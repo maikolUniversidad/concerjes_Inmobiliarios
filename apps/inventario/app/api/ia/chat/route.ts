@@ -14,9 +14,18 @@ interface ProdCtx {
   stock: { cantidad_real: number; cantidad_disp: number } | null
 }
 
+interface AttachmentIn {
+  name: string
+  kind: 'image' | 'text'
+  mime?: string
+  dataUrl?: string
+  text?: string
+}
+
 interface ChatMsg {
   role: 'user' | 'assistant' | 'system'
   content: string
+  attachments?: AttachmentIn[]
 }
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
@@ -77,6 +86,8 @@ REGLAS DE RESPUESTA:
 - Usa **Markdown** rico: encabezados, **negritas**, listas, y tablas Markdown cuando compares datos.
 - Formatea los valores monetarios en pesos colombianos (ej. $1.250.000).
 - Si no tienes el dato exacto, dilo con honestidad y sugiere cómo obtenerlo.
+- Si el usuario adjunta archivos (imágenes, CSV, Excel o texto), analízalos y úsalos como
+  fuente principal para tu respuesta; relaciónalos con los datos del inventario cuando aplique.
 
 GRÁFICAS:
 - Cuando una comparación numérica se entienda mejor visualmente, incluye UNA gráfica
@@ -108,7 +119,10 @@ export async function POST(req: NextRequest) {
 
     const ctx = await construirContexto()
 
-    const usandoOpenAI = modelo === 'openai'
+    // ¿Hay imágenes adjuntas? Si las hay, se fuerza un modelo con visión (OpenAI).
+    const hayImagenes = mensajes.some(m => (m.attachments ?? []).some(a => a.kind === 'image' && a.dataUrl))
+    const usandoOpenAI = modelo === 'openai' || hayImagenes
+
     const client = new OpenAI(
       usandoOpenAI
         ? { apiKey: process.env.OPENAI_API_KEY }
@@ -117,9 +131,36 @@ export async function POST(req: NextRequest) {
             baseURL: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
           }
     )
-    const modelId = usandoOpenAI
-      ? (process.env.OPENAI_MODEL_CHAT || 'gpt-4o-mini')
-      : (process.env.DEEPSEEK_MODEL_CHAT || 'deepseek-chat')
+    const modelId = hayImagenes
+      ? (process.env.OPENAI_MODEL_VISION || 'gpt-4o')
+      : usandoOpenAI
+        ? (process.env.OPENAI_MODEL_CHAT || 'gpt-4o-mini')
+        : (process.env.DEEPSEEK_MODEL_CHAT || 'deepseek-chat')
+
+    // Transforma cada mensaje al formato del modelo, incrustando texto de
+    // archivos e imágenes (visión) cuando corresponda.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const toModelMessage = (m: ChatMsg): any => {
+      const adj = m.attachments ?? []
+      const partesTexto: string[] = []
+      if (m.content) partesTexto.push(m.content)
+      for (const a of adj) {
+        if (a.kind === 'text' && a.text) {
+          partesTexto.push(`\n\n--- Archivo adjunto: ${a.name} ---\n${a.text}`)
+        }
+      }
+      const imagenes = adj.filter(a => a.kind === 'image' && a.dataUrl)
+      const texto = partesTexto.join('')
+
+      if (imagenes.length === 0) return { role: m.role, content: texto }
+      return {
+        role: m.role,
+        content: [
+          { type: 'text', text: texto || 'Analiza la(s) imagen(es) adjunta(s) en el contexto del inventario.' },
+          ...imagenes.map(a => ({ type: 'image_url', image_url: { url: a.dataUrl } })),
+        ],
+      }
+    }
 
     const stream = await client.chat.completions.create({
       model: modelId,
@@ -128,7 +169,7 @@ export async function POST(req: NextRequest) {
       max_tokens: 1400,
       messages: [
         { role: 'system', content: systemPrompt(ctx) },
-        ...mensajes,
+        ...mensajes.map(toModelMessage),
       ],
     })
 

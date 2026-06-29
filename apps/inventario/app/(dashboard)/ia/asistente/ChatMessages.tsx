@@ -1,9 +1,16 @@
 'use client'
 
 import { useEffect, useRef } from 'react'
-import { Bot, User, Sparkles, Mic, FileText, ImageIcon } from 'lucide-react'
+import { Bot, User, Sparkles, Mic, FileText, ImageIcon, Paperclip, History, BarChart3 } from 'lucide-react'
 import { Markdown } from './Markdown'
 import { PREGUNTAS_SUGERIDAS } from '@/lib/ia/preguntas'
+
+const CAPACIDADES = [
+  { icon: History, label: 'Historial por carpetas' },
+  { icon: Paperclip, label: 'Adjunta imágenes, CSV y Excel' },
+  { icon: Mic, label: 'Habla y se transcribe' },
+  { icon: BarChart3, label: 'Responde con gráficas' },
+]
 
 export interface ChatAttachmentView {
   name: string
@@ -37,6 +44,16 @@ function EmptyState({ onPregunta }: { onPregunta: (t: string) => void }) {
         <p className="mt-1 font-body text-sm text-gray-500">
           Pregúntame en lenguaje natural. Puedo responder con tablas, resúmenes y gráficas.
         </p>
+
+        {/* Capacidades */}
+        <div className="mt-4 flex flex-wrap justify-center gap-2">
+          {CAPACIDADES.map(c => (
+            <span key={c.label} className="flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-600">
+              <c.icon className="h-3.5 w-3.5 text-brand-green" />
+              {c.label}
+            </span>
+          ))}
+        </div>
       </div>
 
       <div className="mt-8 grid gap-4 sm:grid-cols-2">

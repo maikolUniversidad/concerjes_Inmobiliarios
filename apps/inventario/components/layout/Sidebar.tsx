@@ -23,12 +23,19 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
         'flex items-center gap-3 px-4 py-4 border-b border-white/10 shrink-0',
         collapsed && 'lg:justify-center lg:px-2'
       )}>
-        <div className="w-9 h-9 bg-white/20 rounded-lg flex items-center justify-center shrink-0">
-          <span className="text-white font-heading font-bold text-sm">CI</span>
-        </div>
+        {/* Ícono solo — visible siempre */}
+        <Image
+          src="/icon.png"
+          alt="CI"
+          width={36}
+          height={36}
+          className="rounded-lg shrink-0 bg-white/10 p-0.5"
+          priority
+        />
+        {/* Nombre — solo cuando no está colapsado */}
         <div className={cn(collapsed && 'lg:hidden')}>
           <p className="text-white font-heading font-bold text-sm leading-tight">Conserjes</p>
-          <p className="text-green-300 font-heading font-semibold text-xs leading-tight">Inventario</p>
+          <p className="text-green-300 font-heading font-semibold text-xs leading-tight">Inmobiliarios</p>
         </div>
       </div>
 

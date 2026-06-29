@@ -108,6 +108,7 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
       setMensajes((data ?? []).map((d: any) => ({
         id: d.id, role: d.role === 'assistant' ? 'assistant' : 'user',
         content: d.content, metadata: d.metadata,
+        attachments: Array.isArray(d.metadata?.attachments) ? d.metadata.attachments : undefined,
       })))
     } catch {
       toast.error('No se pudo cargar la conversación.')
@@ -117,12 +118,14 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
   // ── Envío de mensaje con streaming ──────────────────────────────────────────
   const enviar = useCallback(async (texto: string, fromAudio = false) => {
     const contenido = texto.trim()
-    if (!contenido || streaming) return
+    const adjuntos = attachments
+    if ((!contenido && adjuntos.length === 0) || streaming || parsing) return
 
     let convId = activaId
     // Crear conversación de forma diferida en el primer mensaje.
     if (!convId) {
-      const titulo = contenido.length > 60 ? contenido.slice(0, 57) + '…' : contenido
+      const baseTitulo = contenido || adjuntos[0]?.name || 'Nueva conversación'
+      const titulo = baseTitulo.length > 60 ? baseTitulo.slice(0, 57) + '…' : baseTitulo
       const nueva: IAConversacion = {
         id: nuevoId(), user_id: userId, carpeta_id: null, titulo, modelo,
         fijada: false, created_at: new Date().toISOString(), updated_at: new Date().toISOString(),
@@ -133,11 +136,34 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
       void persistInsertConv(nueva)
     }
 
-    const userMsg: ChatMessage = { role: 'user', content: contenido, metadata: fromAudio ? { audio: true } : null }
-    const historialParaApi = [...mensajes, userMsg].map(m => ({ role: m.role, content: m.content }))
+    // Vista del mensaje (incluye preview de adjuntos)
+    const attachmentsView = adjuntos.map(a => ({
+      name: a.name, kind: a.kind, mime: a.mime, dataUrl: a.kind === 'image' ? a.dataUrl : undefined,
+    }))
+    const userMsg: ChatMessage = {
+      role: 'user', content: contenido,
+      metadata: {
+        ...(fromAudio ? { audio: true } : {}),
+        // Guardado ligero en historial: nombre/tipo, sin base64 ni texto pesado.
+        attachments: adjuntos.map(a => ({ name: a.name, kind: a.kind, mime: a.mime })),
+      },
+      attachments: attachmentsView.length ? attachmentsView : undefined,
+    }
+
+    // Payload completo para la API (con dataUrl de imágenes y texto extraído)
+    const adjuntosApi = adjuntos.map(a => ({
+      name: a.name, kind: a.kind, mime: a.mime,
+      dataUrl: a.kind === 'image' ? a.dataUrl : undefined,
+      text: a.kind === 'text' ? a.text : undefined,
+    }))
+    const historialParaApi = [
+      ...mensajes.map(m => ({ role: m.role, content: m.content })),
+      { role: 'user' as const, content: contenido, attachments: adjuntosApi },
+    ]
 
     setMensajes(prev => [...prev, userMsg, { role: 'assistant', content: '', metadata: { modelo } }])
     setInput('')
+    setAttachments([])
     setStreaming(true)
     void persistMensaje(convId, userMsg)
 
@@ -198,7 +224,7 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
       setStreaming(false)
       abortRef.current = null
     }
-  }, [activaId, mensajes, modelo, streaming, userId, persistInsertConv, persistMensaje])
+  }, [activaId, mensajes, modelo, streaming, parsing, attachments, userId, persistInsertConv, persistMensaje])
 
   const detener = useCallback(() => abortRef.current?.abort(), [])
 
@@ -354,6 +380,10 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
           onSend={() => enviar(input)}
           onStop={detener}
           streaming={streaming}
+          attachments={attachments}
+          parsing={parsing}
+          onAddFiles={onAddFiles}
+          onRemoveAttachment={onRemoveAttachment}
         />
       </div>
     </div>

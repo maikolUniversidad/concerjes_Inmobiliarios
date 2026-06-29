@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { Eye, EyeOff, LogIn, Loader2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
@@ -58,10 +59,14 @@ export default function LoginPage() {
 
           {/* Logo */}
           <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-brand-green rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-brand-green/30">
-              <span className="text-white font-heading font-bold text-2xl">CI</span>
-            </div>
-            <h1 className="font-heading font-bold text-2xl text-gray-900">Conserjes Inmobiliarios</h1>
+            <Image
+              src="/logo.png"
+              alt="Conserjes Inmobiliarios"
+              width={200}
+              height={200}
+              className="mx-auto object-contain mb-2"
+              priority
+            />
             <p className="font-body text-sm text-gray-500 mt-1">Plataforma de Inventarios</p>
           </div>
 

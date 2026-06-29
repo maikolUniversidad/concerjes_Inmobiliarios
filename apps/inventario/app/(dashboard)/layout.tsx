@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import Image from 'next/image'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { NotificationBell } from '@/components/layout/NotificationBell'
@@ -31,10 +32,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         <header className="h-14 bg-white border-b border-gray-200 flex items-center gap-3 px-3 sm:px-5 shrink-0">
           {/* Marca compacta en móvil */}
           <div className="flex items-center gap-2 lg:hidden">
-            <div className="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center shrink-0">
-              <span className="text-white font-heading font-bold text-xs">CI</span>
-            </div>
-            <span className="font-heading font-bold text-sm text-gray-900">Inventario</span>
+            <Image src="/icon.png" alt="CI" width={32} height={32} className="rounded-lg shrink-0" priority />
+            <Image src="/logo.png" alt="Conserjes Inmobiliarios" width={110} height={40} className="object-contain h-8 w-auto" priority />
           </div>
 
           {/* Colapsar sidebar — solo desktop */}

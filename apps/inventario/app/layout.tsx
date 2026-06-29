@@ -24,6 +24,11 @@ export const metadata: Metadata = {
   },
   description: 'Plataforma de control de inventarios con IA para Conserjes Inmobiliarios Ltda.',
   robots: { index: false, follow: false },
+  icons: {
+    icon: '/icon.png',
+    apple: '/apple-icon.png',
+    shortcut: '/icon.png',
+  },
 }
 
 export const viewport: Viewport = {

@@ -71,12 +71,11 @@ export default async function LandingPage() {
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-10 h-10 bg-brand-green rounded-xl flex items-center justify-center shrink-0 shadow-sm">
-              <span className="text-white font-heading font-bold text-base">CI</span>
-            </div>
+            <Image src="/icon.png" alt="CI" width={40} height={40} className="rounded-xl shrink-0 shadow-sm" priority />
             <div className="min-w-0">
-              <p className="font-heading font-bold text-sm text-gray-900 leading-tight">Conserjes Inmobiliarios</p>
-              <p className="font-body text-xs text-brand-green leading-tight hidden sm:block">NIT 800093388-2</p>
+              <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={180} height={48} className="object-contain h-8 w-auto hidden sm:block" priority />
+              <p className="font-heading font-bold text-sm text-gray-900 leading-tight sm:hidden">Conserjes Inmobiliarios</p>
+              <p className="font-body text-xs text-brand-green leading-tight">NIT 800093388-2</p>
             </div>
           </div>
           <div className="hidden md:flex items-center gap-5 text-sm">
@@ -155,9 +154,7 @@ export default async function LandingPage() {
                 <div className="absolute inset-0 opacity-[0.08]" style={{ backgroundImage: 'radial-gradient(circle, #2E7D32 1px, transparent 0)', backgroundSize: '28px 28px' }} />
                 {/* IMAGEN: reemplazar con foto real del equipo/sede */}
                 <div className="relative text-center px-8">
-                  <div className="w-20 h-20 bg-brand-green rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl">
-                    <span className="text-white font-heading font-bold text-3xl">CI</span>
-                  </div>
+                  <Image src="/logo.png" alt="Conserjes Inmobiliarios" width={180} height={180} className="mx-auto mb-4 object-contain drop-shadow-xl" />
                   <p className="font-heading font-bold text-xl text-brand-green">Conserjes Inmobiliarios Ltda</p>
                   <p className="font-body text-sm text-green-700 mt-2">Fundada el 6 de abril de 1990 · Bogotá, Colombia</p>
                 </div>
@@ -432,9 +429,7 @@ export default async function LandingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-3 mb-4">
-                <div className="w-9 h-9 bg-brand-green rounded-xl flex items-center justify-center">
-                  <span className="text-white font-heading font-bold text-sm">CI</span>
-                </div>
+                <Image src="/icon.png" alt="CI" width={36} height={36} className="rounded-xl bg-white/10 p-0.5" />
                 <p className="font-heading font-bold text-white text-sm">Conserjes Inmobiliarios</p>
               </div>
               <p className="font-body text-sm text-gray-500 leading-relaxed mb-3">Más de 34 años brindando soluciones integrales de aseo, mantenimiento y cafetería en Colombia.</p>

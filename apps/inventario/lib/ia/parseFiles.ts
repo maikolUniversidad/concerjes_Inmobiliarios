@@ -1,6 +1,7 @@
 import type { Attachment } from './types'
 
-const MAX_IMAGE = 6 * 1024 * 1024   // 6 MB
+// 3 MB: tras la inflación base64 (~33%) queda bajo el límite de body de Vercel (~4.5 MB)
+const MAX_IMAGE = 3 * 1024 * 1024   // 3 MB
 const MAX_DOC = 10 * 1024 * 1024    // 10 MB
 const MAX_TEXT_CHARS = 12000        // tope de texto extraído por archivo
 
@@ -54,7 +55,7 @@ export async function parseFile(file: File): Promise<Attachment> {
 
   // Imágenes → data URL (visión)
   if (file.type.startsWith('image/')) {
-    if (file.size > MAX_IMAGE) throw new Error(`La imagen "${file.name}" supera 6 MB.`)
+    if (file.size > MAX_IMAGE) throw new Error(`La imagen "${file.name}" supera 3 MB.`)
     return { ...base, kind: 'image', dataUrl: await readAsDataURL(file) }
   }
 
