@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Search, Grid3X3, List, AlertTriangle } from 'lucide-react'
+import { Search, Grid3X3, List, AlertTriangle, Eye, Pencil, ArrowLeftRight, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
@@ -139,49 +139,68 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
             const real   = p.stock?.cantidad_real ?? 0
             const status = getStockStatus(real, p.stock_minimo_def)
             return (
-              <Link key={p.id} href={`/productos/${p.id}`}
-                className="group bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md hover:border-brand-green/30 transition-all duration-200">
-                {/* Foto */}
-                <div className="aspect-square bg-gray-50 relative overflow-hidden">
-                  {p.imagen_url ? (
-                    <Image
-                      src={p.imagen_url}
-                      alt={p.nombre_estandar}
-                      fill
-                      className="object-cover group-hover:scale-105 transition-transform duration-300"
-                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                    />
-                  ) : (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-300">
-                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                        <span className="text-2xl">📦</span>
+              <div key={p.id}
+                className="group bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md hover:border-brand-green/30 transition-all duration-200 flex flex-col">
+                <Link href={`/productos/${p.id}`} className="block">
+                  {/* Foto */}
+                  <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                    {p.imagen_url ? (
+                      <Image
+                        src={p.imagen_url}
+                        alt={p.nombre_estandar}
+                        fill
+                        className="object-cover group-hover:scale-105 transition-transform duration-300"
+                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-300">
+                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                          <span className="text-2xl">📦</span>
+                        </div>
+                        <span className="font-body text-xs">Sin foto</span>
                       </div>
-                      <span className="font-body text-xs">Sin foto</span>
-                    </div>
-                  )}
-                  {/* Cat badge */}
-                  <span className={`absolute top-2 left-2 font-body font-bold text-xs px-1.5 py-0.5 rounded-md ${cat.bg} ${cat.color}`}>
-                    {p.cat_rotacion}
-                  </span>
-                  {/* Alert */}
-                  {real <= p.stock_minimo_def && real > 0 && (
-                    <AlertTriangle className="absolute top-2 right-2 w-4 h-4 text-orange-500" />
-                  )}
-                </div>
-                {/* Info */}
-                <div className="p-3 space-y-2">
-                  <p className="font-body font-semibold text-xs text-gray-900 line-clamp-2 leading-tight">
-                    {p.nombre_estandar}
-                  </p>
-                  <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="font-heading font-bold text-sm text-gray-900">{real}</span>
-                    <span className={`font-body text-xs px-1.5 py-0.5 rounded-full ${status.cls}`}>
-                      {status.label}
+                    )}
+                    <span className={`absolute top-2 left-2 font-body font-bold text-xs px-1.5 py-0.5 rounded-md ${cat.bg} ${cat.color}`}>
+                      {p.cat_rotacion}
                     </span>
+                    {real <= p.stock_minimo_def && real > 0 && (
+                      <AlertTriangle className="absolute top-2 right-2 w-4 h-4 text-orange-500" />
+                    )}
                   </div>
+                  {/* Info */}
+                  <div className="p-3 space-y-2">
+                    <p className="font-body font-semibold text-xs text-gray-900 line-clamp-2 leading-tight">
+                      {p.nombre_estandar}
+                    </p>
+                    <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
+                    <div className="flex items-center justify-between">
+                      <span className="font-heading font-bold text-sm text-gray-900">{real}</span>
+                      <span className={`font-body text-xs px-1.5 py-0.5 rounded-full ${status.cls}`}>
+                        {status.label}
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+                {/* Barra de acciones */}
+                <div className="mt-auto grid grid-cols-4 border-t border-gray-100 divide-x divide-gray-100">
+                  <Link href={`/productos/${p.id}`} title="Ver detalle"
+                    className="flex items-center justify-center py-2 text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
+                    <Eye className="w-4 h-4" />
+                  </Link>
+                  <Link href={`/productos/${p.id}/editar`} title="Editar producto"
+                    className="flex items-center justify-center py-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                    <Pencil className="w-4 h-4" />
+                  </Link>
+                  <Link href={`/movimientos/nuevo?producto=${p.id}`} title="Registrar movimiento"
+                    className="flex items-center justify-center py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+                    <ArrowLeftRight className="w-4 h-4" />
+                  </Link>
+                  <Link href={`/movimientos/nuevo?producto=${p.id}&tipo=AJUSTE`} title="Ajustar unidades"
+                    className="flex items-center justify-center py-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
+                    <SlidersHorizontal className="w-4 h-4" />
+                  </Link>
                 </div>
-              </Link>
+              </div>
             )
           })}
         </div>
@@ -247,15 +266,23 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                           {status.label}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Link href={`/productos/${p.id}`}
-                            className="text-xs font-body text-brand-green hover:underline px-2 py-1">
-                            Ver
+                      <td className="px-4 py-2.5">
+                        <div className="flex items-center justify-center gap-0.5">
+                          <Link href={`/productos/${p.id}`} title="Ver detalle"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
+                            <Eye className="w-4 h-4" />
                           </Link>
-                          <Link href={`/productos/${p.id}/editar`}
-                            className="text-xs font-body text-gray-500 hover:text-gray-700 px-2 py-1">
-                            Editar
+                          <Link href={`/productos/${p.id}/editar`} title="Editar producto"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                            <Pencil className="w-4 h-4" />
+                          </Link>
+                          <Link href={`/movimientos/nuevo?producto=${p.id}`} title="Registrar movimiento"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+                            <ArrowLeftRight className="w-4 h-4" />
+                          </Link>
+                          <Link href={`/movimientos/nuevo?producto=${p.id}&tipo=AJUSTE`} title="Ajustar unidades"
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
+                            <SlidersHorizontal className="w-4 h-4" />
                           </Link>
                         </div>
                       </td>

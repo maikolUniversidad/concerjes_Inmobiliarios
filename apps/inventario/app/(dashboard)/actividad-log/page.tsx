@@ -187,7 +187,6 @@ function LogRow({ log }: { log: LogEntry }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ActividadLogPage() {
-  const supabase = createClient()
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -206,6 +205,7 @@ export default function ActividadLogPage() {
     async (isRefresh = false) => {
       if (isRefresh) setRefreshing(true)
       try {
+        const supabase = createClient()
         const { data } = await supabase
           .from('actividad_log')
           .select('*, usuarios(nombre, avatar_url)')
@@ -217,7 +217,7 @@ export default function ActividadLogPage() {
         setRefreshing(false)
       }
     },
-    [supabase]
+    []
   )
 
   useEffect(() => {

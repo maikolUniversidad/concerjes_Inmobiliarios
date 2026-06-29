@@ -167,7 +167,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
                 Arrastra archivos o haz clic para seleccionar
               </p>
               <p className="font-body text-xs text-gray-400 mt-1">
-                {tab === 'sst' ? 'PDF, JPG, PNG · máx. 20 MB' : 'JPG, PNG, WebP · máx. 10 MB'}
+                PDF, JPG, PNG, ZIP · máx. 50 MB
               </p>
             </div>
           </>

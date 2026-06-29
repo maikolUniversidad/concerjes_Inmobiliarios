@@ -147,7 +147,8 @@ interface DrawerFormProps {
 }
 
 function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: DrawerFormProps) {
-  const supabase = createClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createClient() as any
   const isNew = usuario === null
 
   const [nombre, setNombre] = useState(usuario?.nombre ?? '')
@@ -514,7 +515,8 @@ interface UsuariosClientProps {
 }
 
 export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sedes }: UsuariosClientProps) {
-  const supabase = createClient()
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const supabase = createClient() as any
   const [usuarios, setUsuarios] = useState<Usuario[]>(initialUsuarios)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selected, setSelected] = useState<Usuario | null>(null)
