@@ -1,9 +1,10 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Search, Grid3X3, List, AlertTriangle, Eye, Pencil, ArrowLeftRight, SlidersHorizontal } from 'lucide-react'
+import { Search, Grid3X3, List, AlertTriangle, Eye, Pencil, ArrowLeftRight, Camera } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
+import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 
 interface Producto {
   id: string
@@ -32,6 +33,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [tipoFilter, setTipo]   = useState('')
   const [stockFilter, setStock] = useState('')
   const [view, setView]         = useState<'grid' | 'list'>('grid')
+  const [scannerOpen, setScannerOpen] = useState(false)
 
   const filtered = useMemo(() => {
     return productos.filter(p => {
@@ -81,7 +83,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
 
       {/* Filters + view toggle */}
       <div className="bg-white border border-gray-100 rounded-xl p-4 flex flex-wrap gap-3 shadow-sm items-center">
-        <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
+        <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 flex-1 min-w-[200px] focus-within:border-brand-green transition-colors">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
           <input
             value={search}
@@ -89,7 +91,22 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
             placeholder="Buscar por nombre, REF o código..."
             className="font-body text-sm flex-1 outline-none placeholder:text-gray-400"
           />
+          <button
+            type="button"
+            onClick={() => setScannerOpen(true)}
+            title="Escanear código de barras o QR"
+            className="p-1 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors"
+          >
+            <Camera className="w-4 h-4" />
+          </button>
         </div>
+
+        {scannerOpen && (
+          <BarcodeScanner
+            onDetected={val => { setSearch(val); setScannerOpen(false) }}
+            onClose={() => setScannerOpen(false)}
+          />
+        )}
         <select value={catFilter} onChange={e => setCat(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none focus:border-brand-green bg-white">
           <option value="">Categoría</option>

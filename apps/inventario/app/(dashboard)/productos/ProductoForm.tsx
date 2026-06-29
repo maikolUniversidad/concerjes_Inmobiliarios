@@ -1,10 +1,11 @@
 'use client'
-import { useActionState } from 'react'
+import { useActionState, useState, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
-import { AlertCircle, Loader2, Save } from 'lucide-react'
+import { AlertCircle, Loader2, Save, QrCode, X } from 'lucide-react'
 import Link from 'next/link'
 import type { ActionResult } from './actions'
 import { ImagePicker } from '@/components/ui/ImagePicker'
+import { BarcodeGenerator, type BarcodeFormat } from '@/components/ui/BarcodeGenerator'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
 
 const TIPOS = ['CAFETERIA', 'LIQUIDOS', 'ASEO', 'EPP', 'PAPELERIA', 'MAQUINARIA', 'JARDINERIA', 'REPUESTOS', 'OTROS']
@@ -48,6 +49,10 @@ interface Props {
 
 export function ProductoForm({ action, proveedores, defaults = {}, submitLabel = 'Guardar producto', modo = 'crear' }: Props) {
   const [state, formAction] = useActionState<ActionResult, FormData>(action, {})
+  const [showGenerator, setShowGenerator] = useState(false)
+  const [genFormat, setGenFormat] = useState<BarcodeFormat>('CODE128')
+  const codigoRef = useRef<HTMLInputElement>(null)
+  const refInputRef = useRef<HTMLInputElement>(null)
 
   return (
     <form action={formAction} className="space-y-6 max-w-3xl">
@@ -95,13 +100,53 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
           </div>
           <div>
             <label className={labelCls}>REF</label>
-            <input name="ref" type="number" defaultValue={defaults.ref ?? ''} className={inputCls + ' mt-1'} placeholder="Opcional" />
+            <input ref={refInputRef} name="ref" type="number" defaultValue={defaults.ref ?? ''} className={inputCls + ' mt-1'} placeholder="Opcional" />
           </div>
           <div>
             <label className={labelCls}>Código</label>
-            <input name="codigo" type="number" defaultValue={defaults.codigo ?? ''} className={inputCls + ' mt-1'} placeholder="Opcional" />
+            <div className="flex gap-1.5 mt-1">
+              <input ref={codigoRef} name="codigo" type="number" defaultValue={defaults.codigo ?? ''} className={inputCls + ' flex-1'} placeholder="Opcional" />
+              <button
+                type="button"
+                title="Generar código de barras / QR"
+                onClick={() => setShowGenerator(v => !v)}
+                className={`shrink-0 p-2 rounded-lg border transition-colors ${showGenerator ? 'border-brand-green bg-green-50 text-brand-green' : 'border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green'}`}
+              >
+                <QrCode className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         </div>
+
+        {/* Generador de código inline */}
+        {showGenerator && (
+          <div className="border border-brand-green/30 rounded-2xl p-4 bg-green-50/40 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="font-heading font-semibold text-sm text-gray-800">Generador de código</p>
+              <button type="button" onClick={() => setShowGenerator(false)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {(['CODE128', 'QR', 'EAN13', 'CODE39'] as BarcodeFormat[]).map(f => (
+                <button key={f} type="button" onClick={() => setGenFormat(f)}
+                  className={`font-body text-xs px-3 py-1.5 rounded-lg border transition-colors ${genFormat === f ? 'border-brand-green bg-brand-green text-white' : 'border-gray-200 text-gray-600 hover:border-brand-green'}`}>
+                  {f}
+                </button>
+              ))}
+            </div>
+            <BarcodeGenerator
+              value={codigoRef.current?.value || refInputRef.current?.value || ''}
+              format={genFormat}
+              onAssign={(val) => {
+                if (codigoRef.current && /^\d+$/.test(val)) codigoRef.current.value = val
+              }}
+            />
+            <p className="font-body text-xs text-gray-500">
+              Ingresa un valor en el campo Código o REF arriba para generar. Haz clic en <strong>Asignar</strong> para copiarlo al formulario.
+            </p>
+          </div>
+        )}
 
         <div>
           <label className={labelCls}>Notas / Complemento</label>

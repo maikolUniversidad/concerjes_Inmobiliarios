@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
   QrCode, FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
-  UploadCloud, History, type LucideIcon,
+  UploadCloud, History, ClipboardCheck, Barcode, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -40,10 +40,12 @@ export const navigation: NavModule[] = [
     title: 'Inventario',
     icon: Package,
     items: [
-      { label: 'Productos',   href: '/productos',   icon: Package },
-      { label: 'Stock',       href: '/stock',       icon: BarChart3 },
-      { label: 'Movimientos', href: '/movimientos', icon: ArrowLeftRight },
-      { label: 'Escáner',     href: '/scanner',     icon: QrCode },
+      { label: 'Productos',          href: '/productos', icon: Package },
+      { label: 'Stock',              href: '/stock',     icon: BarChart3 },
+      { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight },
+      { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck },
+      { label: 'Escáner',            href: '/scanner',   icon: QrCode },
+      { label: 'Generador Códigos',  href: '/codigos',   icon: Barcode },
     ],
   },
   {
