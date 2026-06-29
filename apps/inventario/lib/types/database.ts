@@ -31,6 +31,9 @@ export interface Producto {
   codigo_barras: string | null
   codigo_barras_formato: string | null
   codigo_barras_origen: string | null
+  sku: string | null
+  ubicacion_bodega: string | null
+  bodega_descripcion: string | null
   activo: boolean
   created_at: string
   updated_at: string

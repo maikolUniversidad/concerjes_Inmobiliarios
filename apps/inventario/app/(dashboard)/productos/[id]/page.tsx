@@ -31,6 +31,7 @@ export default async function ProductoPage({ params }: Props) {
       id, ref, codigo, nombre_estandar, presentacion, complemento,
       tipo_insumo, cat_rotacion, stock_minimo_def, stock_minimo_asig,
       ind_rot_general, ind_rot_mes, precio_lista, imagen_url, activo,
+      sku, ubicacion_bodega, bodega_descripcion,
       stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ),
       proveedor:proveedor_id ( nombre, telefono, email ),
       proveedor2:proveedor2_id ( nombre )

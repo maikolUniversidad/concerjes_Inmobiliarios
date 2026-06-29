@@ -1,7 +1,10 @@
 'use client'
-import { useActionState, useState, useRef } from 'react'
+import { useActionState, useState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
-import { AlertCircle, Loader2, Save, QrCode, X, Camera, PackageSearch, ExternalLink } from 'lucide-react'
+import {
+  AlertCircle, Loader2, Save, QrCode, X,
+  Camera, PackageSearch, ExternalLink, Warehouse, Hash,
+} from 'lucide-react'
 import Link from 'next/link'
 import type { ActionResult } from './actions'
 import { ImagePicker } from '@/components/ui/ImagePicker'
@@ -10,16 +13,23 @@ import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 import { createClient } from '@/lib/supabase/client'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
 
-interface ProductoExistente {
-  id: string
-  nombre_estandar: string
-  presentacion: string | null
-  tipo_insumo: string
-  codigo: number | null
-  ref: number | null
+const TIPOS: TipoInsumo[] = ['CAFETERIA', 'LIQUIDOS', 'ASEO', 'EPP', 'PAPELERIA', 'MAQUINARIA', 'JARDINERIA', 'REPUESTOS', 'OTROS']
+
+const TIPO_SKU: Record<string, string> = {
+  CAFETERIA: 'CAF', LIQUIDOS: 'LIQ', ASEO: 'ASE', EPP: 'EPP',
+  PAPELERIA: 'PAP', MAQUINARIA: 'MAQ', JARDINERIA: 'JAR', REPUESTOS: 'REP', OTROS: 'OTR',
 }
 
-const TIPOS = ['CAFETERIA', 'LIQUIDOS', 'ASEO', 'EPP', 'PAPELERIA', 'MAQUINARIA', 'JARDINERIA', 'REPUESTOS', 'OTROS']
+function generarSKU(tipo: string): string {
+  const pref = TIPO_SKU[tipo] ?? 'OTR'
+  const seq  = String(Math.floor(Math.random() * 9000) + 1000)
+  return `CI-${pref}-${seq}`
+}
+
+// Genera un código numérico de 8 dígitos basado en timestamp
+function generarCodigoNumerico(): string {
+  return String(Date.now()).slice(-8)
+}
 
 export interface ProductoDefaults {
   id?: string
@@ -34,6 +44,18 @@ export interface ProductoDefaults {
   codigo?: number | null
   complemento?: string | null
   imagen_url?: string | null
+  sku?: string | null
+  ubicacion_bodega?: string | null
+  bodega_descripcion?: string | null
+}
+
+interface ProductoExistente {
+  id: string
+  nombre_estandar: string
+  presentacion: string | null
+  tipo_insumo: string
+  codigo: number | null
+  ref: number | null
 }
 
 const labelCls = 'font-body font-semibold text-sm text-gray-700'
@@ -58,64 +80,93 @@ interface Props {
   modo?: 'crear' | 'editar'
 }
 
+// Parsea "A-02-3" → { pasillo: 'A', estante: '02', nivel: '3' }
+function parseUbicacion(ub: string | null | undefined) {
+  if (!ub) return { pasillo: '', estante: '', nivel: '' }
+  const parts = ub.split('-')
+  return { pasillo: parts[0] ?? '', estante: parts[1] ?? '', nivel: parts[2] ?? '' }
+}
+
 export function ProductoForm({ action, proveedores, defaults = {}, submitLabel = 'Guardar producto', modo = 'crear' }: Props) {
   const [state, formAction] = useActionState<ActionResult, FormData>(action, {})
+
+  // ── Campos reactivos para generador ──
+  const [tipoInsumo, setTipoInsumo] = useState<string>(defaults.tipo_insumo ?? 'OTROS')
+  const [codigoValue, setCodigoValue] = useState<string>(defaults.codigo ? String(defaults.codigo) : '')
+  const [refValue, setRefValue] = useState<string>(defaults.ref ? String(defaults.ref) : '')
+
+  // ── SKU y bodega ──
+  const [skuValue, setSkuValue] = useState<string>(defaults.sku ?? '')
+  const ub = parseUbicacion(defaults.ubicacion_bodega)
+  const [pasillo, setPasillo] = useState(ub.pasillo)
+  const [estante, setEstante] = useState(ub.estante)
+  const [nivel, setNivel]     = useState(ub.nivel)
+
+  // ── Generador / escáner ──
   const [showGenerator, setShowGenerator] = useState(false)
-  const [showScanner, setShowScanner] = useState(false)
   const [genFormat, setGenFormat] = useState<BarcodeFormat>('CODE128')
+  const [genValue, setGenValue] = useState('')
+  const [showScanner, setShowScanner] = useState(false)
+
+  // ── Duplicado ──
   const [duplicado, setDuplicado] = useState<ProductoExistente | null>(null)
   const [checkingDup, setCheckingDup] = useState(false)
-  const codigoRef = useRef<HTMLInputElement>(null)
-  const refInputRef = useRef<HTMLInputElement>(null)
+
   const supabase = createClient()
+
+  // Al abrir el generador: usa valor existente o auto-genera uno nuevo
+  function openGenerator() {
+    const val = codigoValue || refValue || generarCodigoNumerico()
+    setGenValue(val)
+    setShowGenerator(true)
+  }
+
+  // Auto-generar SKU cuando se cambia el tipo y el SKU está vacío (solo en modo crear)
+  useEffect(() => {
+    if (modo === 'crear' && !skuValue) {
+      setSkuValue(generarSKU(tipoInsumo))
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoInsumo])
+
+  function handleAssign(val: string) {
+    setGenValue(val)
+    // Llenar Código y REF con el valor generado
+    if (/^\d+$/.test(val)) {
+      setCodigoValue(val)
+      if (!refValue) setRefValue(val)
+    }
+    setShowGenerator(false)
+  }
 
   async function handleScanDetected(value: string) {
     setShowScanner(false)
-    // Llenar campo código si es numérico, sino REF
     if (/^\d+$/.test(value)) {
-      if (codigoRef.current) codigoRef.current.value = value
-    } else {
-      // Para códigos alfanuméricos no podemos usar el campo number, ignorar o poner en complemento
-      if (codigoRef.current) codigoRef.current.value = ''
+      setCodigoValue(value)
+      if (!refValue) setRefValue(value)
     }
 
-    // Buscar si ya existe un producto con ese código o ref
+    // Verificar duplicado
     setCheckingDup(true)
     setDuplicado(null)
     try {
       const num = parseInt(value)
-      if (!isNaN(num)) {
-        const { data } = await supabase
-          .from('productos')
-          .select('id, nombre_estandar, presentacion, tipo_insumo, codigo, ref')
-          .or(`codigo.eq.${num},ref.eq.${num}`)
-          .eq('activo', true)
-          .limit(1)
-          .single()
-        if (data) setDuplicado(data as ProductoExistente)
-      } else {
-        // Buscar por codigo_barras si está disponible
-        const { data } = await supabase
-          .from('productos')
-          .select('id, nombre_estandar, presentacion, tipo_insumo, codigo, ref')
-          .eq('codigo_barras', value)
-          .eq('activo', true)
-          .limit(1)
-          .single()
-        if (data) setDuplicado(data as ProductoExistente)
-      }
+      const query = !isNaN(num)
+        ? supabase.from('productos').select('id,nombre_estandar,presentacion,tipo_insumo,codigo,ref').or(`codigo.eq.${num},ref.eq.${num}`).eq('activo', true)
+        : supabase.from('productos').select('id,nombre_estandar,presentacion,tipo_insumo,codigo,ref').eq('codigo_barras', value).eq('activo', true)
+      const { data } = await query.limit(1).maybeSingle()
+      if (data) setDuplicado(data as ProductoExistente)
     } finally {
       setCheckingDup(false)
     }
   }
 
+  const ubicacionPreview = [pasillo, estante, nivel].filter(Boolean).join('-')
+
   return (
     <>
     {showScanner && (
-      <BarcodeScanner
-        onDetected={handleScanDetected}
-        onClose={() => setShowScanner(false)}
-      />
+      <BarcodeScanner onDetected={handleScanDetected} onClose={() => setShowScanner(false)} />
     )}
 
     <form action={formAction} className="space-y-6 max-w-3xl">
@@ -128,15 +179,15 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
         </div>
       )}
 
-      {/* Alerta producto duplicado */}
       {checkingDup && (
         <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
           <Loader2 className="w-4 h-4 text-blue-500 shrink-0 animate-spin" />
           <p className="font-body text-sm text-blue-700">Verificando si el producto ya existe...</p>
         </div>
       )}
+
       {duplicado && (
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
           <div className="flex items-start gap-2">
             <PackageSearch className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -144,8 +195,7 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
               <p className="font-body text-sm text-amber-700 mt-0.5 truncate">{duplicado.nombre_estandar}</p>
               {duplicado.presentacion && <p className="font-body text-xs text-amber-600">{duplicado.presentacion}</p>}
               <p className="font-mono text-xs text-amber-500 mt-0.5">
-                {duplicado.codigo ? `Código: ${duplicado.codigo}` : ''}{duplicado.codigo && duplicado.ref ? ' · ' : ''}{duplicado.ref ? `REF: ${duplicado.ref}` : ''}
-                {' · '}{duplicado.tipo_insumo}
+                {duplicado.codigo ? `Código: ${duplicado.codigo}` : ''}{duplicado.codigo && duplicado.ref ? ' · ' : ''}{duplicado.ref ? `REF: ${duplicado.ref}` : ''} · {duplicado.tipo_insumo}
               </p>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -162,10 +212,12 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
         </div>
       )}
 
+      {/* Imagen */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
         <ImagePicker name="imagen_url" defaultUrl={defaults.imagen_url ?? null} folder="productos" />
       </div>
 
+      {/* Información general */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
         <h2 className="font-heading font-semibold text-lg text-gray-900">Información general</h2>
 
@@ -182,7 +234,7 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
           </div>
           <div>
             <label className={labelCls}>Tipo de insumo</label>
-            <select name="tipo_insumo" defaultValue={defaults.tipo_insumo ?? 'OTROS'} className={inputCls + ' mt-1 bg-white'}>
+            <select name="tipo_insumo" value={tipoInsumo} onChange={e => setTipoInsumo(e.target.value)} className={inputCls + ' mt-1 bg-white'}>
               {TIPOS.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
           </div>
@@ -192,31 +244,29 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
           <div>
             <label className={labelCls}>Categoría rotación</label>
             <select name="cat_rotacion" defaultValue={defaults.cat_rotacion ?? 'C'} className={inputCls + ' mt-1 bg-white'}>
-              {(['A', 'B', 'C', 'D'] as CategoriaRotacion[]).map(c => <option key={c} value={c}>Cat. {c} — {CATEGORIA_LABELS[c].label}</option>)}
+              {(['A', 'B', 'C', 'D'] as CategoriaRotacion[]).map(c => (
+                <option key={c} value={c}>Cat. {c} — {CATEGORIA_LABELS[c].label}</option>
+              ))}
             </select>
           </div>
           <div>
             <label className={labelCls}>REF</label>
-            <input ref={refInputRef} name="ref" type="number" defaultValue={defaults.ref ?? ''} className={inputCls + ' mt-1'} placeholder="Opcional" />
+            <input name="ref" type="number" value={refValue} onChange={e => setRefValue(e.target.value)}
+              className={inputCls + ' mt-1'} placeholder="Opcional" />
           </div>
           <div>
             <label className={labelCls}>Código</label>
             <div className="flex gap-1.5 mt-1">
-              <input ref={codigoRef} name="codigo" type="number" defaultValue={defaults.codigo ?? ''} className={inputCls + ' flex-1'} placeholder="Opcional" />
-              <button
-                type="button"
-                title="Escanear código de barras / QR con la cámara"
+              <input name="codigo" type="number" value={codigoValue} onChange={e => setCodigoValue(e.target.value)}
+                className={inputCls + ' flex-1'} placeholder="Opcional" />
+              <button type="button" title="Escanear con cámara"
                 onClick={() => setShowScanner(true)}
-                className="shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green transition-colors"
-              >
+                className="shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green transition-colors">
                 <Camera className="w-4 h-4" />
               </button>
-              <button
-                type="button"
-                title="Generar código de barras / QR"
-                onClick={() => setShowGenerator(v => !v)}
-                className={`shrink-0 p-2 rounded-lg border transition-colors ${showGenerator ? 'border-brand-green bg-green-50 text-brand-green' : 'border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green'}`}
-              >
+              <button type="button" title="Generar código"
+                onClick={openGenerator}
+                className={`shrink-0 p-2 rounded-lg border transition-colors ${showGenerator ? 'border-brand-green bg-green-50 text-brand-green' : 'border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green'}`}>
                 <QrCode className="w-4 h-4" />
               </button>
             </div>
@@ -240,15 +290,27 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
                 </button>
               ))}
             </div>
-            <BarcodeGenerator
-              value={codigoRef.current?.value || refInputRef.current?.value || ''}
-              format={genFormat}
-              onAssign={(val) => {
-                if (codigoRef.current && /^\d+$/.test(val)) codigoRef.current.value = val
-              }}
-            />
+            <div className="flex gap-2 items-center">
+              <input
+                value={genValue}
+                onChange={e => setGenValue(e.target.value)}
+                placeholder="Valor del código"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm outline-none focus:border-brand-green"
+              />
+              <button type="button" onClick={() => setGenValue(generarCodigoNumerico())}
+                className="text-xs font-body text-gray-500 border border-gray-200 rounded-lg px-2.5 py-2 hover:bg-gray-50 transition-colors whitespace-nowrap">
+                Auto
+              </button>
+            </div>
+            {genValue && (
+              <BarcodeGenerator
+                value={genValue}
+                format={genFormat}
+                onAssign={handleAssign}
+              />
+            )}
             <p className="font-body text-xs text-gray-500">
-              Ingresa un valor en el campo Código o REF arriba para generar. Haz clic en <strong>Asignar</strong> para copiarlo al formulario.
+              Al hacer clic en <strong>Asignar</strong> se llenarán automáticamente los campos REF y Código.
             </p>
           </div>
         )}
@@ -259,6 +321,61 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
         </div>
       </div>
 
+      {/* SKU y Ubicación en Bodega */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center gap-2">
+          <Warehouse className="w-5 h-5 text-brand-green" />
+          <h2 className="font-heading font-semibold text-lg text-gray-900">SKU y Ubicación en Bodega</h2>
+        </div>
+
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className={labelCls}>SKU interno</label>
+            <div className="flex gap-1.5 mt-1">
+              <input name="sku" value={skuValue} onChange={e => setSkuValue(e.target.value)}
+                className={inputCls + ' flex-1 font-mono'} placeholder="Ej: CI-ASE-0042" />
+              <button type="button" title="Regenerar SKU" onClick={() => setSkuValue(generarSKU(tipoInsumo))}
+                className="shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green transition-colors">
+                <Hash className="w-4 h-4" />
+              </button>
+            </div>
+            <p className="font-body text-xs text-gray-400 mt-1">Identificador único del producto en bodega</p>
+          </div>
+          <div>
+            <label className={labelCls}>Descripción / Bodega</label>
+            <input name="bodega_descripcion" defaultValue={defaults.bodega_descripcion ?? ''}
+              className={inputCls + ' mt-1'} placeholder="Ej: Bodega principal — Sede Norte" />
+          </div>
+        </div>
+
+        <div>
+          <label className={labelCls}>Ubicación física</label>
+          <div className="grid grid-cols-3 gap-2 mt-1">
+            <div>
+              <input name="ubicacion_pasillo" value={pasillo} onChange={e => setPasillo(e.target.value.toUpperCase())}
+                maxLength={5} className={inputCls} placeholder="Pasillo (A)" />
+              <p className="font-body text-xs text-gray-400 mt-0.5 text-center">Pasillo</p>
+            </div>
+            <div>
+              <input name="ubicacion_estante" value={estante} onChange={e => setEstante(e.target.value)}
+                maxLength={5} className={inputCls} placeholder="Estante (02)" />
+              <p className="font-body text-xs text-gray-400 mt-0.5 text-center">Estante</p>
+            </div>
+            <div>
+              <input name="ubicacion_nivel" value={nivel} onChange={e => setNivel(e.target.value)}
+                maxLength={3} className={inputCls} placeholder="Nivel (3)" />
+              <p className="font-body text-xs text-gray-400 mt-0.5 text-center">Nivel</p>
+            </div>
+          </div>
+          {ubicacionPreview && (
+            <p className="font-mono text-xs text-brand-green mt-1.5">
+              Ubicación: <strong>{ubicacionPreview}</strong>
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Stock y precio */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
         <h2 className="font-heading font-semibold text-lg text-gray-900">Stock y precio</h2>
         <div className="grid sm:grid-cols-3 gap-4">

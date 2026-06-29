@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package, Trash2 } from 'lucide-react'
+import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package, Trash2, Warehouse, MapPin } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { ProductoImageUpload } from '@/components/productos/ProductoImageUpload'
@@ -32,6 +32,9 @@ interface Props {
     precio_lista: number | null
     imagen_url: string | null
     activo: boolean
+    sku: string | null
+    ubicacion_bodega: string | null
+    bodega_descripcion: string | null
     stock: { cantidad_real: number; cantidad_disp: number; cantidad_entr: number; cantidad_sal: number } | null
     proveedor: { nombre: string; telefono: string | null; email: string | null } | null
     proveedor2: { nombre: string } | null
@@ -173,6 +176,39 @@ export function ProductoDetalle({ producto: initial, movimientos }: Props) {
             </div>
           )}
         </div>
+
+        {/* SKU y Ubicación en Bodega */}
+        {(initial.sku || initial.ubicacion_bodega || initial.bodega_descripcion) && (
+          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+            <div className="flex items-center gap-2 mb-4">
+              <Warehouse className="w-4 h-4 text-brand-green" />
+              <h3 className="font-heading font-semibold text-sm text-gray-700">SKU y Ubicación en Bodega</h3>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {initial.sku && (
+                <div>
+                  <p className="font-body text-xs text-gray-400">SKU interno</p>
+                  <p className="font-mono font-semibold text-sm text-brand-green mt-0.5">{initial.sku}</p>
+                </div>
+              )}
+              {initial.ubicacion_bodega && (
+                <div>
+                  <p className="font-body text-xs text-gray-400">Ubicación física</p>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
+                    <p className="font-mono font-semibold text-sm text-gray-900">{initial.ubicacion_bodega}</p>
+                  </div>
+                </div>
+              )}
+              {initial.bodega_descripcion && (
+                <div className="col-span-2">
+                  <p className="font-body text-xs text-gray-400">Descripción</p>
+                  <p className="font-body text-sm text-gray-700 mt-0.5">{initial.bodega_descripcion}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Últimos movimientos */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">

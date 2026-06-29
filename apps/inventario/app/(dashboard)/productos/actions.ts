@@ -26,6 +26,15 @@ function leerCampos(formData: FormData) {
     codigo: num(formData.get('codigo')),
     complemento: String(formData.get('complemento') ?? '').trim() || null,
     imagen_url: String(formData.get('imagen_url') ?? '').trim() || null,
+    sku: String(formData.get('sku') ?? '').trim() || null,
+    ubicacion_bodega: (() => {
+      const pasillo = String(formData.get('ubicacion_pasillo') ?? '').trim().toUpperCase()
+      const estante = String(formData.get('ubicacion_estante') ?? '').trim()
+      const nivel   = String(formData.get('ubicacion_nivel') ?? '').trim()
+      if (!pasillo && !estante && !nivel) return null
+      return [pasillo, estante, nivel].filter(Boolean).join('-')
+    })(),
+    bodega_descripcion: String(formData.get('bodega_descripcion') ?? '').trim() || null,
   }
 }
 

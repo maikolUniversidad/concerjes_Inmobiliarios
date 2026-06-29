@@ -16,7 +16,7 @@ export default async function EditarProductoPage({ params }: Props) {
 
   const [{ data, error }, { data: proveedores }] = await Promise.all([
     supabase.from('productos')
-      .select('id, nombre_estandar, presentacion, tipo_insumo, cat_rotacion, stock_minimo_def, precio_lista, proveedor_id, ref, codigo, complemento, imagen_url')
+      .select('id, nombre_estandar, presentacion, tipo_insumo, cat_rotacion, stock_minimo_def, precio_lista, proveedor_id, ref, codigo, complemento, imagen_url, sku, ubicacion_bodega, bodega_descripcion')
       .eq('id', id).single(),
     supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre'),
   ])
