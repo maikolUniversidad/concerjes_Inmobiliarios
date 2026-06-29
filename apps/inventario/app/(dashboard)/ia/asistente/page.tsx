@@ -23,7 +23,8 @@ export default async function AsistentePage() {
   }
 
   return (
-    <div className="h-full">
+    // En móvil deja el hueco de la barra inferior (~4rem + safe-area); en desktop ocupa todo el alto.
+    <div className="h-full pb-[calc(4rem+env(safe-area-inset-bottom))] lg:pb-0">
       <AsistenteClient
         userId={user?.id ?? ''}
         carpetasIniciales={carpetas}

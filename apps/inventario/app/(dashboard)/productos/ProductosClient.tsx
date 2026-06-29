@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Search, Grid3X3, List, AlertTriangle, Eye, Pencil, ArrowLeftRight, Camera } from 'lucide-react'
+import { Search, Grid3X3, List, AlertTriangle, Eye, Pencil, ArrowLeftRight, Camera, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'

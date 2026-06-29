@@ -96,7 +96,7 @@ export function MobileNav() {
           className="bg-sidebar border-t border-white/10 pb-[env(safe-area-inset-bottom)]"
           aria-label="Navegación principal"
         >
-          <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-1.5">
+          <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-1">
             {navigation.map((mod) => {
               const isActive = activeModule?.id === mod.id
               const isOpen = openId === mod.id
@@ -107,7 +107,7 @@ export function MobileNav() {
                   onClick={() => handleModuleTap(mod.id)}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-1 shrink-0 min-w-[4.5rem] rounded-xl px-3 py-2 transition-colors',
+                    'flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[4rem] rounded-xl px-2.5 py-1.5 transition-colors',
                     isActive || isOpen
                       ? 'bg-white/20 text-white'
                       : 'text-green-200 active:bg-white/10'
