@@ -2,10 +2,11 @@
 
 import Link from 'next/link'
 import Image from 'next/image'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { ChevronRight, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { navigation, isItemActive } from './navigation'
+import { createClient } from '@/lib/supabase/client'
 
 interface SidebarProps {
   collapsed?: boolean
@@ -14,6 +15,14 @@ interface SidebarProps {
 
 export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
+  const router = useRouter()
+
+  async function handleLogout() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/login')
+    router.refresh()
+  }
 
   return (
     <aside className="h-full w-full bg-sidebar flex flex-col">
@@ -87,6 +96,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       {/* User + Logout */}
       <div className="border-t border-white/10 p-3 shrink-0">
         <button
+          onClick={handleLogout}
           className={cn(
             'w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-green-200 hover:bg-white/10 hover:text-white transition-colors',
             collapsed && 'lg:justify-center'
