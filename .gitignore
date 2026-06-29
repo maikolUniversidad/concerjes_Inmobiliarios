@@ -16,8 +16,9 @@ build/
 # Turbo
 .turbo
 
-# Vercel
-.vercel
+# Vercel — mantener project.json pero ignorar el resto
+.vercel/*
+!.vercel/project.json
 
 # Debug
 npm-debug.log*
@@ -48,3 +49,5 @@ test-results/
 # Misc
 *.tsbuildinfo
 _cloner_ref/
+
+.env*
