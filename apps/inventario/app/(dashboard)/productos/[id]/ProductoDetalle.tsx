@@ -1,9 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package } from 'lucide-react'
+import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package, Trash2 } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { ProductoImageUpload } from '@/components/productos/ProductoImageUpload'
+import { DeleteButton } from '@/components/ui/DeleteButton'
+import { eliminarProducto } from '../actions'
 import { formatCOP } from '@/lib/utils'
 
 interface Movimiento {
@@ -113,11 +115,19 @@ export function ProductoDetalle({ producto: initial, movimientos }: Props) {
                 <p className="font-body text-sm text-gray-500 mt-0.5">{initial.presentacion}</p>
               )}
             </div>
-            <Link href={`/productos/${initial.id}/editar`}
-              className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors shrink-0">
-              <Edit2 className="w-3.5 h-3.5" />
-              Editar
-            </Link>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link href={`/productos/${initial.id}/editar`}
+                className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
+                <Edit2 className="w-3.5 h-3.5" />
+                Editar
+              </Link>
+              <DeleteButton action={eliminarProducto} id={initial.id}
+                mensaje={`¿Eliminar “${initial.nombre_estandar}”? Se ocultará del catálogo (se conserva el historial).`}
+                className="flex items-center gap-2 border border-red-200 text-red-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-red-50 transition-colors">
+                <Trash2 className="w-3.5 h-3.5" />
+                Eliminar
+              </DeleteButton>
+            </div>
           </div>
         </div>
 

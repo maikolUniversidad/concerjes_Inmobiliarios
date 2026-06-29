@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
   QrCode, FileText, Warehouse, Truck, Users,
-  Settings, Brain, Sparkles, FolderOpen, type LucideIcon,
+  Settings, Brain, Sparkles, FolderOpen, ClipboardList, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -72,9 +72,10 @@ export const navigation: NavModule[] = [
     title: 'Administración',
     icon: Settings,
     items: [
-      { label: 'Documentos/Galería', href: '/documentos',    icon: FolderOpen },
-      { label: 'Usuarios',           href: '/usuarios',       icon: Users },
-      { label: 'Configuración',      href: '/configuracion',  icon: Settings },
+      { label: 'Documentos/Galería', href: '/documentos',      icon: FolderOpen     },
+      { label: 'Usuarios',           href: '/usuarios',         icon: Users          },
+      { label: 'Log de Actividad',   href: '/actividad-log',    icon: ClipboardList  },
+      { label: 'Configuración',      href: '/configuracion',    icon: Settings       },
     ],
   },
 ]

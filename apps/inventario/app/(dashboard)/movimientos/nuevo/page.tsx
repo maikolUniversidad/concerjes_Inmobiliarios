@@ -3,16 +3,24 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { MovimientoForm } from './MovimientoForm'
+import type { TipoMovimiento } from '@/lib/types/database'
 
 export const metadata: Metadata = { title: 'Registrar movimiento' }
 
-export default async function NuevoMovimientoPage() {
+const TIPOS_VALIDOS: TipoMovimiento[] = ['ENTRADA', 'SALIDA', 'DEVOLUCION', 'AJUSTE', 'TRASLADO']
+
+interface Props { searchParams: Promise<{ producto?: string; tipo?: string }> }
+
+export default async function NuevoMovimientoPage({ searchParams }: Props) {
+  const { producto, tipo } = await searchParams
   const supabase = await createClient()
 
   const [{ data: productos }, { data: sedes }] = await Promise.all([
     supabase.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar'),
     supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre'),
   ])
+
+  const initialTipo = tipo && TIPOS_VALIDOS.includes(tipo as TipoMovimiento) ? (tipo as TipoMovimiento) : undefined
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -26,7 +34,7 @@ export default async function NuevoMovimientoPage() {
         </p>
       </div>
 
-      <MovimientoForm productos={productos ?? []} sedes={sedes ?? []} />
+      <MovimientoForm productos={productos ?? []} sedes={sedes ?? []} initialProducto={producto} initialTipo={initialTipo} />
     </div>
   )
 }

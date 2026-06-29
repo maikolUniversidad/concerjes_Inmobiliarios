@@ -36,10 +36,13 @@ CREATE TABLE IF NOT EXISTS proveedores (
   contacto     VARCHAR(200),
   telefono     VARCHAR(30),
   email        VARCHAR(200),
+  logo_url     TEXT,
   es_principal BOOLEAN DEFAULT false,
   activo       BOOLEAN DEFAULT true,
   created_at   TIMESTAMPTZ DEFAULT NOW()
 );
+-- Para BD existentes (la tabla ya existía sin esta columna):
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS logo_url TEXT;
 
 -- Productos (catálogo maestro) ----------------------------------------------
 CREATE TABLE IF NOT EXISTS productos (
@@ -573,3 +576,52 @@ CREATE POLICY "Authenticated upload productos-fotos" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'productos-fotos' AND auth.role() = 'authenticated');
 CREATE POLICY "Authenticated delete productos-fotos" ON storage.objects
   FOR DELETE USING (bucket_id = 'productos-fotos' AND auth.role() = 'authenticated');
+
+-- =============================================================================
+-- USUARIOS — columnas adicionales
+-- =============================================================================
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS avatar_url TEXT;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(30);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permisos JSONB DEFAULT '{}';
+
+-- =============================================================================
+-- ACTIVIDAD LOG
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS actividad_log (
+  id             UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  usuario_id     UUID REFERENCES usuarios(id),
+  usuario_email  VARCHAR(200),
+  usuario_nombre VARCHAR(200),
+  accion         VARCHAR(100) NOT NULL,
+  modulo         VARCHAR(80)  NOT NULL,
+  entidad        VARCHAR(80),
+  entidad_id     TEXT,
+  descripcion    TEXT NOT NULL,
+  detalle        JSONB,
+  ip             VARCHAR(45),
+  created_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_log_usuario ON actividad_log(usuario_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_log_modulo  ON actividad_log(modulo, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_log_created ON actividad_log(created_at DESC);
+
+ALTER TABLE actividad_log ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "admin_read_log"  ON actividad_log;
+DROP POLICY IF EXISTS "insert_log"      ON actividad_log;
+CREATE POLICY "admin_read_log" ON actividad_log FOR SELECT TO authenticated
+  USING (EXISTS (SELECT 1 FROM usuarios u WHERE u.id = auth.uid() AND u.rol IN ('SUPER_ADMIN','ADMIN','AUDITOR')));
+CREATE POLICY "insert_log" ON actividad_log FOR INSERT TO authenticated WITH CHECK (true);
+
+-- =============================================================================
+-- STORAGE — bucket avatares
+-- =============================================================================
+DROP POLICY IF EXISTS "Public read avatares"  ON storage.objects;
+DROP POLICY IF EXISTS "Self upload avatar"    ON storage.objects;
+DROP POLICY IF EXISTS "Self delete avatar"    ON storage.objects;
+CREATE POLICY "Public read avatares" ON storage.objects
+  FOR SELECT USING (bucket_id = 'avatares');
+CREATE POLICY "Self upload avatar" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'avatares' AND auth.role() = 'authenticated');
+CREATE POLICY "Self delete avatar" ON storage.objects
+  FOR DELETE USING (bucket_id = 'avatares' AND auth.role() = 'authenticated');

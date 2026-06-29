@@ -55,6 +55,7 @@ export interface Proveedor {
   contacto: string | null
   telefono: string | null
   email: string | null
+  logo_url: string | null
   es_principal: boolean
   activo: boolean
   created_at: string

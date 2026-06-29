@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
-import { FileText, Plus } from 'lucide-react'
+import Link from 'next/link'
+import { FileText, Plus, Ban } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { DeleteButton } from '@/components/ui/DeleteButton'
+import { anularOC } from './actions'
 import type { EstadoOC } from '@/lib/types/database'
 
 export const metadata: Metadata = { title: 'Órdenes de Compra' }
@@ -43,9 +46,9 @@ export default async function OrdenesCompraPage() {
           <h1 className="font-heading font-bold text-2xl text-gray-900">Órdenes de Compra</h1>
           <p className="font-body text-sm text-gray-500 mt-0.5">{ordenes.length} órdenes registradas</p>
         </div>
-        <button className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg opacity-60 cursor-not-allowed" title="Creación de OC — próximamente">
+        <Link href="/ordenes-compra/nuevo" className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark transition-colors shadow-sm">
           <Plus className="w-4 h-4" /> Nueva orden
-        </button>
+        </Link>
       </div>
 
       {ordenes.length === 0 ? (
@@ -67,17 +70,28 @@ export default async function OrdenesCompraPage() {
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Emisión</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Valor</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Estado</th>
+                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3 w-20">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {ordenes.map(o => (
-                  <tr key={o.id} className="hover:bg-gray-50/50">
+                  <tr key={o.id} className="hover:bg-gray-50/50 group">
                     <td className="px-4 py-3 font-mono text-sm text-gray-900">{o.numero_oc}</td>
                     <td className="px-4 py-3 font-body text-sm text-gray-700">{o.proveedor?.nombre ?? '—'}</td>
                     <td className="px-4 py-3 font-body text-xs text-gray-500">{new Date(o.fecha_emision).toLocaleDateString('es-CO')}</td>
                     <td className="px-4 py-3 text-right font-heading font-semibold text-sm text-gray-900">{o.valor_total ? cop.format(o.valor_total) : '—'}</td>
                     <td className="px-4 py-3 text-center">
                       <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${ESTADO_CLS[o.estado]}`}>{o.estado}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center justify-center">
+                        {o.estado !== 'ANULADA' && o.estado !== 'COMPLETA' && (
+                          <DeleteButton action={anularOC} id={o.id} mensaje={`¿Anular la orden ${o.numero_oc}?`}
+                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all" >
+                            <Ban className="w-3.5 h-3.5" />
+                          </DeleteButton>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}

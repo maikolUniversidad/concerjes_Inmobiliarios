@@ -2,17 +2,15 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { NuevoProductoForm } from './NuevoProductoForm'
+import { ProductoForm } from '../ProductoForm'
+import { crearProducto } from '../actions'
 
 export const metadata: Metadata = { title: 'Nuevo producto' }
 
 export default async function NuevoProductoPage() {
   const supabase = await createClient()
   const { data: proveedores } = await supabase
-    .from('proveedores')
-    .select('id, nombre')
-    .eq('activo', true)
-    .order('nombre')
+    .from('proveedores').select('id, nombre').eq('activo', true).order('nombre')
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -21,12 +19,10 @@ export default async function NuevoProductoPage() {
           <ArrowLeft className="w-4 h-4" /> Volver a productos
         </Link>
         <h1 className="font-heading font-bold text-2xl text-gray-900">Nuevo producto</h1>
-        <p className="font-body text-sm text-gray-500 mt-0.5">
-          Registra un nuevo insumo en el catálogo maestro
-        </p>
+        <p className="font-body text-sm text-gray-500 mt-0.5">Registra un nuevo insumo en el catálogo maestro</p>
       </div>
 
-      <NuevoProductoForm proveedores={proveedores ?? []} />
+      <ProductoForm action={crearProducto} proveedores={proveedores ?? []} submitLabel="Guardar producto" modo="crear" />
     </div>
   )
 }

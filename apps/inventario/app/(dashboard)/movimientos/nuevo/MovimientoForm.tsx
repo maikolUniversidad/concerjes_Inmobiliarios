@@ -31,11 +31,13 @@ function SubmitBtn() {
 interface Props {
   productos: { id: string; nombre_estandar: string; presentacion: string | null }[]
   sedes: { id: string; nombre: string }[]
+  initialProducto?: string
+  initialTipo?: TipoMovimiento
 }
 
-export function MovimientoForm({ productos, sedes }: Props) {
+export function MovimientoForm({ productos, sedes, initialProducto, initialTipo }: Props) {
   const [state, formAction] = useActionState<ActionResult, FormData>(registrarMovimiento, {})
-  const [tipo, setTipo] = useState<TipoMovimiento>('ENTRADA')
+  const [tipo, setTipo] = useState<TipoMovimiento>(initialTipo ?? 'ENTRADA')
   const hint = TIPOS.find(t => t.value === tipo)?.hint
 
   return (
@@ -66,7 +68,7 @@ export function MovimientoForm({ productos, sedes }: Props) {
 
         <div>
           <label className={labelCls}>Producto *</label>
-          <select name="producto_id" required defaultValue="" className={inputCls + ' mt-1 bg-white'}>
+          <select name="producto_id" required defaultValue={initialProducto ?? ''} className={inputCls + ' mt-1 bg-white'}>
             <option value="" disabled>— Selecciona un producto —</option>
             {productos.map(p => (
               <option key={p.id} value={p.id}>

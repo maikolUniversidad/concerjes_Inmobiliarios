@@ -9,7 +9,7 @@ export default async function ProveedoresPage() {
   const supabase = await createClient()
   const { data } = await supabase
     .from('proveedores')
-    .select('id, nombre, nit, contacto, telefono, email, es_principal')
+    .select('id, nombre, nit, contacto, telefono, email, logo_url, es_principal')
     .eq('activo', true)
     .order('es_principal', { ascending: false })
     .order('nombre')
