@@ -532,3 +532,44 @@ BEGIN
 
   RETURN v_id;
 END $$;
+
+-- =============================================================================
+-- STORAGE — Políticas RLS para buckets públicos
+-- Buckets: galeria-fotos, documentos-sst, productos-fotos
+-- =============================================================================
+
+-- galeria-fotos
+DROP POLICY IF EXISTS "Public read galeria-fotos" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated upload galeria-fotos" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated delete galeria-fotos" ON storage.objects;
+
+CREATE POLICY "Public read galeria-fotos" ON storage.objects
+  FOR SELECT USING (bucket_id = 'galeria-fotos');
+CREATE POLICY "Authenticated upload galeria-fotos" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'galeria-fotos' AND auth.role() = 'authenticated');
+CREATE POLICY "Authenticated delete galeria-fotos" ON storage.objects
+  FOR DELETE USING (bucket_id = 'galeria-fotos' AND auth.role() = 'authenticated');
+
+-- documentos-sst
+DROP POLICY IF EXISTS "Public read documentos-sst" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated upload documentos-sst" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated delete documentos-sst" ON storage.objects;
+
+CREATE POLICY "Public read documentos-sst" ON storage.objects
+  FOR SELECT USING (bucket_id = 'documentos-sst');
+CREATE POLICY "Authenticated upload documentos-sst" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'documentos-sst' AND auth.role() = 'authenticated');
+CREATE POLICY "Authenticated delete documentos-sst" ON storage.objects
+  FOR DELETE USING (bucket_id = 'documentos-sst' AND auth.role() = 'authenticated');
+
+-- productos-fotos
+DROP POLICY IF EXISTS "Public read productos-fotos" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated upload productos-fotos" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated delete productos-fotos" ON storage.objects;
+
+CREATE POLICY "Public read productos-fotos" ON storage.objects
+  FOR SELECT USING (bucket_id = 'productos-fotos');
+CREATE POLICY "Authenticated upload productos-fotos" ON storage.objects
+  FOR INSERT WITH CHECK (bucket_id = 'productos-fotos' AND auth.role() = 'authenticated');
+CREATE POLICY "Authenticated delete productos-fotos" ON storage.objects
+  FOR DELETE USING (bucket_id = 'productos-fotos' AND auth.role() = 'authenticated');
