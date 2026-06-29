@@ -63,7 +63,7 @@ export default function AsistentePage() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-6 border-b border-gray-200 bg-white">
+      <div className="p-4 sm:p-6 border-b border-gray-200 bg-white">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 bg-brand-green/10 rounded-xl flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-brand-green" />
@@ -80,7 +80,7 @@ export default function AsistentePage() {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
         {messages.map((msg, i) => (
           <div
             key={i}
@@ -123,7 +123,7 @@ export default function AsistentePage() {
 
       {/* Suggestions */}
       {messages.length <= 1 && (
-        <div className="px-6 pb-2">
+        <div className="px-4 sm:px-6 pb-2">
           <p className="font-body text-xs text-gray-400 mb-2">Sugerencias rápidas:</p>
           <div className="flex flex-wrap gap-2">
             {suggestions.map((s) => (

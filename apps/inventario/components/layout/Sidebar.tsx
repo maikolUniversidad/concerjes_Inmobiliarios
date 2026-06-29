@@ -2,40 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard, Package, BarChart3, ArrowLeftRight,
-  QrCode, FileText, Warehouse, Truck, Users,
-  Settings, Brain, Sparkles, ChevronRight, LogOut,
-} from 'lucide-react'
+import { ChevronRight, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
-
-const navigation = [
-  { title: 'Principal', items: [
-    { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  ]},
-  { title: 'Inventario', items: [
-    { label: 'Productos',   href: '/productos',   icon: Package },
-    { label: 'Stock',       href: '/stock',        icon: BarChart3 },
-    { label: 'Movimientos', href: '/movimientos',  icon: ArrowLeftRight },
-    { label: 'Escáner',     href: '/scanner',      icon: QrCode },
-  ]},
-  { title: 'Gestión', items: [
-    { label: 'Aprovisionamiento', href: '/aprovisionamiento', icon: Warehouse },
-    { label: 'Contratos/Sedes',   href: '/contratos',          icon: FileText },
-    { label: 'Proveedores',       href: '/proveedores',         icon: Truck },
-    { label: 'Órdenes de Compra', href: '/ordenes-compra',      icon: FileText },
-    { label: 'Reportes',          href: '/reportes',            icon: BarChart3 },
-  ]},
-  { title: 'Inteligencia Artificial', items: [
-    { label: 'Visión IA',    href: '/ia/vision',    icon: Sparkles },
-    { label: 'Asistente IA', href: '/ia/asistente', icon: Brain },
-    { label: 'Análisis IA',  href: '/ia/analisis',  icon: BarChart3 },
-  ]},
-  { title: 'Administración', items: [
-    { label: 'Usuarios',      href: '/usuarios',      icon: Users },
-    { label: 'Configuración', href: '/configuracion', icon: Settings },
-  ]},
-]
+import { navigation, isItemActive } from './navigation'
 
 interface SidebarProps {
   collapsed?: boolean
@@ -65,7 +34,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto sidebar-scroll py-4 px-2">
         {navigation.map((group) => (
-          <div key={group.title} className="mb-5">
+          <div key={group.id} className="mb-5">
             {/* Group label — hidden when collapsed on desktop */}
             <p className={cn(
               'text-green-400 font-body font-semibold text-xs uppercase tracking-widest px-3 mb-2',
@@ -76,7 +45,7 @@ export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
 
             <ul className="space-y-0.5">
               {group.items.map((item) => {
-                const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
+                const isActive = isItemActive(pathname, item.href)
                 return (
                   <li key={item.href}>
                     <Link

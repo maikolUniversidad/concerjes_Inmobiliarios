@@ -1,52 +1,26 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
-import { Menu, Bell, Search, X } from 'lucide-react'
+import { MobileNav } from '@/components/layout/MobileNav'
+import { PanelLeft, Bell, Search } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [collapsed, setCollapsed]   = useState(false)
-
-  const closeMobile = useCallback(() => setMobileOpen(false), [])
+  const [collapsed, setCollapsed] = useState(false)
 
   return (
     <div className="flex h-screen bg-gray-50 overflow-hidden">
 
-      {/* ── MOBILE BACKDROP ── */}
-      {mobileOpen && (
-        <div
-          className="fixed inset-0 z-40 bg-black/50 lg:hidden"
-          onClick={closeMobile}
-        />
-      )}
-
-      {/* ── SIDEBAR ──
-          Mobile: fixed overlay (z-50), slides in/out
-          Desktop: static, collapsible
+      {/* ── SIDEBAR (solo desktop) ──
+          En móvil la navegación vive en la barra inferior (MobileNav).
       */}
       <div
         className={[
-          // base
-          'fixed inset-y-0 left-0 z-50 flex-shrink-0 transition-transform duration-300 ease-in-out',
-          // mobile: show/hide via translate
-          mobileOpen ? 'translate-x-0' : '-translate-x-full',
-          // desktop: always visible, no translate
-          'lg:relative lg:translate-x-0 lg:z-auto',
-          // width
+          'hidden lg:flex flex-shrink-0 transition-[width] duration-300 ease-in-out',
           collapsed ? 'lg:w-16' : 'lg:w-64',
-          'w-72',
         ].join(' ')}
       >
-        {/* Mobile close button */}
-        <button
-          onClick={closeMobile}
-          className="absolute top-4 right-3 z-10 lg:hidden p-1.5 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-colors"
-        >
-          <X className="w-4 h-4" />
-        </button>
-
-        <Sidebar collapsed={collapsed} onNavigate={closeMobile} />
+        <Sidebar collapsed={collapsed} />
       </div>
 
       {/* ── MAIN ── */}
@@ -54,22 +28,24 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
 
         {/* TOPBAR */}
         <header className="h-14 bg-white border-b border-gray-200 flex items-center gap-3 px-3 sm:px-5 shrink-0">
-          {/* Hamburger — mobile: opens drawer, desktop: collapses sidebar */}
+          {/* Marca compacta en móvil */}
+          <div className="flex items-center gap-2 lg:hidden">
+            <div className="w-8 h-8 bg-brand-green rounded-lg flex items-center justify-center shrink-0">
+              <span className="text-white font-heading font-bold text-xs">CI</span>
+            </div>
+            <span className="font-heading font-bold text-sm text-gray-900">Inventario</span>
+          </div>
+
+          {/* Colapsar sidebar — solo desktop */}
           <button
-            onClick={() => {
-              if (window.innerWidth >= 1024) {
-                setCollapsed(c => !c)
-              } else {
-                setMobileOpen(o => !o)
-              }
-            }}
-            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
-            aria-label="Menú"
+            onClick={() => setCollapsed((c) => !c)}
+            className="hidden lg:inline-flex p-2 rounded-lg hover:bg-gray-100 transition-colors"
+            aria-label="Colapsar menú"
           >
-            <Menu className="w-5 h-5 text-gray-600" />
+            <PanelLeft className="w-5 h-5 text-gray-600" />
           </button>
 
-          {/* Search — hidden on smallest screens */}
+          {/* Search — oculto en pantallas pequeñas */}
           <div className="flex-1 max-w-xs hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
             <Search className="w-4 h-4 text-gray-400 shrink-0" />
             <input
@@ -84,12 +60,12 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           {/* Actions */}
           <div className="flex items-center gap-1.5">
             {/* Search icon on mobile */}
-            <button className="sm:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors">
+            <button className="sm:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar">
               <Search className="w-5 h-5 text-gray-500" />
             </button>
 
             {/* Notifications */}
-            <button className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors">
+            <button className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Notificaciones">
               <Bell className="w-5 h-5 text-gray-600" />
               <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full" />
             </button>
@@ -101,11 +77,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           </div>
         </header>
 
-        {/* CONTENT */}
-        <main className="flex-1 overflow-y-auto">
+        {/* CONTENT — padding inferior en móvil para no quedar bajo la barra */}
+        <main className="flex-1 overflow-y-auto pb-28 lg:pb-0">
           {children}
         </main>
       </div>
+
+      {/* ── NAV INFERIOR (solo móvil) ── */}
+      <MobileNav />
     </div>
   )
 }

@@ -39,6 +39,10 @@
 /* Brand gradient util */
 .gradient-brand { background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%); }
 
+/* Ocultar barra de scroll (usado en la navegación inferior móvil con scroll horizontal) */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
 /* Smooth scroll */
 html { scroll-behavior: smooth; }
 

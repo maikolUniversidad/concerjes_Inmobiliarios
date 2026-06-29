@@ -32,7 +32,7 @@ export default function StockPage() {
   const totalSaliente = mockStock.reduce((a, s) => a + s.saliente, 0)
 
   return (
-    <div className="p-6 space-y-5">
+    <div className="p-4 sm:p-6 space-y-5">
       <div>
         <h1 className="font-heading font-bold text-2xl text-gray-900">Stock en Tiempo Real</h1>
         <p className="font-body text-sm text-gray-500 mt-0.5">Inventario actual · cantidad real, disponible, entrante y saliente</p>

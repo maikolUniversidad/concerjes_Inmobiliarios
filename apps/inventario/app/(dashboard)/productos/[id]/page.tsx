@@ -51,7 +51,7 @@ export default async function ProductoPage({ params }: Props) {
   const movimientos = (movs ?? []) as Pick<Movimiento,'tipo'|'cantidad'|'observacion'|'created_at'>[]
 
   return (
-    <div className="p-6 space-y-6 max-w-5xl">
+    <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
       <div className="flex items-center gap-2">
         <Link href="/productos"
           className="flex items-center gap-1.5 text-gray-500 hover:text-gray-700 font-body text-sm transition-colors">
