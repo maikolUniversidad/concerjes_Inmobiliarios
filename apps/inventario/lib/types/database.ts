@@ -303,9 +303,116 @@ export const ROL_LABELS: Record<RolUsuario, { label: string; color: string }> = 
   OPERADOR_SEDE: { label: 'Operador Sede', color: 'bg-teal-100 text-teal-800' },
 }
 
+// ── Asistente IA: chat con historial y carpetas ──────────────────────────────
+export type RolMensajeIA = 'user' | 'assistant' | 'system'
+
+export interface IACarpeta {
+  id: string
+  user_id: string
+  nombre: string
+  color: string
+  orden: number
+  created_at: string
+}
+
+export interface IAConversacion {
+  id: string
+  user_id: string
+  carpeta_id: string | null
+  titulo: string
+  modelo: string
+  fijada: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface IAMensaje {
+  id: string
+  conversacion_id: string
+  user_id: string
+  role: RolMensajeIA
+  content: string
+  metadata: Record<string, unknown> | null
+  created_at: string
+}
+
+// ── Notificaciones y Alertas ──────────────────────────────────────────────────
+export type TipoNotificacion =
+  | 'STOCK_BAJO' | 'STOCK_AGOTADO' | 'OC_CREADA' | 'OC_RECIBIDA' | 'OC_POR_VENCER'
+  | 'MOVIMIENTO' | 'CONTACTO_WEB' | 'USUARIO_NUEVO' | 'SISTEMA'
+export type SeveridadNotificacion = 'INFO' | 'EXITO' | 'ADVERTENCIA' | 'CRITICA'
+export type EstadoNotificacion = 'NO_LEIDA' | 'LEIDA' | 'ARCHIVADA'
+
+/** Regla parametrizable: define qué alerta existe y cómo se comporta. */
+export interface ReglaAlerta {
+  id: string
+  codigo: TipoNotificacion
+  nombre: string
+  descripcion: string | null
+  severidad: SeveridadNotificacion
+  activa: boolean
+  canal_app: boolean
+  canal_email: boolean
+  roles_destino: RolUsuario[]
+  umbral: Record<string, unknown>
+  es_sistema: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Instancia entregada a un usuario (bandeja). */
+export interface Notificacion {
+  id: string
+  usuario_id: string
+  tipo: TipoNotificacion
+  severidad: SeveridadNotificacion
+  titulo: string
+  descripcion: string | null
+  entidad: string | null
+  entidad_id: string | null
+  enlace: string | null
+  metadata: Record<string, unknown> | null
+  estado: EstadoNotificacion
+  leido_at: string | null
+  regla_codigo: TipoNotificacion | null
+  created_at: string
+}
+
+export interface NotificacionPreferencias {
+  usuario_id: string
+  tipos_silenciados: TipoNotificacion[]
+  email_activo: boolean
+  updated_at: string
+}
+
+export const TIPO_NOTIFICACION_LABELS: Record<TipoNotificacion, { label: string; icon: string }> = {
+  STOCK_BAJO:    { label: 'Stock bajo',                 icon: 'PackageMinus' },
+  STOCK_AGOTADO: { label: 'Stock agotado',              icon: 'PackageX' },
+  OC_CREADA:     { label: 'Orden de compra creada',     icon: 'FileText' },
+  OC_RECIBIDA:   { label: 'Orden de compra recibida',   icon: 'PackageCheck' },
+  OC_POR_VENCER: { label: 'Orden de compra por vencer', icon: 'CalendarClock' },
+  MOVIMIENTO:    { label: 'Movimiento de inventario',   icon: 'ArrowLeftRight' },
+  CONTACTO_WEB:  { label: 'Nuevo contacto web',         icon: 'Mail' },
+  USUARIO_NUEVO: { label: 'Nuevo usuario',              icon: 'UserPlus' },
+  SISTEMA:       { label: 'Mensaje del sistema',        icon: 'Megaphone' },
+}
+
+export const SEVERIDAD_LABELS: Record<SeveridadNotificacion, { label: string; color: string; bg: string; dot: string }> = {
+  INFO:        { label: 'Información',  color: 'text-blue-700',  bg: 'bg-blue-50 border-blue-100',   dot: 'bg-blue-500' },
+  EXITO:       { label: 'Éxito',       color: 'text-green-700', bg: 'bg-green-50 border-green-100', dot: 'bg-green-500' },
+  ADVERTENCIA: { label: 'Advertencia', color: 'text-amber-700', bg: 'bg-amber-50 border-amber-100', dot: 'bg-amber-500' },
+  CRITICA:     { label: 'Crítica',     color: 'text-red-700',   bg: 'bg-red-50 border-red-100',     dot: 'bg-red-500' },
+}
+
 export type Database = {
   public: {
     Tables: {
+      reglas_alerta: { Row: ReglaAlerta; Insert: Partial<ReglaAlerta>; Update: Partial<ReglaAlerta> }
+      notificaciones: { Row: Notificacion; Insert: Partial<Notificacion>; Update: Partial<Notificacion> }
+      notificaciones_preferencias: { Row: NotificacionPreferencias; Insert: Partial<NotificacionPreferencias>; Update: Partial<NotificacionPreferencias> }
+      ia_carpetas: { Row: IACarpeta; Insert: Partial<IACarpeta>; Update: Partial<IACarpeta> }
+      ia_conversaciones: { Row: IAConversacion; Insert: Partial<IAConversacion>; Update: Partial<IAConversacion> }
+      ia_mensajes: { Row: IAMensaje; Insert: Partial<IAMensaje>; Update: Partial<IAMensaje> }
       productos: { Row: Producto; Insert: Partial<Producto>; Update: Partial<Producto> }
       stock: { Row: Stock; Insert: Partial<Stock>; Update: Partial<Stock> }
       proveedores: { Row: Proveedor; Insert: Partial<Proveedor>; Update: Partial<Proveedor> }

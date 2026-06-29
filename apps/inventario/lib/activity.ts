@@ -1,7 +1,8 @@
 import { SupabaseClient } from '@supabase/supabase-js'
 
 export async function logActivity(
-  supabase: SupabaseClient,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: SupabaseClient<any, any, any>,
   params: {
     accion: string
     modulo: string

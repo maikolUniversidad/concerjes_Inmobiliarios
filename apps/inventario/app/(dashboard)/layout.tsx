@@ -3,7 +3,8 @@
 import { useState } from 'react'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
-import { PanelLeft, Bell, Search } from 'lucide-react'
+import { NotificationBell } from '@/components/layout/NotificationBell'
+import { PanelLeft, Search } from 'lucide-react'
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const [collapsed, setCollapsed] = useState(false)
@@ -65,10 +66,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </button>
 
             {/* Notifications */}
-            <button className="relative p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Notificaciones">
-              <Bell className="w-5 h-5 text-gray-600" />
-              <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full" />
-            </button>
+            <NotificationBell />
 
             {/* Avatar */}
             <div className="w-8 h-8 rounded-full bg-brand-green flex items-center justify-center ml-1">

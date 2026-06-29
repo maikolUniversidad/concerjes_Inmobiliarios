@@ -1,7 +1,8 @@
 import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
   QrCode, FileText, Warehouse, Truck, Users,
-  Settings, Brain, Sparkles, FolderOpen, ClipboardList, Bell, Shield, type LucideIcon,
+  Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
+  UploadCloud, History, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -62,9 +63,7 @@ export const navigation: NavModule[] = [
     title: 'Inteligencia Artificial',
     icon: Brain,
     items: [
-      { label: 'Visión IA',    href: '/ia/vision',    icon: Sparkles },
       { label: 'Asistente IA', href: '/ia/asistente', icon: Brain },
-      { label: 'Análisis IA',  href: '/ia/analisis',  icon: BarChart3 },
     ],
   },
   {
@@ -72,6 +71,8 @@ export const navigation: NavModule[] = [
     title: 'Administración',
     icon: Settings,
     items: [
+      { label: 'Cargas masivas',     href: '/importar',         icon: UploadCloud    },
+      { label: 'Historial de Cambios', href: '/historial',      icon: History        },
       { label: 'Documentos/Galería', href: '/documentos',      icon: FolderOpen     },
       { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell           },
       { label: 'Usuarios',           href: '/usuarios',         icon: Users          },
