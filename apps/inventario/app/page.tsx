@@ -70,13 +70,9 @@ export default async function LandingPage() {
       {/* ── NAVBAR ── */}
       <nav className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100 shadow-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <Image src="/icon.png" alt="CI" width={40} height={40} className="rounded-xl shrink-0 shadow-sm" priority />
-            <div className="min-w-0">
-              <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={180} height={48} className="object-contain h-8 w-auto hidden sm:block" priority />
-              <p className="font-heading font-bold text-sm text-gray-900 leading-tight sm:hidden">Conserjes Inmobiliarios</p>
-              <p className="font-body text-xs text-brand-green leading-tight">NIT 800093388-2</p>
-            </div>
+          <div className="flex flex-col min-w-0">
+            <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={220} height={60} className="object-contain h-9 w-auto" priority />
+            <p className="font-body text-xs text-brand-green leading-tight">NIT 800093388-2</p>
           </div>
           <div className="hidden md:flex items-center gap-5 text-sm">
             {[['#nosotros','Nosotros'],['#historia','Historia'],['#servicios','Servicios'],['#sst','SST'],['#galeria','Galería'],['#clientes','Clientes'],['#contacto','Contacto']].map(([h,l]) => (
