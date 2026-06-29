@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  { auth: { autoRefreshToken: false, persistSession: false } }
-)
+function adminClient() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } }
+  )
+}
 
 export async function POST(req: NextRequest) {
   try {
@@ -17,7 +19,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 1. Crear usuario en Supabase Auth
-    const { data: authData, error: authErr } = await supabaseAdmin.auth.admin.createUser({
+    const { data: authData, error: authErr } = await adminClient().auth.admin.createUser({
       email,
       password,
       email_confirm: true,
@@ -28,7 +30,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 2. Insertar en tabla usuarios con el mismo UUID que Auth
-    const { data: usuario, error: dbErr } = await supabaseAdmin
+    const { data: usuario, error: dbErr } = await adminClient()
       .from('usuarios')
       .insert({
         id: authData.user.id,
@@ -46,7 +48,7 @@ export async function POST(req: NextRequest) {
 
     if (dbErr || !usuario) {
       // Si falla el insert, eliminar el auth user para no dejar huérfanos
-      await supabaseAdmin.auth.admin.deleteUser(authData.user.id)
+      await adminClient().auth.admin.deleteUser(authData.user.id)
       return NextResponse.json({ error: dbErr?.message ?? 'Error al registrar usuario en BD.' }, { status: 400 })
     }
 
@@ -65,12 +67,12 @@ export async function PUT(req: NextRequest) {
 
     // Actualizar contraseña en Auth si se provee
     if (password) {
-      const { error: authErr } = await supabaseAdmin.auth.admin.updateUserById(id, { password })
+      const { error: authErr } = await adminClient().auth.admin.updateUserById(id, { password })
       if (authErr) return NextResponse.json({ error: authErr.message }, { status: 400 })
     }
 
     // Actualizar datos en tabla usuarios
-    const { data: usuario, error: dbErr } = await supabaseAdmin
+    const { data: usuario, error: dbErr } = await adminClient()
       .from('usuarios')
       .update(fields)
       .eq('id', id)
