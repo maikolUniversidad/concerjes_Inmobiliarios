@@ -11,9 +11,9 @@ import {
 /**
  * Barra de navegación inferior para móvil (oculta en desktop `lg+`).
  *
- * - Fila de MÓDULOS fija en la parte inferior, con scroll horizontal.
+ * - Fila de MÓDULOS fija en la parte inferior, distribuida para llenar el ancho.
  * - Al tocar un módulo con submódulos se despliega una bandeja superior,
- *   también con scroll horizontal, con sus submódulos en forma de chips.
+ *   con scroll horizontal, con sus submódulos en forma de chips.
  * - Los módulos de un solo elemento navegan directamente.
  */
 export function MobileNav() {
@@ -96,7 +96,7 @@ export function MobileNav() {
           className="bg-sidebar border-t border-white/10 pb-[env(safe-area-inset-bottom)]"
           aria-label="Navegación principal"
         >
-          <div className="flex gap-1 overflow-x-auto no-scrollbar px-2 py-1">
+          <div className="flex items-stretch gap-0.5 px-1.5 py-1">
             {navigation.map((mod) => {
               const isActive = activeModule?.id === mod.id
               const isOpen = openId === mod.id
@@ -107,14 +107,14 @@ export function MobileNav() {
                   onClick={() => handleModuleTap(mod.id)}
                   aria-current={isActive ? 'page' : undefined}
                   className={cn(
-                    'flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[4rem] rounded-xl px-2.5 py-1.5 transition-colors',
+                    'flex flex-1 min-w-0 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1.5 transition-colors',
                     isActive || isOpen
                       ? 'bg-white/20 text-white'
                       : 'text-green-200 active:bg-white/10'
                   )}
                 >
                   <mod.icon className="w-5 h-5 shrink-0" />
-                  <span className="font-body text-[11px] font-medium leading-none whitespace-nowrap">
+                  <span className="font-body text-[11px] font-medium leading-none truncate max-w-full">
                     {moduleShortLabel[mod.id] ?? mod.title}
                   </span>
                 </button>

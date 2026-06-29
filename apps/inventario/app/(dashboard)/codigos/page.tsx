@@ -10,7 +10,7 @@ export default async function CodigosPage() {
 
   const { data: productos } = await supabase
     .from('productos')
-    .select('id, codigo, ref, nombre_estandar, presentacion')
+    .select('id, codigo, ref, nombre_estandar, presentacion, codigo_barras, codigo_barras_formato, codigo_barras_origen')
     .eq('activo', true)
     .order('nombre_estandar')
     .limit(500)

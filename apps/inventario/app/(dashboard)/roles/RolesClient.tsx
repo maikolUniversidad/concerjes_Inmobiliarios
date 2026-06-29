@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react'
 import { Plus, X, Loader2, Shield, Trash2, ChevronRight, Check } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { GRUPOS_PERMISOS, ALL_PERMISOS, emptyPermisos, countActivos } from '@/lib/permisos'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -16,71 +17,9 @@ export interface Rol {
   created_at: string
 }
 
-// ─── Permisos disponibles ─────────────────────────────────────────────────────
-
-export const GRUPOS_PERMISOS = [
-  {
-    grupo: 'Inventario',
-    permisos: [
-      { key: 'ver_productos',       label: 'Ver productos' },
-      { key: 'editar_productos',    label: 'Crear / editar productos' },
-      { key: 'ver_stock',           label: 'Ver stock' },
-      { key: 'ajustar_stock',       label: 'Ajustar stock' },
-      { key: 'ver_movimientos',     label: 'Ver movimientos' },
-      { key: 'crear_movimientos',   label: 'Registrar movimientos' },
-      { key: 'usar_scanner',        label: 'Usar escáner QR' },
-    ],
-  },
-  {
-    grupo: 'Gestión',
-    permisos: [
-      { key: 'ver_aprovisionamiento',    label: 'Ver aprovisionamiento' },
-      { key: 'editar_aprovisionamiento', label: 'Editar plan de compras' },
-      { key: 'ver_contratos',            label: 'Ver contratos / sedes' },
-      { key: 'editar_contratos',         label: 'Editar contratos / sedes' },
-      { key: 'ver_proveedores',          label: 'Ver proveedores' },
-      { key: 'editar_proveedores',       label: 'Editar proveedores' },
-      { key: 'ver_ordenes_compra',       label: 'Ver órdenes de compra' },
-      { key: 'crear_ordenes_compra',     label: 'Crear / aprobar OC' },
-      { key: 'ver_reportes',             label: 'Ver reportes' },
-    ],
-  },
-  {
-    grupo: 'Administración',
-    permisos: [
-      { key: 'ver_documentos',     label: 'Ver documentos / galería' },
-      { key: 'subir_documentos',   label: 'Subir / eliminar documentos' },
-      { key: 'ver_usuarios',       label: 'Ver usuarios' },
-      { key: 'gestionar_usuarios', label: 'Crear / editar usuarios' },
-      { key: 'gestionar_roles',    label: 'Gestionar roles y permisos' },
-      { key: 'ver_actividad_log',  label: 'Ver log de actividad' },
-      { key: 'ver_configuracion',  label: 'Ver configuración' },
-      { key: 'editar_configuracion', label: 'Editar configuración' },
-    ],
-  },
-  {
-    grupo: 'Inteligencia Artificial',
-    permisos: [
-      { key: 'usar_ia_vision',    label: 'Usar visión IA' },
-      { key: 'usar_ia_asistente', label: 'Usar asistente IA' },
-      { key: 'ver_ia_analisis',   label: 'Ver análisis IA' },
-    ],
-  },
-]
-
-const ALL_PERMISOS = GRUPOS_PERMISOS.flatMap((g) => g.permisos)
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-[#2E7D32] bg-white transition-colors'
-
-function emptyPermisos(): Record<string, boolean> {
-  return Object.fromEntries(ALL_PERMISOS.map((p) => [p.key, false]))
-}
-
-function countActivos(permisos: Record<string, boolean>) {
-  return Object.values(permisos).filter(Boolean).length
-}
 
 // ─── Drawer Form ──────────────────────────────────────────────────────────────
 
@@ -275,7 +214,7 @@ function DrawerForm({ rol, onClose, onSaved, onDeleted }: DrawerFormProps) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export default function RolesClient({ roles: initialRoles }: { roles: Rol[] }) {
+export default function RolesClient({ roles: initialRoles, conteos = {} }: { roles: Rol[]; conteos?: Record<string, number> }) {
   const [roles, setRoles] = useState<Rol[]>(initialRoles)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [selected, setSelected] = useState<Rol | null>(null)
@@ -334,7 +273,9 @@ export default function RolesClient({ roles: initialRoles }: { roles: Rol[] }) {
                   </div>
                   <div>
                     <p className="font-heading font-bold text-sm text-gray-900 leading-tight">{r.nombre}</p>
-                    <p className="font-body text-xs text-gray-400 mt-0.5">{activos} permisos activos</p>
+                    <p className="font-body text-xs text-gray-400 mt-0.5">
+                      {activos} permisos · {conteos[r.id] ?? 0} usuario{(conteos[r.id] ?? 0) === 1 ? '' : 's'}
+                    </p>
                   </div>
                 </div>
                 <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-[#2E7D32] mt-1 shrink-0 transition-colors" />

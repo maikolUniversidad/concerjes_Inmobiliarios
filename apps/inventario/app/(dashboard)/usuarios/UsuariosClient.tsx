@@ -11,20 +11,24 @@ import {
   Trash2,
   Eye,
   EyeOff,
+  Shield,
+  Check,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
+import { GRUPOS_PERMISOS, countActivos, colorRol } from '@/lib/permisos'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-export type RolUsuario =
-  | 'SUPER_ADMIN'
-  | 'ADMIN'
-  | 'SUPERVISOR'
-  | 'COORDINADOR_COMPRAS'
-  | 'BODEGUERO'
-  | 'AUDITOR'
-  | 'OPERADOR_SEDE'
+/** Rol asignable, proveniente de la tabla `roles` (dinámico). */
+export interface RolOption {
+  id: string
+  nombre: string
+  descripcion: string | null
+  permisos: Record<string, boolean> | null
+  rol_base: string | null
+  activo: boolean
+}
 
 export interface GrupoOption {
   id: string
@@ -42,7 +46,8 @@ export interface Usuario {
   id: string
   nombre: string
   email: string
-  rol: RolUsuario
+  rol: string
+  rol_id: string | null
   grupo_id: string | null
   sede_id: string | null
   activo: boolean
@@ -52,41 +57,15 @@ export interface Usuario {
   telefono: string | null
   permisos: Record<string, boolean> | null
   grupos_contrato: { id: string; codigo: string; nombre: string } | null
-}
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const ROLES: RolUsuario[] = [
-  'SUPER_ADMIN',
-  'ADMIN',
-  'SUPERVISOR',
-  'COORDINADOR_COMPRAS',
-  'BODEGUERO',
-  'AUDITOR',
-  'OPERADOR_SEDE',
-]
-
-const ROL_BADGE: Record<RolUsuario, string> = {
-  SUPER_ADMIN: 'bg-red-100 text-red-700',
-  ADMIN: 'bg-orange-100 text-orange-700',
-  SUPERVISOR: 'bg-blue-100 text-blue-700',
-  COORDINADOR_COMPRAS: 'bg-purple-100 text-purple-700',
-  BODEGUERO: 'bg-green-100 text-green-700',
-  AUDITOR: 'bg-gray-100 text-gray-700',
-  OPERADOR_SEDE: 'bg-teal-100 text-teal-700',
-}
-
-const ROL_LABEL: Record<RolUsuario, string> = {
-  SUPER_ADMIN: 'Super Admin',
-  ADMIN: 'Admin',
-  SUPERVISOR: 'Supervisor',
-  COORDINADOR_COMPRAS: 'Coord. Compras',
-  BODEGUERO: 'Bodeguero',
-  AUDITOR: 'Auditor',
-  OPERADOR_SEDE: 'Op. Sede',
+  roles: { id: string; nombre: string; permisos: Record<string, boolean> | null } | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Nombre legible del rol de un usuario (dinámico, con fallback al enum). */
+function nombreRol(u: Usuario, roles: RolOption[]): string {
+  return u.roles?.nombre ?? roles.find((r) => r.id === u.rol_id)?.nombre ?? u.rol ?? '—'
+}
 
 function initials(nombre: string) {
   return nombre
@@ -143,12 +122,15 @@ interface DrawerFormProps {
   usuario: Usuario | null
   grupos: GrupoOption[]
   sedes: SedeOption[]
+  roles: RolOption[]
   onClose: () => void
   onSaved: (updated: Usuario) => void
   onDeleted: (id: string) => void
 }
 
-function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: DrawerFormProps) {
+const USER_SELECT = `id, nombre, email, rol, rol_id, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre), roles(id, nombre, permisos)`
+
+function DrawerForm({ usuario, grupos, sedes, roles, onClose, onSaved, onDeleted }: DrawerFormProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createClient() as any
   const isNew = usuario === null
@@ -157,7 +139,7 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
   const [email, setEmail] = useState(usuario?.email ?? '')
   const [password, setPassword] = useState('')
   const [telefono, setTelefono] = useState(usuario?.telefono ?? '')
-  const [rol, setRol] = useState<RolUsuario>(usuario?.rol ?? 'AUDITOR')
+  const [rolId, setRolId] = useState<string>(usuario?.rol_id ?? roles[0]?.id ?? '')
   const [grupoId, setGrupoId] = useState(usuario?.grupo_id ?? '')
   const [sedeId, setSedeId] = useState(usuario?.sede_id ?? '')
   const [activo, setActivo] = useState(usuario?.activo ?? true)
@@ -173,6 +155,8 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
   const filteredSedes = grupoId
     ? sedes.filter((s) => s.grupo_id === grupoId)
     : sedes
+
+  const rolSel = roles.find((r) => r.id === rolId) ?? null
 
   function handleFile(file: File) {
     if (!file.type.startsWith('image/')) return
@@ -223,7 +207,7 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
             email: email.trim(),
             password,
             telefono: telefono.trim() || null,
-            rol,
+            rol_id: rolId || null,
             grupo_id: grupoId || null,
             sede_id: sedeId || null,
             activo,
@@ -252,7 +236,7 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
           descripcion: `Usuario creado: ${inserted.nombre}`,
           entidad: 'usuarios',
           entidad_id: inserted.id,
-          detalle: { rol, email },
+          detalle: { rol: rolSel?.nombre ?? null, email },
         })
 
         onSaved(inserted as unknown as Usuario)
@@ -278,14 +262,14 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
           .update({
             nombre: nombre.trim(),
             telefono: telefono.trim() || null,
-            rol,
+            rol_id: rolId || null,
             grupo_id: grupoId || null,
             sede_id: sedeId || null,
             activo,
             avatar_url: newAvatarUrl,
           })
           .eq('id', usuario!.id)
-          .select(`id, nombre, email, rol, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre)`)
+          .select(USER_SELECT)
           .single()
 
         if (updateErr || !updated) {
@@ -299,7 +283,7 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
           descripcion: `Usuario editado: ${updated.nombre}`,
           entidad: 'usuarios',
           entidad_id: updated.id,
-          detalle: { rol, activo },
+          detalle: { rol: rolSel?.nombre ?? null, activo },
         })
 
         onSaved(updated as unknown as Usuario)
@@ -467,17 +451,59 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
               Rol
             </label>
             <select
-              value={rol}
-              onChange={(e) => setRol(e.target.value as RolUsuario)}
+              value={rolId}
+              onChange={(e) => setRolId(e.target.value)}
               className={inputCls}
             >
-              {ROLES.map((r) => (
-                <option key={r} value={r}>
-                  {ROL_LABEL[r]}
+              {roles.length === 0 && <option value="">— Sin roles definidos —</option>}
+              {roles.map((r) => (
+                <option key={r.id} value={r.id}>
+                  {r.nombre}
                 </option>
               ))}
             </select>
+            {rolSel?.descripcion && (
+              <p className="font-body text-xs text-gray-400 mt-1">{rolSel.descripcion}</p>
+            )}
           </div>
+
+          {/* Preview de permisos del rol seleccionado (solo lectura) */}
+          {rolSel && (
+            <div className="rounded-xl border border-gray-100 bg-gray-50/60 p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="flex items-center gap-1.5 font-body font-semibold text-xs text-gray-600">
+                  <Shield className="w-3.5 h-3.5 text-[#2E7D32]" /> Permisos de este rol
+                </span>
+                <span className="font-body text-xs text-gray-400">
+                  {countActivos(rolSel.permisos)} activos
+                </span>
+              </div>
+              <div className="space-y-2 max-h-44 overflow-y-auto pr-1">
+                {GRUPOS_PERMISOS.map((g) => {
+                  const activos = g.permisos.filter((p) => rolSel.permisos?.[p.key])
+                  if (activos.length === 0) return null
+                  return (
+                    <div key={g.grupo}>
+                      <p className="font-body text-[11px] font-semibold uppercase tracking-wide text-gray-400">{g.grupo}</p>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {activos.map((p) => (
+                          <span key={p.key} className="inline-flex items-center gap-1 rounded-full bg-white border border-gray-200 px-2 py-0.5 font-body text-[11px] text-gray-600">
+                            <Check className="w-2.5 h-2.5 text-[#2E7D32]" /> {p.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+                {countActivos(rolSel.permisos) === 0 && (
+                  <p className="font-body text-xs text-gray-400">Este rol no tiene permisos asignados.</p>
+                )}
+              </div>
+              <p className="mt-2 font-body text-[11px] text-gray-400">
+                Edita los permisos desde <span className="font-semibold">Roles y Permisos</span>.
+              </p>
+            </div>
+          )}
 
           <div>
             <label className="font-body font-semibold text-xs text-gray-600 block mb-1">
@@ -568,9 +594,10 @@ interface UsuariosClientProps {
   usuarios: Usuario[]
   grupos: GrupoOption[]
   sedes: SedeOption[]
+  roles: RolOption[]
 }
 
-export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sedes }: UsuariosClientProps) {
+export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sedes, roles }: UsuariosClientProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = createClient() as any
   const [usuarios, setUsuarios] = useState<Usuario[]>(initialUsuarios)
@@ -696,11 +723,14 @@ export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sede
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${ROL_BADGE[u.rol]}`}
-                    >
-                      {ROL_LABEL[u.rol]}
-                    </span>
+                    {(() => {
+                      const nombre = nombreRol(u, roles)
+                      return (
+                        <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${colorRol(nombre)}`}>
+                          {nombre}
+                        </span>
+                      )
+                    })()}
                   </td>
                   <td className="px-4 py-3 hidden md:table-cell">
                     <span className="font-body text-sm text-gray-600">
@@ -764,6 +794,7 @@ export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sede
             usuario={selected}
             grupos={grupos}
             sedes={sedes}
+            roles={roles}
             onClose={closeDrawer}
             onSaved={handleSaved}
             onDeleted={handleDeleted}

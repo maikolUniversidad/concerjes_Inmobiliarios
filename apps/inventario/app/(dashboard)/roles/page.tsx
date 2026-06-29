@@ -13,6 +13,13 @@ export default async function RolesPage() {
     .select('*')
     .order('created_at', { ascending: true })
 
+  // Conteo de usuarios por rol (para mostrar cuántos usan cada rol)
+  const { data: usuariosRol } = await supabase.from('usuarios').select('rol_id')
+  const conteos: Record<string, number> = {}
+  for (const u of (usuariosRol ?? []) as { rol_id: string | null }[]) {
+    if (u.rol_id) conteos[u.rol_id] = (conteos[u.rol_id] ?? 0) + 1
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
       <div>
@@ -21,7 +28,7 @@ export default async function RolesPage() {
           Define roles personalizados y configura sus permisos de acceso
         </p>
       </div>
-      <RolesClient roles={roles ?? []} />
+      <RolesClient roles={roles ?? []} conteos={conteos} />
     </div>
   )
 }

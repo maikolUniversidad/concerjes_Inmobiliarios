@@ -12,7 +12,7 @@ function adminClient() {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
-    const { nombre, email, password, telefono, rol, grupo_id, sede_id, activo } = body
+    const { nombre, email, password, telefono, rol_id, grupo_id, sede_id, activo } = body
 
     if (!nombre || !email || !password) {
       return NextResponse.json({ error: 'nombre, email y password son obligatorios.' }, { status: 400 })
@@ -37,13 +37,14 @@ export async function POST(req: NextRequest) {
         nombre: nombre.trim(),
         email: email.trim(),
         telefono: telefono?.trim() || null,
-        rol: rol ?? 'OPERADOR_SEDE',
+        // El enum `rol` lo sincroniza el trigger a partir del rol asignado.
+        rol_id: rol_id || null,
         grupo_id: grupo_id || null,
         sede_id: sede_id || null,
         activo: activo ?? true,
         avatar_url: null,
       })
-      .select(`id, nombre, email, rol, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre)`)
+      .select(`id, nombre, email, rol, rol_id, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre), roles(id, nombre, permisos)`)
       .single()
 
     if (dbErr || !usuario) {
@@ -76,7 +77,7 @@ export async function PUT(req: NextRequest) {
       .from('usuarios')
       .update(fields)
       .eq('id', id)
-      .select(`id, nombre, email, rol, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre)`)
+      .select(`id, nombre, email, rol, rol_id, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre), roles(id, nombre, permisos)`)
       .single()
 
     if (dbErr || !usuario) {

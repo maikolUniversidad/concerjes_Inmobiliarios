@@ -15,6 +15,7 @@ export default async function UsuariosPage() {
       nombre,
       email,
       rol,
+      rol_id,
       grupo_id,
       sede_id,
       activo,
@@ -27,6 +28,11 @@ export default async function UsuariosPage() {
         id,
         codigo,
         nombre
+      ),
+      roles (
+        id,
+        nombre,
+        permisos
       )
     `)
     .order('created_at', { ascending: false })
@@ -41,6 +47,13 @@ export default async function UsuariosPage() {
     .select('id, grupo_id, nombre')
     .order('nombre')
 
+  // Roles dinámicos (catálogo asignable) desde la tabla `roles`
+  const { data: roles } = await supabase
+    .from('roles')
+    .select('id, nombre, descripcion, permisos, rol_base, activo')
+    .eq('activo', true)
+    .order('nombre')
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
       <div>
@@ -53,6 +66,7 @@ export default async function UsuariosPage() {
         usuarios={usuarios ?? []}
         grupos={grupos ?? []}
         sedes={sedes ?? []}
+        roles={roles ?? []}
       />
     </div>
   )

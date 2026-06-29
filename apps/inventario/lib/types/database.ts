@@ -28,6 +28,9 @@ export interface Producto {
   proveedor2_id: string | null
   precio_lista2: number | null
   imagen_url: string | null
+  codigo_barras: string | null
+  codigo_barras_formato: string | null
+  codigo_barras_origen: string | null
   activo: boolean
   created_at: string
   updated_at: string
