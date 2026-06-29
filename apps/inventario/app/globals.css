@@ -35,3 +35,12 @@
 .sidebar-scroll::-webkit-scrollbar { width: 4px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
 .sidebar-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
+
+/* Brand gradient util */
+.gradient-brand { background: linear-gradient(135deg, #1B5E20 0%, #2E7D32 50%, #388E3C 100%); }
+
+/* Smooth scroll */
+html { scroll-behavior: smooth; }
+
+/* Mobile tap highlight */
+* { -webkit-tap-highlight-color: transparent; }
