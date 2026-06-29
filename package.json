@@ -13,7 +13,10 @@
     "lint": "turbo run lint",
     "test": "turbo run test",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "clean": "turbo run clean"
+    "clean": "turbo run clean",
+    "deploy": "node scripts/vercel-deploy.mjs deploy --prod --yes",
+    "deploy:preview": "node scripts/vercel-deploy.mjs deploy --yes",
+    "deploy:status": "node scripts/vercel-deploy.mjs ls"
   },
   "devDependencies": {
     "pg": "^8.22.0",
