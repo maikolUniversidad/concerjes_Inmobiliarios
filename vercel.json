@@ -1,14 +1,7 @@
 {
-  "projects": [
-    {
-      "name": "conserjes-web",
-      "root": "apps/web",
-      "framework": "nextjs"
-    },
-    {
-      "name": "conserjes-inventario",
-      "root": "apps/inventario",
-      "framework": "nextjs"
-    }
-  ]
+  "framework": "nextjs",
+  "buildCommand": "cd apps/inventario && npm run build",
+  "outputDirectory": "apps/inventario/.next",
+  "installCommand": "npm install",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/inventario/"
 }
