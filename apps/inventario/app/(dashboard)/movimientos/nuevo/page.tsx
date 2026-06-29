@@ -15,10 +15,14 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const { producto, tipo } = await searchParams
   const supabase = await createClient()
 
-  const [{ data: productos }, { data: sedes }] = await Promise.all([
+  const [{ data: productos }, { data: sedes }, { data: ubicData }] = await Promise.all([
     supabase.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar'),
     supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre'),
+    supabase.from('ubicaciones').select('id, codigo, nombre, bodega:bodegas ( nombre )').eq('activo', true).order('codigo'),
   ])
+
+  const ubicaciones = ((ubicData as unknown as { id: string; codigo: string; nombre: string | null; bodega: { nombre: string } | null }[]) ?? [])
+    .map(u => ({ id: u.id, label: `${u.bodega?.nombre ?? 'Bodega'} · ${u.codigo}${u.nombre ? ` (${u.nombre})` : ''}` }))
 
   const initialTipo = tipo && TIPOS_VALIDOS.includes(tipo as TipoMovimiento) ? (tipo as TipoMovimiento) : undefined
 
@@ -34,7 +38,7 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
         </p>
       </div>
 
-      <MovimientoForm productos={productos ?? []} sedes={sedes ?? []} initialProducto={producto} initialTipo={initialTipo} />
+      <MovimientoForm productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} initialProducto={producto} initialTipo={initialTipo} />
     </div>
   )
 }

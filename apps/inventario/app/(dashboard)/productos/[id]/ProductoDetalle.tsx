@@ -27,20 +27,53 @@ interface Props {
     cat_rotacion: CategoriaRotacion
     stock_minimo_def: number
     stock_minimo_asig: number
+    stock_min_suger: number | null
     ind_rot_general: number | null
     ind_rot_mes: number | null
     precio_lista: number | null
+    precio_lista2: number | null
     imagen_url: string | null
     activo: boolean
     sku: string | null
     ubicacion_bodega: string | null
     bodega_descripcion: string | null
+    codigo_barras: string | null
+    codigo_barras_formato: string | null
+    codigo_barras_origen: string | null
+    created_at?: string | null
+    updated_at?: string | null
     stock: { cantidad_real: number; cantidad_disp: number; cantidad_entr: number; cantidad_sal: number } | null
     proveedor: { nombre: string; telefono: string | null; email: string | null } | null
     proveedor2: { nombre: string } | null
   }
   movimientos: Movimiento[]
   fotos: { id: string; url: string; storage_path: string | null; orden: number; es_principal: boolean }[]
+}
+
+const SIN = '—'
+/** Devuelve el valor o un guion si está vacío/nulo. */
+function val(v: string | number | null | undefined): string {
+  if (v === null || v === undefined || v === '') return SIN
+  return String(v)
+}
+
+function Campo({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
+  return (
+    <div>
+      <p className="font-body text-xs text-gray-400">{label}</p>
+      <p className={`font-medium text-sm text-gray-900 ${mono ? 'font-mono' : 'font-body'}`}>{value}</p>
+    </div>
+  )
+}
+
+const ORIGEN_BADGE: Record<string, { label: string; cls: string }> = {
+  ESCANEADO: { label: 'Escaneado del producto', cls: 'bg-blue-50 text-blue-700 border-blue-100' },
+  GENERADO:  { label: 'Generado por nosotros',  cls: 'bg-green-50 text-green-700 border-green-100' },
+}
+
+function fechaCorta(iso?: string | null): string {
+  if (!iso) return SIN
+  return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
 function MovIcon({ tipo }: { tipo: string }) {
@@ -140,81 +173,124 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos }: Props
           </div>
         </div>
 
-        {/* Detalles */}
+        {/* Detalles — se muestran TODOS los campos, aunque estén sin asignar */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
           <h3 className="font-heading font-semibold text-sm text-gray-700 mb-4">Información del producto</h3>
-          <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-            {[
-              { label: 'Tipo de insumo',    value: initial.tipo_insumo },
-              { label: 'Precio lista',      value: initial.precio_lista ? formatCOP(initial.precio_lista) : '—' },
-              { label: 'Índice rot. gral',  value: initial.ind_rot_general ?? '—' },
-              { label: 'Índice rot. mes',   value: initial.ind_rot_mes ?? '—' },
-              { label: 'Stock mín. asig.',  value: initial.stock_minimo_asig ?? '—' },
-              { label: 'Estado',            value: initial.activo ? 'Activo' : 'Inactivo' },
-            ].map(d => (
-              <div key={d.label}>
-                <p className="font-body text-xs text-gray-400">{d.label}</p>
-                <p className="font-body font-medium text-sm text-gray-900">{d.value}</p>
-              </div>
-            ))}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-6 gap-y-3">
+            <Campo label="REF" value={val(initial.ref)} mono />
+            <Campo label="Código interno" value={val(initial.codigo)} mono />
+            <Campo label="SKU interno" value={initial.sku ? <span className="text-brand-green">{initial.sku}</span> : 'Sin asignar'} mono />
+            <Campo label="Tipo de insumo" value={val(initial.tipo_insumo)} />
+            <Campo label="Categoría rotación" value={`${initial.cat_rotacion} · ${cat.label}`} />
+            <Campo label="Presentación" value={val(initial.presentacion)} />
+            <Campo label="Precio lista" value={initial.precio_lista ? formatCOP(initial.precio_lista) : SIN} />
+            <Campo label="Precio lista 2" value={initial.precio_lista2 ? formatCOP(initial.precio_lista2) : SIN} />
+            <Campo label="Estado" value={initial.activo ? 'Activo' : 'Inactivo'} />
+            <Campo label="Índice rot. general" value={val(initial.ind_rot_general)} />
+            <Campo label="Índice rot. mes" value={val(initial.ind_rot_mes)} />
+            <Campo label="Stock mín. definido" value={val(initial.stock_minimo_def)} />
+            <Campo label="Stock mín. asignado" value={val(initial.stock_minimo_asig)} />
+            <Campo label="Stock mín. sugerido" value={val(initial.stock_min_suger)} />
           </div>
 
-          {/* Proveedores */}
-          {initial.proveedor && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="font-body text-xs text-gray-400 mb-2">Proveedor principal</p>
-              <div className="flex items-center gap-3 bg-green-50 rounded-xl px-3 py-2.5">
-                <Package className="w-4 h-4 text-brand-green" />
-                <div>
-                  <p className="font-body font-semibold text-sm text-gray-900">{initial.proveedor.nombre}</p>
-                  {initial.proveedor.telefono && (
-                    <p className="font-body text-xs text-gray-500">{initial.proveedor.telefono}</p>
-                  )}
-                </div>
+          {/* Código de barras / QR */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="font-body text-xs text-gray-400 mb-1.5">Código de barras / QR</p>
+            {initial.codigo_barras ? (
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono font-semibold text-sm text-gray-900 break-all">{initial.codigo_barras}</span>
+                {initial.codigo_barras_formato && (
+                  <span className="font-body text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{initial.codigo_barras_formato}</span>
+                )}
+                {initial.codigo_barras_origen && ORIGEN_BADGE[initial.codigo_barras_origen] && (
+                  <span className={`font-body text-[11px] px-2 py-0.5 rounded-full border ${ORIGEN_BADGE[initial.codigo_barras_origen].cls}`}>
+                    {ORIGEN_BADGE[initial.codigo_barras_origen].label}
+                  </span>
+                )}
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-body text-sm text-gray-400">Sin asignar</span>
+                <Link href="/codigos" className="font-body text-xs text-brand-green hover:underline font-semibold">Generar código →</Link>
+              </div>
+            )}
+          </div>
 
-          {initial.complemento && (
-            <div className="mt-4 pt-4 border-t border-gray-100">
-              <p className="font-body text-xs text-gray-400 mb-1">Notas / Complemento</p>
-              <p className="font-body text-sm text-gray-700">{initial.complemento}</p>
-            </div>
-          )}
-        </div>
-
-        {/* SKU y Ubicación en Bodega */}
-        {(initial.sku || initial.ubicacion_bodega || initial.bodega_descripcion) && (
-          <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center gap-2 mb-4">
-              <Warehouse className="w-4 h-4 text-brand-green" />
-              <h3 className="font-heading font-semibold text-sm text-gray-700">SKU y Ubicación en Bodega</h3>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              {initial.sku && (
-                <div>
-                  <p className="font-body text-xs text-gray-400">SKU interno</p>
-                  <p className="font-mono font-semibold text-sm text-brand-green mt-0.5">{initial.sku}</p>
-                </div>
-              )}
-              {initial.ubicacion_bodega && (
-                <div>
-                  <p className="font-body text-xs text-gray-400">Ubicación física</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">
-                    <MapPin className="w-3.5 h-3.5 text-gray-400" />
-                    <p className="font-mono font-semibold text-sm text-gray-900">{initial.ubicacion_bodega}</p>
+          {/* Proveedores — siempre visibles */}
+          <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <p className="font-body text-xs text-gray-400 mb-1.5">Proveedor principal</p>
+              {initial.proveedor ? (
+                <div className="flex items-center gap-3 bg-green-50 rounded-xl px-3 py-2.5">
+                  <Package className="w-4 h-4 text-brand-green shrink-0" />
+                  <div className="min-w-0">
+                    <p className="font-body font-semibold text-sm text-gray-900 truncate">{initial.proveedor.nombre}</p>
+                    {initial.proveedor.telefono && (
+                      <p className="font-body text-xs text-gray-500">{initial.proveedor.telefono}</p>
+                    )}
+                    {initial.proveedor.email && (
+                      <p className="font-body text-xs text-gray-400 truncate">{initial.proveedor.email}</p>
+                    )}
                   </div>
                 </div>
+              ) : (
+                <p className="font-body text-sm text-gray-400">Sin asignar</p>
               )}
-              {initial.bodega_descripcion && (
-                <div className="col-span-2">
-                  <p className="font-body text-xs text-gray-400">Descripción</p>
-                  <p className="font-body text-sm text-gray-700 mt-0.5">{initial.bodega_descripcion}</p>
+            </div>
+            <div>
+              <p className="font-body text-xs text-gray-400 mb-1.5">Proveedor secundario</p>
+              {initial.proveedor2 ? (
+                <div className="flex items-center gap-3 bg-gray-50 rounded-xl px-3 py-2.5">
+                  <Package className="w-4 h-4 text-gray-400 shrink-0" />
+                  <p className="font-body font-semibold text-sm text-gray-900 truncate">{initial.proveedor2.nombre}</p>
                 </div>
+              ) : (
+                <p className="font-body text-sm text-gray-400">Sin asignar</p>
               )}
             </div>
           </div>
-        )}
+
+          {/* Notas / Complemento — siempre visible */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="font-body text-xs text-gray-400 mb-1">Notas / Complemento</p>
+            <p className="font-body text-sm text-gray-700">{initial.complemento || SIN}</p>
+          </div>
+
+          {/* Fechas */}
+          <div className="mt-4 pt-4 border-t border-gray-100 flex flex-wrap gap-x-6 gap-y-1">
+            <span className="font-body text-xs text-gray-400">Creado: <span className="text-gray-600">{fechaCorta(initial.created_at)}</span></span>
+            <span className="font-body text-xs text-gray-400">Actualizado: <span className="text-gray-600">{fechaCorta(initial.updated_at)}</span></span>
+          </div>
+        </div>
+
+        {/* SKU y Ubicación en Bodega — siempre visible, aunque no tenga datos */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <div className="flex items-center gap-2 mb-4">
+            <Warehouse className="w-4 h-4 text-brand-green" />
+            <h3 className="font-heading font-semibold text-sm text-gray-700">SKU y Ubicación en Bodega</h3>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="font-body text-xs text-gray-400">SKU interno</p>
+              <p className={`font-mono font-semibold text-sm mt-0.5 ${initial.sku ? 'text-brand-green' : 'text-gray-400'}`}>
+                {initial.sku || 'Sin asignar'}
+              </p>
+            </div>
+            <div>
+              <p className="font-body text-xs text-gray-400">Ubicación física</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                <p className={`font-mono font-semibold text-sm ${initial.ubicacion_bodega ? 'text-gray-900' : 'text-gray-400'}`}>
+                  {initial.ubicacion_bodega || 'Sin asignar'}
+                </p>
+              </div>
+            </div>
+            <div className="col-span-2">
+              <p className="font-body text-xs text-gray-400">Descripción de ubicación</p>
+              <p className="font-body text-sm text-gray-700 mt-0.5">{initial.bodega_descripcion || SIN}</p>
+            </div>
+          </div>
+        </div>
 
         {/* Últimos movimientos */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">

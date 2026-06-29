@@ -31,11 +31,12 @@ function SubmitBtn() {
 interface Props {
   productos: { id: string; nombre_estandar: string; presentacion: string | null }[]
   sedes: { id: string; nombre: string }[]
+  ubicaciones?: { id: string; label: string }[]
   initialProducto?: string
   initialTipo?: TipoMovimiento
 }
 
-export function MovimientoForm({ productos, sedes, initialProducto, initialTipo }: Props) {
+export function MovimientoForm({ productos, sedes, ubicaciones = [], initialProducto, initialTipo }: Props) {
   const [state, formAction] = useActionState<ActionResult, FormData>(registrarMovimiento, {})
   const [tipo, setTipo] = useState<TipoMovimiento>(initialTipo ?? 'ENTRADA')
   const hint = TIPOS.find(t => t.value === tipo)?.hint
@@ -91,6 +92,17 @@ export function MovimientoForm({ productos, sedes, initialProducto, initialTipo 
             </select>
           </div>
         </div>
+
+        {ubicaciones.length > 0 && (
+          <div>
+            <label className={labelCls}>Ubicación en bodega (opcional)</label>
+            <select name="ubicacion_id" defaultValue="" className={inputCls + ' mt-1 bg-white'}>
+              <option value="">— Sin ubicación —</option>
+              {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
+            </select>
+            <p className="font-body text-xs text-gray-400 mt-1">Vincula este movimiento a una estantería/zona de la bodega.</p>
+          </div>
+        )}
 
         <div>
           <label className={labelCls}>Observación</label>

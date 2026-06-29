@@ -44,6 +44,7 @@ export const navigation: NavModule[] = [
       { label: 'Stock',              href: '/stock',     icon: BarChart3 },
       { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight },
       { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck },
+      { label: 'Bodegas',            href: '/bodegas',   icon: Warehouse },
       { label: 'Generador Códigos',  href: '/codigos',   icon: Barcode },
     ],
   },

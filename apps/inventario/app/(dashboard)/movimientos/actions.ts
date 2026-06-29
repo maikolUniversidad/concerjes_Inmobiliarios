@@ -16,6 +16,7 @@ export async function registrarMovimiento(_prev: ActionResult, formData: FormDat
   const tipo = String(formData.get('tipo') ?? '') as TipoMovimiento
   const cantidad = Number(formData.get('cantidad'))
   const sede_id = String(formData.get('sede_id') ?? '') || null
+  const ubicacion_id = String(formData.get('ubicacion_id') ?? '') || null
   const observacion = String(formData.get('observacion') ?? '').trim() || null
 
   if (!producto_id) return { error: 'Selecciona un producto.' }
@@ -29,6 +30,7 @@ export async function registrarMovimiento(_prev: ActionResult, formData: FormDat
     p_cantidad: cantidad,
     p_sede: sede_id,
     p_observacion: observacion,
+    p_ubicacion: ubicacion_id,
   })
 
   if (error) {

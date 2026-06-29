@@ -29,10 +29,12 @@ export default async function ProductoPage({ params }: Props) {
     .from('productos')
     .select(`
       id, ref, codigo, nombre_estandar, presentacion, complemento,
-      tipo_insumo, cat_rotacion, stock_minimo_def, stock_minimo_asig,
-      ind_rot_general, ind_rot_mes, precio_lista, imagen_url, activo,
+      tipo_insumo, cat_rotacion, stock_minimo_def, stock_minimo_asig, stock_min_suger,
+      ind_rot_general, ind_rot_mes, precio_lista, precio_lista2, imagen_url, activo,
       sku, ubicacion_bodega, bodega_descripcion,
-      stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ),
+      codigo_barras, codigo_barras_formato, codigo_barras_origen,
+      created_at, updated_at,
+      stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal, updated_at ),
       proveedor:proveedor_id ( nombre, telefono, email ),
       proveedor2:proveedor2_id ( nombre )
     `)

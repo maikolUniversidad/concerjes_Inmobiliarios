@@ -14,6 +14,8 @@ interface Props {
   /** Carpeta dentro del bucket. */
   folder?: string
   label?: string
+  /** Se invoca con la URL pública al subir, o null al quitar. */
+  onChange?: (url: string | null) => void
 }
 
 type State = 'idle' | 'dragging' | 'uploading' | 'success' | 'error'
@@ -24,7 +26,7 @@ type State = 'idle' | 'dragging' | 'uploading' | 'success' | 'error'
  * la server action del formulario persiste la URL. Sirve para CREAR (sin id)
  * y para EDITAR.
  */
-export function ImagePicker({ name = 'imagen_url', defaultUrl = null, bucket = 'productos-fotos', folder = 'nuevos', label = 'Foto del producto' }: Props) {
+export function ImagePicker({ name = 'imagen_url', defaultUrl = null, bucket = 'productos-fotos', folder = 'nuevos', label = 'Foto del producto', onChange }: Props) {
   const [state, setState] = useState<State>('idle')
   const [url, setUrl] = useState<string | null>(defaultUrl)
   const [preview, setPreview] = useState<string | null>(defaultUrl)
@@ -55,6 +57,7 @@ export function ImagePicker({ name = 'imagen_url', defaultUrl = null, bucket = '
 
       const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path)
       setUrl(publicUrl); setPreview(publicUrl); setState('success')
+      onChange?.(publicUrl)
       setTimeout(() => setState('idle'), 2000)
     } catch (e: unknown) {
       setErrorMsg(e instanceof Error ? e.message : 'Error al subir la imagen')
@@ -67,7 +70,7 @@ export function ImagePicker({ name = 'imagen_url', defaultUrl = null, bucket = '
     const file = e.dataTransfer.files[0]; if (file) subir(file)
   }, [subir])
 
-  function quitar() { setUrl(null); setPreview(null) }
+  function quitar() { setUrl(null); setPreview(null); onChange?.(null) }
 
   return (
     <div className="space-y-2">
