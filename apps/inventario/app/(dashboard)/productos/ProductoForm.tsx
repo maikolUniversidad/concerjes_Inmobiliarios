@@ -3,7 +3,7 @@ import { useActionState, useState, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
 import {
   AlertCircle, Loader2, Save, QrCode, X,
-  Camera, PackageSearch, ExternalLink, Warehouse, Hash,
+  Camera, PackageSearch, ExternalLink, Warehouse, Hash, MapPin,
 } from 'lucide-react'
 import Link from 'next/link'
 import type { ActionResult } from './actions'
@@ -48,6 +48,21 @@ export interface ProductoDefaults {
   sku?: string | null
   ubicacion_bodega?: string | null
   bodega_descripcion?: string | null
+  ubicacion_id?: string | null
+}
+
+/** Ubicación real de bodega para relacionar el producto (con foto y plano). */
+export interface UbicacionOption {
+  id: string
+  codigo: string
+  nombre: string | null
+  tipo: string | null
+  foto_url: string | null
+  pos_x: number | null
+  pos_y: number | null
+  bodega_id: string
+  bodega_nombre: string
+  bodega_plano_url: string | null
 }
 
 interface ProductoExistente {
@@ -76,19 +91,13 @@ function SubmitBtn({ label }: { label: string }) {
 interface Props {
   action: (prev: ActionResult, formData: FormData) => Promise<ActionResult>
   proveedores: { id: string; nombre: string }[]
+  ubicaciones?: UbicacionOption[]
   defaults?: ProductoDefaults
   submitLabel?: string
   modo?: 'crear' | 'editar'
 }
 
-// Parsea "A-02-3" → { pasillo: 'A', estante: '02', nivel: '3' }
-function parseUbicacion(ub: string | null | undefined) {
-  if (!ub) return { pasillo: '', estante: '', nivel: '' }
-  const parts = ub.split('-')
-  return { pasillo: parts[0] ?? '', estante: parts[1] ?? '', nivel: parts[2] ?? '' }
-}
-
-export function ProductoForm({ action, proveedores, defaults = {}, submitLabel = 'Guardar producto', modo = 'crear' }: Props) {
+export function ProductoForm({ action, proveedores, ubicaciones = [], defaults = {}, submitLabel = 'Guardar producto', modo = 'crear' }: Props) {
   const [state, formAction] = useActionState<ActionResult, FormData>(action, {})
 
   // ── Campos reactivos para generador ──
@@ -98,10 +107,7 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
 
   // ── SKU y bodega ──
   const [skuValue, setSkuValue] = useState<string>(defaults.sku ?? '')
-  const ub = parseUbicacion(defaults.ubicacion_bodega)
-  const [pasillo, setPasillo] = useState(ub.pasillo)
-  const [estante, setEstante] = useState(ub.estante)
-  const [nivel, setNivel]     = useState(ub.nivel)
+  const [ubicacionId, setUbicacionId] = useState<string>(defaults.ubicacion_id ?? '')
 
   // ── Generador / escáner ──
   const [showGenerator, setShowGenerator] = useState(false)
@@ -162,7 +168,13 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
     }
   }
 
-  const ubicacionPreview = [pasillo, estante, nivel].filter(Boolean).join('-')
+  // Ubicación seleccionada + agrupación por bodega para el selector
+  const ubicSel = ubicaciones.find(u => u.id === ubicacionId) ?? null
+  const ubicacionesPorBodega = ubicaciones.reduce<Record<string, { nombre: string; items: UbicacionOption[] }>>((acc, u) => {
+    acc[u.bodega_id] = acc[u.bodega_id] ?? { nombre: u.bodega_nombre, items: [] }
+    acc[u.bodega_id].items.push(u)
+    return acc
+  }, {})
 
   return (
     <>
@@ -356,29 +368,69 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
           </div>
         </div>
 
+        {/* Ubicación real en bodega (relacionada, con foto) */}
         <div>
-          <label className={labelCls}>Ubicación física</label>
-          <div className="grid grid-cols-3 gap-2 mt-1">
-            <div>
-              <input name="ubicacion_pasillo" value={pasillo} onChange={e => setPasillo(e.target.value.toUpperCase())}
-                maxLength={5} className={inputCls} placeholder="Pasillo (A)" />
-              <p className="font-body text-xs text-gray-400 mt-0.5 text-center">Pasillo</p>
+          <label className={labelCls}>Ubicación en bodega</label>
+          {/* Guarda el código legible para vistas/etiquetas; la relación va en ubicacion_id */}
+          <input type="hidden" name="ubicacion_bodega" value={ubicSel?.codigo ?? ''} />
+          {ubicaciones.length === 0 ? (
+            <div className="mt-1 flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2.5">
+              <MapPin className="w-4 h-4 text-amber-600 shrink-0" />
+              <p className="font-body text-xs text-amber-800">
+                No hay ubicaciones registradas.{' '}
+                <Link href="/bodegas" className="font-semibold underline">Crea una bodega y sus ubicaciones</Link> para relacionar el producto.
+              </p>
             </div>
-            <div>
-              <input name="ubicacion_estante" value={estante} onChange={e => setEstante(e.target.value)}
-                maxLength={5} className={inputCls} placeholder="Estante (02)" />
-              <p className="font-body text-xs text-gray-400 mt-0.5 text-center">Estante</p>
-            </div>
-            <div>
-              <input name="ubicacion_nivel" value={nivel} onChange={e => setNivel(e.target.value)}
-                maxLength={3} className={inputCls} placeholder="Nivel (3)" />
-              <p className="font-body text-xs text-gray-400 mt-0.5 text-center">Nivel</p>
-            </div>
-          </div>
-          {ubicacionPreview && (
-            <p className="font-mono text-xs text-brand-green mt-1.5">
-              Ubicación: <strong>{ubicacionPreview}</strong>
-            </p>
+          ) : (
+            <>
+              <select
+                name="ubicacion_id"
+                value={ubicacionId}
+                onChange={e => setUbicacionId(e.target.value)}
+                className={inputCls + ' mt-1 bg-white'}
+              >
+                <option value="">— Sin ubicación asignada —</option>
+                {Object.entries(ubicacionesPorBodega).map(([bid, grp]) => (
+                  <optgroup key={bid} label={grp.nombre}>
+                    {grp.items.map(u => (
+                      <option key={u.id} value={u.id}>
+                        {u.codigo}{u.nombre ? ` · ${u.nombre}` : ''}{u.tipo ? ` (${u.tipo})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <p className="font-body text-xs text-gray-400 mt-1">Relaciona el producto con una ubicación real de la bodega.</p>
+
+              {/* Vista previa de dónde va a quedar */}
+              {ubicSel && (
+                <div className="mt-3 flex flex-col sm:flex-row gap-3 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                  {/* Foto del lugar */}
+                  <div className="w-full sm:w-32 h-32 rounded-lg overflow-hidden bg-white border border-gray-100 shrink-0 flex items-center justify-center">
+                    {ubicSel.foto_url
+                      ? <img src={ubicSel.foto_url} alt={ubicSel.codigo} className="w-full h-full object-cover" />
+                      : <MapPin className="w-8 h-8 text-gray-300" />}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-body text-xs text-gray-400">Quedará en</p>
+                    <p className="font-heading font-bold text-sm text-gray-900">{ubicSel.bodega_nombre}</p>
+                    <p className="font-mono text-sm text-brand-green">{ubicSel.codigo}{ubicSel.nombre ? ` · ${ubicSel.nombre}` : ''}</p>
+                    {ubicSel.tipo && <span className="inline-block mt-1 font-body text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{ubicSel.tipo}</span>}
+
+                    {/* Mini plano con marcador */}
+                    {ubicSel.bodega_plano_url && ubicSel.pos_x != null && ubicSel.pos_y != null && (
+                      <div className="relative mt-2 w-full max-w-[220px] rounded-lg overflow-hidden border border-gray-200">
+                        <img src={ubicSel.bodega_plano_url} alt="Plano de bodega" className="w-full h-auto block" />
+                        <span
+                          className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-green ring-2 ring-white shadow"
+                          style={{ left: `${ubicSel.pos_x}%`, top: `${ubicSel.pos_y}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
       </div>

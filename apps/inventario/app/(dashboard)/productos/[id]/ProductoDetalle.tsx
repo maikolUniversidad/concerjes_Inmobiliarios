@@ -45,6 +45,15 @@ interface Props {
     stock: { cantidad_real: number; cantidad_disp: number; cantidad_entr: number; cantidad_sal: number } | null
     proveedor: { nombre: string; telefono: string | null; email: string | null } | null
     proveedor2: { nombre: string } | null
+    ubicacion: {
+      codigo: string
+      nombre: string | null
+      tipo: string | null
+      foto_url: string | null
+      pos_x: number | null
+      pos_y: number | null
+      bodega: { nombre: string; plano_url: string | null } | null
+    } | null
   }
   movimientos: Movimiento[]
   fotos: { id: string; url: string; storage_path: string | null; orden: number; es_principal: boolean }[]
@@ -289,6 +298,43 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos }: Props
               <p className="font-body text-xs text-gray-400">Descripción de ubicación</p>
               <p className="font-body text-sm text-gray-700 mt-0.5">{initial.bodega_descripcion || SIN}</p>
             </div>
+          </div>
+
+          {/* Ubicación relacionada en bodega — dónde queda físicamente (con foto) */}
+          <div className="mt-4 pt-4 border-t border-gray-100">
+            <p className="font-body text-xs text-gray-400 mb-2">Ubicación relacionada en bodega</p>
+            {initial.ubicacion ? (
+              <div className="flex flex-col sm:flex-row gap-3 bg-gray-50 border border-gray-100 rounded-xl p-3">
+                <div className="w-full sm:w-28 h-28 rounded-lg overflow-hidden bg-white border border-gray-100 shrink-0 flex items-center justify-center">
+                  {initial.ubicacion.foto_url
+                    ? <img src={initial.ubicacion.foto_url} alt={initial.ubicacion.codigo} className="w-full h-full object-cover" />
+                    : <MapPin className="w-8 h-8 text-gray-300" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-heading font-bold text-sm text-gray-900">{initial.ubicacion.bodega?.nombre ?? 'Bodega'}</p>
+                  <p className="font-mono text-sm text-brand-green">
+                    {initial.ubicacion.codigo}{initial.ubicacion.nombre ? ` · ${initial.ubicacion.nombre}` : ''}
+                  </p>
+                  {initial.ubicacion.tipo && (
+                    <span className="inline-block mt-1 font-body text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{initial.ubicacion.tipo}</span>
+                  )}
+                  {initial.ubicacion.bodega?.plano_url && initial.ubicacion.pos_x != null && initial.ubicacion.pos_y != null && (
+                    <div className="relative mt-2 w-full max-w-[220px] rounded-lg overflow-hidden border border-gray-200">
+                      <img src={initial.ubicacion.bodega.plano_url} alt="Plano de bodega" className="w-full h-auto block" />
+                      <span
+                        className="absolute w-3 h-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-brand-green ring-2 ring-white shadow"
+                        style={{ left: `${initial.ubicacion.pos_x}%`, top: `${initial.ubicacion.pos_y}%` }}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="font-body text-sm text-gray-400">Sin ubicación relacionada</span>
+                <Link href={`/productos/${initial.id}/editar`} className="font-body text-xs text-brand-green hover:underline font-semibold">Relacionar →</Link>
+              </div>
+            )}
           </div>
         </div>
 

@@ -8,10 +8,21 @@ import type { Producto, Stock, Proveedor, Movimiento } from '@/lib/types/databas
 
 interface Props { params: Promise<{ id: string }> }
 
+type UbicacionRel = {
+  codigo: string
+  nombre: string | null
+  tipo: string | null
+  foto_url: string | null
+  pos_x: number | null
+  pos_y: number | null
+  bodega: { nombre: string; plano_url: string | null } | null
+}
+
 type ProductoConRelaciones = Producto & {
   stock: Stock | null
   proveedor: Pick<Proveedor,'nombre'|'telefono'|'email'> | null
   proveedor2: Pick<Proveedor,'nombre'> | null
+  ubicacion: UbicacionRel | null
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -36,7 +47,8 @@ export default async function ProductoPage({ params }: Props) {
       created_at, updated_at,
       stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal, updated_at ),
       proveedor:proveedor_id ( nombre, telefono, email ),
-      proveedor2:proveedor2_id ( nombre )
+      proveedor2:proveedor2_id ( nombre ),
+      ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) )
     `)
     .eq('id', id)
     .single()

@@ -34,6 +34,7 @@ export interface Producto {
   sku: string | null
   ubicacion_bodega: string | null
   bodega_descripcion: string | null
+  ubicacion_id: string | null
   activo: boolean
   created_at: string
   updated_at: string

@@ -28,13 +28,8 @@ function leerCampos(formData: FormData) {
     imagen_url: String(formData.get('imagen_url') ?? '').trim() || null,
     fotos_extra: formData.getAll('foto_extra').map(v => String(v)).filter(Boolean),
     sku: String(formData.get('sku') ?? '').trim() || null,
-    ubicacion_bodega: (() => {
-      const pasillo = String(formData.get('ubicacion_pasillo') ?? '').trim().toUpperCase()
-      const estante = String(formData.get('ubicacion_estante') ?? '').trim()
-      const nivel   = String(formData.get('ubicacion_nivel') ?? '').trim()
-      if (!pasillo && !estante && !nivel) return null
-      return [pasillo, estante, nivel].filter(Boolean).join('-')
-    })(),
+    ubicacion_id: String(formData.get('ubicacion_id') ?? '') || null,
+    ubicacion_bodega: String(formData.get('ubicacion_bodega') ?? '').trim() || null,
     bodega_descripcion: String(formData.get('bodega_descripcion') ?? '').trim() || null,
   }
 }
