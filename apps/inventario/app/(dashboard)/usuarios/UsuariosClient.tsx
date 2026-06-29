@@ -9,6 +9,8 @@ import {
   ChevronRight,
   Upload,
   Trash2,
+  Eye,
+  EyeOff,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -153,6 +155,7 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
 
   const [nombre, setNombre] = useState(usuario?.nombre ?? '')
   const [email, setEmail] = useState(usuario?.email ?? '')
+  const [password, setPassword] = useState('')
   const [telefono, setTelefono] = useState(usuario?.telefono ?? '')
   const [rol, setRol] = useState<RolUsuario>(usuario?.rol ?? 'AUDITOR')
   const [grupoId, setGrupoId] = useState(usuario?.grupo_id ?? '')
@@ -164,6 +167,7 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [showPass, setShowPass] = useState(false)
   const fileRef = useRef<HTMLInputElement>(null)
 
   const filteredSedes = grupoId
@@ -198,33 +202,47 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
       setError('Nombre y email son obligatorios.')
       return
     }
+    if (isNew && !password.trim()) {
+      setError('La contraseña es obligatoria para nuevos usuarios.')
+      return
+    }
+    if (password && password.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres.')
+      return
+    }
     setSaving(true)
     setError(null)
     try {
       if (isNew) {
-        const { data: inserted, error: insertErr } = await supabase
-          .from('usuarios')
-          .insert({
+        // Llama a la API route que usa service role para crear el auth user
+        const res = await fetch('/api/usuarios', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
             nombre: nombre.trim(),
             email: email.trim(),
+            password,
             telefono: telefono.trim() || null,
             rol,
             grupo_id: grupoId || null,
             sede_id: sedeId || null,
             activo,
-            avatar_url: null,
-          })
-          .select(`id, nombre, email, rol, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre)`)
-          .single()
-
-        if (insertErr || !inserted) {
-          setError(insertErr?.message ?? 'Error al crear usuario.')
+          }),
+        })
+        const json = await res.json()
+        if (!res.ok || !json.usuario) {
+          setError(json.error ?? 'Error al crear usuario.')
           return
         }
+        const inserted = json.usuario
 
         const newAvatarUrl = await uploadAvatar(inserted.id)
-        if (newAvatarUrl !== null) {
-          await supabase.from('usuarios').update({ avatar_url: newAvatarUrl }).eq('id', inserted.id)
+        if (newAvatarUrl) {
+          await fetch('/api/usuarios', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: inserted.id, avatar_url: newAvatarUrl }),
+          })
           inserted.avatar_url = newAvatarUrl
         }
 
@@ -240,11 +258,25 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
         onSaved(inserted as unknown as Usuario)
       } else {
         const newAvatarUrl = await uploadAvatar(usuario!.id)
+
+        // Si hay contraseña nueva, actualizarla via API route (service role)
+        if (password.trim()) {
+          const res = await fetch('/api/usuarios', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: usuario!.id, password }),
+          })
+          if (!res.ok) {
+            const j = await res.json()
+            setError(j.error ?? 'Error al cambiar contraseña.')
+            return
+          }
+        }
+
         const { data: updated, error: updateErr } = await supabase
           .from('usuarios')
           .update({
             nombre: nombre.trim(),
-            email: email.trim(),
             telefono: telefono.trim() || null,
             rol,
             grupo_id: grupoId || null,
@@ -391,6 +423,30 @@ function DrawerForm({ usuario, grupos, sedes, onClose, onSaved, onDeleted }: Dra
               placeholder="correo@ejemplo.com"
               disabled={!isNew}
             />
+          </div>
+
+          <div>
+            <label className="font-body font-semibold text-xs text-gray-600 block mb-1">
+              {isNew ? <>Contraseña <span className="text-red-500">*</span></> : 'Nueva contraseña'}
+              {!isNew && <span className="text-gray-400 font-normal ml-1">(dejar en blanco para no cambiar)</span>}
+            </label>
+            <div className="relative">
+              <input
+                type={showPass ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={`${inputCls} pr-10`}
+                placeholder={isNew ? 'Mínimo 6 caracteres' : '••••••••'}
+                autoComplete="new-password"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPass((v) => !v)}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+              >
+                {showPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
           <div>

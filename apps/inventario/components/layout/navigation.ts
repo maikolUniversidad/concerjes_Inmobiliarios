@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
   QrCode, FileText, Warehouse, Truck, Users,
-  Settings, Brain, Sparkles, FolderOpen, ClipboardList, type LucideIcon,
+  Settings, Brain, Sparkles, FolderOpen, ClipboardList, Bell, Shield, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -73,7 +73,9 @@ export const navigation: NavModule[] = [
     icon: Settings,
     items: [
       { label: 'Documentos/Galería', href: '/documentos',      icon: FolderOpen     },
+      { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell           },
       { label: 'Usuarios',           href: '/usuarios',         icon: Users          },
+      { label: 'Roles y Permisos',   href: '/roles',            icon: Shield         },
       { label: 'Log de Actividad',   href: '/actividad-log',    icon: ClipboardList  },
       { label: 'Configuración',      href: '/configuracion',    icon: Settings       },
     ],

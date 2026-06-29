@@ -625,3 +625,22 @@ CREATE POLICY "Self upload avatar" ON storage.objects
   FOR INSERT WITH CHECK (bucket_id = 'avatares' AND auth.role() = 'authenticated');
 CREATE POLICY "Self delete avatar" ON storage.objects
   FOR DELETE USING (bucket_id = 'avatares' AND auth.role() = 'authenticated');
+
+-- =============================================================================
+-- ROLES PERSONALIZADOS
+-- =============================================================================
+CREATE TABLE IF NOT EXISTS roles (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nombre      VARCHAR(100) NOT NULL UNIQUE,
+  descripcion TEXT,
+  permisos    JSONB NOT NULL DEFAULT '{}',
+  activo      BOOLEAN DEFAULT true,
+  created_at  TIMESTAMPTZ DEFAULT NOW(),
+  updated_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "roles_select_authenticated" ON roles;
+DROP POLICY IF EXISTS "roles_all_authenticated"    ON roles;
+CREATE POLICY "roles_select_authenticated" ON roles FOR SELECT TO authenticated USING (true);
+CREATE POLICY "roles_all_authenticated"    ON roles FOR ALL    TO authenticated USING (true) WITH CHECK (true);
