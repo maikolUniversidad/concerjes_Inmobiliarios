@@ -1,7 +1,3 @@
 {
-  "framework": "nextjs",
-  "buildCommand": "cd apps/inventario && npm run build",
-  "outputDirectory": "apps/inventario/.next",
-  "installCommand": "npm install",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- apps/inventario/"
+  "framework": "nextjs"
 }
