@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
-  QrCode, FileText, Warehouse, Truck, Users,
+  FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode, type LucideIcon,
 } from 'lucide-react'
@@ -44,7 +44,6 @@ export const navigation: NavModule[] = [
       { label: 'Stock',              href: '/stock',     icon: BarChart3 },
       { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight },
       { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck },
-      { label: 'Escáner',            href: '/scanner',   icon: QrCode },
       { label: 'Generador Códigos',  href: '/codigos',   icon: Barcode },
     ],
   },
