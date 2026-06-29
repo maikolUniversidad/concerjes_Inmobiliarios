@@ -1,12 +1,23 @@
 'use client'
 import { useActionState, useState, useRef } from 'react'
 import { useFormStatus } from 'react-dom'
-import { AlertCircle, Loader2, Save, QrCode, X } from 'lucide-react'
+import { AlertCircle, Loader2, Save, QrCode, X, Camera, PackageSearch, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 import type { ActionResult } from './actions'
 import { ImagePicker } from '@/components/ui/ImagePicker'
 import { BarcodeGenerator, type BarcodeFormat } from '@/components/ui/BarcodeGenerator'
+import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
+import { createClient } from '@/lib/supabase/client'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
+
+interface ProductoExistente {
+  id: string
+  nombre_estandar: string
+  presentacion: string | null
+  tipo_insumo: string
+  codigo: number | null
+  ref: number | null
+}
 
 const TIPOS = ['CAFETERIA', 'LIQUIDOS', 'ASEO', 'EPP', 'PAPELERIA', 'MAQUINARIA', 'JARDINERIA', 'REPUESTOS', 'OTROS']
 
@@ -50,11 +61,63 @@ interface Props {
 export function ProductoForm({ action, proveedores, defaults = {}, submitLabel = 'Guardar producto', modo = 'crear' }: Props) {
   const [state, formAction] = useActionState<ActionResult, FormData>(action, {})
   const [showGenerator, setShowGenerator] = useState(false)
+  const [showScanner, setShowScanner] = useState(false)
   const [genFormat, setGenFormat] = useState<BarcodeFormat>('CODE128')
+  const [duplicado, setDuplicado] = useState<ProductoExistente | null>(null)
+  const [checkingDup, setCheckingDup] = useState(false)
   const codigoRef = useRef<HTMLInputElement>(null)
   const refInputRef = useRef<HTMLInputElement>(null)
+  const supabase = createClient()
+
+  async function handleScanDetected(value: string) {
+    setShowScanner(false)
+    // Llenar campo código si es numérico, sino REF
+    if (/^\d+$/.test(value)) {
+      if (codigoRef.current) codigoRef.current.value = value
+    } else {
+      // Para códigos alfanuméricos no podemos usar el campo number, ignorar o poner en complemento
+      if (codigoRef.current) codigoRef.current.value = ''
+    }
+
+    // Buscar si ya existe un producto con ese código o ref
+    setCheckingDup(true)
+    setDuplicado(null)
+    try {
+      const num = parseInt(value)
+      if (!isNaN(num)) {
+        const { data } = await supabase
+          .from('productos')
+          .select('id, nombre_estandar, presentacion, tipo_insumo, codigo, ref')
+          .or(`codigo.eq.${num},ref.eq.${num}`)
+          .eq('activo', true)
+          .limit(1)
+          .single()
+        if (data) setDuplicado(data as ProductoExistente)
+      } else {
+        // Buscar por codigo_barras si está disponible
+        const { data } = await supabase
+          .from('productos')
+          .select('id, nombre_estandar, presentacion, tipo_insumo, codigo, ref')
+          .eq('codigo_barras', value)
+          .eq('activo', true)
+          .limit(1)
+          .single()
+        if (data) setDuplicado(data as ProductoExistente)
+      }
+    } finally {
+      setCheckingDup(false)
+    }
+  }
 
   return (
+    <>
+    {showScanner && (
+      <BarcodeScanner
+        onDetected={handleScanDetected}
+        onClose={() => setShowScanner(false)}
+      />
+    )}
+
     <form action={formAction} className="space-y-6 max-w-3xl">
       {defaults.id && <input type="hidden" name="id" value={defaults.id} />}
 
@@ -62,6 +125,40 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
         <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <p className="font-body text-sm text-red-700">{state.error}</p>
+        </div>
+      )}
+
+      {/* Alerta producto duplicado */}
+      {checkingDup && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+          <Loader2 className="w-4 h-4 text-blue-500 shrink-0 animate-spin" />
+          <p className="font-body text-sm text-blue-700">Verificando si el producto ya existe...</p>
+        </div>
+      )}
+      {duplicado && (
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-2">
+          <div className="flex items-start gap-2">
+            <PackageSearch className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="font-body font-semibold text-sm text-amber-800">Este producto ya existe en el inventario</p>
+              <p className="font-body text-sm text-amber-700 mt-0.5 truncate">{duplicado.nombre_estandar}</p>
+              {duplicado.presentacion && <p className="font-body text-xs text-amber-600">{duplicado.presentacion}</p>}
+              <p className="font-mono text-xs text-amber-500 mt-0.5">
+                {duplicado.codigo ? `Código: ${duplicado.codigo}` : ''}{duplicado.codigo && duplicado.ref ? ' · ' : ''}{duplicado.ref ? `REF: ${duplicado.ref}` : ''}
+                {' · '}{duplicado.tipo_insumo}
+              </p>
+            </div>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <Link href={`/productos/${duplicado.id}`}
+                className="flex items-center gap-1 font-body text-xs text-amber-700 hover:text-amber-900 border border-amber-300 rounded-lg px-2.5 py-1.5 hover:bg-amber-100 transition-colors">
+                <ExternalLink className="w-3 h-3" />
+                Ver
+              </Link>
+              <button type="button" onClick={() => setDuplicado(null)} className="text-amber-400 hover:text-amber-600 p-1">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -106,6 +203,14 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
             <label className={labelCls}>Código</label>
             <div className="flex gap-1.5 mt-1">
               <input ref={codigoRef} name="codigo" type="number" defaultValue={defaults.codigo ?? ''} className={inputCls + ' flex-1'} placeholder="Opcional" />
+              <button
+                type="button"
+                title="Escanear código de barras / QR con la cámara"
+                onClick={() => setShowScanner(true)}
+                className="shrink-0 p-2 rounded-lg border border-gray-200 text-gray-500 hover:border-brand-green hover:text-brand-green transition-colors"
+              >
+                <Camera className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 title="Generar código de barras / QR"
@@ -193,5 +298,6 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
         </Link>
       </div>
     </form>
+    </>
   )
 }
