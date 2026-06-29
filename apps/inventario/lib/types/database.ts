@@ -200,6 +200,18 @@ export interface PrecioProveedor {
   proveedor?: Proveedor
 }
 
+export interface ContactoWeb {
+  id: string
+  nombre: string
+  empresa: string | null
+  telefono: string
+  email: string
+  servicio: string | null
+  mensaje: string
+  leido: boolean
+  created_at: string
+}
+
 // Permisos por rol
 export const PERMISOS: Record<RolUsuario, string[]> = {
   SUPER_ADMIN: ['*'],
@@ -306,6 +318,7 @@ export type Database = {
       movimientos: { Row: Movimiento; Insert: Partial<Movimiento>; Update: Partial<Movimiento> }
       usuarios: { Row: Usuario; Insert: Partial<Usuario>; Update: Partial<Usuario> }
       precios_proveedor: { Row: PrecioProveedor; Insert: Partial<PrecioProveedor>; Update: Partial<PrecioProveedor> }
+      contactos_web: { Row: ContactoWeb; Insert: Partial<ContactoWeb>; Update: Partial<ContactoWeb> }
     }
   }
 }
