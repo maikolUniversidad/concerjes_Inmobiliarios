@@ -3,6 +3,8 @@
 import { useState } from 'react'
 import { Eye, EyeOff, LogIn, Loader2, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import { createClient } from '@/lib/supabase/client'
 
 export default function LoginPage() {
   const [show, setShow]         = useState(false)
@@ -10,20 +12,36 @@ export default function LoginPage() {
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
+  const router = useRouter()
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setError('')
     setLoading(true)
-    // TODO: Supabase Auth signIn
-    await new Promise((r) => setTimeout(r, 1000))
-    setLoading(false)
+
+    const supabase = createClient()
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+
+    if (authError) {
+      setError(
+        authError.message.includes('Invalid login credentials')
+          ? 'Correo o contraseña incorrectos.'
+          : authError.message.includes('Email not confirmed')
+          ? 'Correo no confirmado. Contacta al administrador.'
+          : 'Error al iniciar sesión. Intenta de nuevo.'
+      )
+      setLoading(false)
+      return
+    }
+
+    router.push('/dashboard')
+    router.refresh()
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col">
 
-      {/* Back to landing */}
+      {/* Back */}
       <div className="p-4 sm:p-6">
         <Link
           href="/"
@@ -75,11 +93,9 @@ export default function LoginPage() {
               </div>
 
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="font-body text-sm font-semibold text-gray-700">
-                    Contraseña
-                  </label>
-                </div>
+                <label className="font-body text-sm font-semibold text-gray-700 block mb-1.5">
+                  Contraseña
+                </label>
                 <div className="relative">
                   <input
                     type={show ? 'text' : 'password'}
@@ -95,7 +111,7 @@ export default function LoginPage() {
                     onClick={() => setShow(!show)}
                     className="absolute right-3.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                   >
-                    {show ? <EyeOff className="w-4.5 h-4.5" /> : <Eye className="w-4.5 h-4.5" />}
+                    {show ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
                 </div>
               </div>
