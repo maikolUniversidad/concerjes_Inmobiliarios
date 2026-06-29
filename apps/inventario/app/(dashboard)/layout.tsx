@@ -17,7 +17,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const isFullHeight = pathname?.startsWith('/ia/asistente') ?? false
 
   return (
-    <div className="flex h-screen bg-gray-50 overflow-hidden">
+    <div className="flex h-[100dvh] bg-gray-50 overflow-hidden">
 
       {/* ── SIDEBAR (solo desktop) ──
           En móvil la navegación vive en la barra inferior (MobileNav).
@@ -93,7 +93,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           className={
             isFullHeight
               ? 'flex-1 min-h-0 overflow-hidden'
-              : 'flex-1 min-h-0 overflow-y-auto pb-[calc(4.75rem+env(safe-area-inset-bottom))] lg:pb-0'
+              : 'flex-1 min-h-0 overflow-y-auto pb-[calc(6.5rem+env(safe-area-inset-bottom))] lg:pb-0'
           }
         >
           {children}
