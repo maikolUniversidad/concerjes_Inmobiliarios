@@ -16,7 +16,8 @@
     "clean": "turbo run clean",
     "deploy": "node scripts/vercel-deploy.mjs deploy --prod --yes",
     "deploy:preview": "node scripts/vercel-deploy.mjs deploy --yes",
-    "deploy:status": "node scripts/vercel-deploy.mjs ls"
+    "deploy:status": "node scripts/vercel-deploy.mjs ls",
+    "deploy:logs": "node scripts/vercel-deploy.mjs logs"
   },
   "devDependencies": {
     "pg": "^8.22.0",
