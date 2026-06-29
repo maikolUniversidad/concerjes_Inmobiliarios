@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=web"],
+      "port": 3000,
+      "autoPort": true
+    },
+    {
+      "name": "inventario",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace=inventario"],
+      "port": 3001
+    }
+  ]
+}

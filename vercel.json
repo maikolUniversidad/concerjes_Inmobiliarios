@@ -1,0 +1,14 @@
+{
+  "projects": [
+    {
+      "name": "conserjes-web",
+      "root": "apps/web",
+      "framework": "nextjs"
+    },
+    {
+      "name": "conserjes-inventario",
+      "root": "apps/inventario",
+      "framework": "nextjs"
+    }
+  ]
+}
