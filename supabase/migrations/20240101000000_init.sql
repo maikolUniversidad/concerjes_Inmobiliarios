@@ -432,3 +432,103 @@ DROP POLICY IF EXISTS admin_update_contactos ON contactos_web;
 CREATE POLICY admin_update_contactos ON contactos_web FOR UPDATE TO authenticated
   USING (public.auth_rol() IN ('SUPER_ADMIN','ADMIN'))
   WITH CHECK (public.auth_rol() IN ('SUPER_ADMIN','ADMIN'));
+
+-- =============================================================================
+-- INTEGRACIÓN CON AUTH
+-- Cada usuario de Supabase Auth obtiene automáticamente una fila en `usuarios`.
+-- Sin esto, auth_rol() devuelve NULL y TODAS las políticas de escritura niegan.
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  INSERT INTO public.usuarios (id, nombre, email, rol)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'nombre', split_part(NEW.email, '@', 1)),
+    NEW.email,
+    'AUDITOR'
+  )
+  ON CONFLICT (id) DO NOTHING;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Backfill: crea `usuarios` para auth.users existentes.
+-- El administrador inicial queda como SUPER_ADMIN.
+INSERT INTO public.usuarios (id, nombre, email, rol)
+SELECT
+  u.id,
+  split_part(u.email, '@', 1),
+  u.email,
+  CASE WHEN u.email = 'admin@conserjesinmobiliarios.com'
+       THEN 'SUPER_ADMIN'::rol_usuario
+       ELSE 'AUDITOR'::rol_usuario END
+FROM auth.users u
+ON CONFLICT (id) DO NOTHING;
+
+-- =============================================================================
+-- FUNCIÓN: registrar_movimiento
+-- Inserta un movimiento y actualiza el stock central de forma atómica.
+-- SECURITY INVOKER → respeta RLS (el llamante necesita rol con permiso de
+-- escritura en movimientos y stock).
+--   ENTRADA / DEVOLUCION → suma al stock
+--   SALIDA               → resta del stock (piso en 0)
+--   AJUSTE               → fija el stock al valor indicado (corrección de conteo)
+--   TRASLADO             → registra el movimiento, no altera el stock central
+-- =============================================================================
+CREATE OR REPLACE FUNCTION public.registrar_movimiento(
+  p_producto    UUID,
+  p_tipo        tipo_movimiento,
+  p_cantidad    NUMERIC,
+  p_sede        UUID DEFAULT NULL,
+  p_observacion TEXT DEFAULT NULL
+) RETURNS UUID
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public
+AS $$
+DECLARE
+  v_id    UUID;
+  v_delta NUMERIC;
+BEGIN
+  IF p_cantidad <= 0 THEN
+    RAISE EXCEPTION 'La cantidad debe ser mayor que cero';
+  END IF;
+
+  INSERT INTO movimientos (tipo, producto_id, cantidad, sede_id, observacion, usuario_id)
+  VALUES (p_tipo, p_producto, p_cantidad, p_sede, p_observacion, auth.uid())
+  RETURNING id INTO v_id;
+
+  -- Garantiza que exista la fila de stock
+  INSERT INTO stock (producto_id, cantidad_real, cantidad_disp)
+  VALUES (p_producto, 0, 0)
+  ON CONFLICT (producto_id) DO NOTHING;
+
+  IF p_tipo = 'AJUSTE' THEN
+    UPDATE stock SET cantidad_real = p_cantidad, cantidad_disp = p_cantidad, updated_at = NOW()
+    WHERE producto_id = p_producto;
+  ELSIF p_tipo IN ('ENTRADA', 'DEVOLUCION') THEN
+    UPDATE stock SET
+      cantidad_real = cantidad_real + p_cantidad,
+      cantidad_disp = cantidad_disp + p_cantidad,
+      updated_at = NOW()
+    WHERE producto_id = p_producto;
+  ELSIF p_tipo = 'SALIDA' THEN
+    UPDATE stock SET
+      cantidad_real = GREATEST(0, cantidad_real - p_cantidad),
+      cantidad_disp = GREATEST(0, cantidad_disp - p_cantidad),
+      updated_at = NOW()
+    WHERE producto_id = p_producto;
+  END IF;
+  -- TRASLADO: no modifica el stock central
+
+  RETURN v_id;
+END $$;
