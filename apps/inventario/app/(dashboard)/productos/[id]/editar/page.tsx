@@ -14,15 +14,21 @@ export default async function EditarProductoPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  const [{ data, error }, { data: proveedores }] = await Promise.all([
+  const [{ data, error }, { data: proveedores }, { data: fotosData }] = await Promise.all([
     supabase.from('productos')
       .select('id, nombre_estandar, presentacion, tipo_insumo, cat_rotacion, stock_minimo_def, precio_lista, proveedor_id, ref, codigo, complemento, imagen_url, sku, ubicacion_bodega, bodega_descripcion')
       .eq('id', id).single(),
     supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre'),
+    supabase.from('producto_fotos').select('url, es_principal').eq('producto_id', id).order('orden'),
   ])
 
   if (error || !data) notFound()
-  const defaults = data as unknown as ProductoDefaults
+  const fotos = (fotosData ?? []) as { url: string; es_principal: boolean }[]
+  const defaults: ProductoDefaults = {
+    ...(data as unknown as ProductoDefaults),
+    imagen_url: fotos.find(f => f.es_principal)?.url ?? (data as { imagen_url: string | null }).imagen_url,
+    fotos_extra: fotos.filter(f => !f.es_principal).map(f => f.url),
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-5">

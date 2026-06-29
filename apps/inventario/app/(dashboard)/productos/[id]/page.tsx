@@ -42,14 +42,20 @@ export default async function ProductoPage({ params }: Props) {
   if (error || !data) notFound()
   const producto = data as unknown as ProductoConRelaciones
 
-  const { data: movs } = await supabase
-    .from('movimientos')
-    .select('tipo, cantidad, created_at, observacion')
-    .eq('producto_id', id)
-    .order('created_at', { ascending: false })
-    .limit(10)
+  const [{ data: movs }, { data: fotosData }] = await Promise.all([
+    supabase.from('movimientos')
+      .select('tipo, cantidad, created_at, observacion')
+      .eq('producto_id', id)
+      .order('created_at', { ascending: false })
+      .limit(10),
+    supabase.from('producto_fotos')
+      .select('id, url, storage_path, orden, es_principal')
+      .eq('producto_id', id)
+      .order('orden'),
+  ])
 
   const movimientos = (movs ?? []) as Pick<Movimiento,'tipo'|'cantidad'|'observacion'|'created_at'>[]
+  const fotos = (fotosData ?? []) as { id: string; url: string; storage_path: string | null; orden: number; es_principal: boolean }[]
 
   return (
     <div className="p-4 sm:p-6 space-y-6 max-w-5xl">
@@ -65,7 +71,7 @@ export default async function ProductoPage({ params }: Props) {
         </span>
       </div>
 
-      <ProductoDetalle producto={producto} movimientos={movimientos} />
+      <ProductoDetalle producto={producto} movimientos={movimientos} fotos={fotos} />
     </div>
   )
 }

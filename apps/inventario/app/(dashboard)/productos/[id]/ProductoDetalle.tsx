@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package, Trash2, Warehouse, MapPin } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
-import { ProductoImageUpload } from '@/components/productos/ProductoImageUpload'
+import { ProductoGaleria, type FotoItem } from '@/components/ui/ProductoGaleria'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { eliminarProducto } from '../actions'
 import { formatCOP } from '@/lib/utils'
@@ -40,6 +40,7 @@ interface Props {
     proveedor2: { nombre: string } | null
   }
   movimientos: Movimiento[]
+  fotos: { id: string; url: string; storage_path: string | null; orden: number; es_principal: boolean }[]
 }
 
 function MovIcon({ tipo }: { tipo: string }) {
@@ -48,8 +49,13 @@ function MovIcon({ tipo }: { tipo: string }) {
   return                          <ArrowLeftRight className="w-4 h-4 text-blue-500"  />
 }
 
-export function ProductoDetalle({ producto: initial, movimientos }: Props) {
+export function ProductoDetalle({ producto: initial, movimientos, fotos }: Props) {
   const [imagenUrl, setImagenUrl] = useState(initial.imagen_url)
+
+  // Construir lista de fotos: prioriza producto_fotos si existe, si no cae a imagen_url
+  const fotoItems: FotoItem[] = fotos.length > 0
+    ? fotos.map(f => ({ id: f.id, url: f.url, storagePath: f.storage_path ?? undefined, esPrincipal: f.es_principal, orden: f.orden }))
+    : imagenUrl ? [{ url: imagenUrl, esPrincipal: true }] : []
   const cat = CATEGORIA_LABELS[initial.cat_rotacion]
   const stock = initial.stock
   const real  = stock?.cantidad_real ?? 0
@@ -65,13 +71,13 @@ export function ProductoDetalle({ producto: initial, movimientos }: Props) {
 
       {/* Col izquierda: foto + info rápida */}
       <div className="space-y-4">
-        {/* Upload de foto */}
+        {/* Galería de fotos */}
         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <ProductoImageUpload
+          <ProductoGaleria
+            modo="directo"
             productoId={initial.id}
-            currentImageUrl={imagenUrl}
-            productoNombre={initial.nombre_estandar}
-            onUploadComplete={setImagenUrl}
+            initialFotos={fotoItems}
+            onPrincipalChange={setImagenUrl}
           />
         </div>
 

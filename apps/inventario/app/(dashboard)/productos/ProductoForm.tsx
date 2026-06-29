@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import type { ActionResult } from './actions'
-import { ImagePicker } from '@/components/ui/ImagePicker'
+import { ProductoGaleria } from '@/components/ui/ProductoGaleria'
 import { BarcodeGenerator, type BarcodeFormat } from '@/components/ui/BarcodeGenerator'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 import { createClient } from '@/lib/supabase/client'
@@ -44,6 +44,7 @@ export interface ProductoDefaults {
   codigo?: number | null
   complemento?: string | null
   imagen_url?: string | null
+  fotos_extra?: string[]
   sku?: string | null
   ubicacion_bodega?: string | null
   bodega_descripcion?: string | null
@@ -212,9 +213,16 @@ export function ProductoForm({ action, proveedores, defaults = {}, submitLabel =
         </div>
       )}
 
-      {/* Imagen */}
+      {/* Galería de fotos */}
       <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
-        <ImagePicker name="imagen_url" defaultUrl={defaults.imagen_url ?? null} folder="productos" />
+        <ProductoGaleria
+          modo="form"
+          defaultFotos={[
+            ...(defaults.imagen_url ? [defaults.imagen_url] : []),
+            ...(defaults.fotos_extra ?? []),
+          ]}
+          folder="productos"
+        />
       </div>
 
       {/* Información general */}
