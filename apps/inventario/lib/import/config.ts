@@ -14,7 +14,7 @@ export interface ColumnDef {
 }
 
 export interface EntityConfig {
-  id: 'productos' | 'proveedores' | 'usuarios'
+  id: 'productos' | 'proveedores' | 'usuarios' | 'personas'
   label: string
   /** Campos (en orden de prioridad) usados para detectar duplicados y actualizar. */
   matchKeys: string[]
@@ -26,6 +26,8 @@ export interface EntityConfig {
 const TIPO_INSUMO = ['CAFETERIA', 'LIQUIDOS', 'ASEO', 'EPP', 'PAPELERIA', 'MAQUINARIA', 'JARDINERIA', 'REPUESTOS', 'NO_DISPONIBLE', 'OTROS'] as const
 const CAT_ROT = ['A', 'B', 'C', 'D'] as const
 const ROLES = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORDINADOR_COMPRAS', 'BODEGUERO', 'AUDITOR', 'OPERADOR_SEDE'] as const
+const TIPO_DOC = ['CC', 'CE', 'TI', 'PA', 'PEP', 'NIT'] as const
+const ESTADO_PERSONA = ['ACTIVO', 'RETIRADO', 'SUSPENDIDO'] as const
 
 export const PRODUCTOS_CONFIG: EntityConfig = {
   id: 'productos',
@@ -95,10 +97,43 @@ export const USUARIOS_CONFIG: EntityConfig = {
   ],
 }
 
+export const PERSONAS_CONFIG: EntityConfig = {
+  id: 'personas',
+  label: 'Personas',
+  matchKeys: ['documento'],
+  matchLabel: 'número de documento',
+  instrucciones: [
+    'Completa una fila por persona. No borres ni renombres la fila de encabezados.',
+    'Si el "documento" ya existe, la persona se ACTUALIZA; si no, se CREA.',
+    'tipo_doc debe ser uno de: ' + TIPO_DOC.join(', ') + '.',
+    'estado debe ser: ' + ESTADO_PERSONA.join(', ') + '.',
+    'empresa_usuaria: escribe el nombre. Si no existe, se crea automáticamente.',
+    'sede: escribe el nombre exacto de una sede existente (opcional).',
+    'fecha_ingreso admite formato AAAA-MM-DD o DD/MM/AAAA.',
+  ],
+  columns: [
+    { key: 'tipo_doc', label: 'tipo_doc', type: 'enum', enumValues: TIPO_DOC, ejemplo: 'CC' },
+    { key: 'documento', label: 'documento', type: 'text', required: true, ejemplo: '1020304050', ayuda: 'Número de documento (obligatorio, clave única)' },
+    { key: 'nombres', label: 'nombres', type: 'text', required: true, ejemplo: 'María Fernanda', ayuda: 'Nombres (obligatorio)' },
+    { key: 'apellidos', label: 'apellidos', type: 'text', required: true, ejemplo: 'Gómez Ruiz', ayuda: 'Apellidos (obligatorio)' },
+    { key: 'cargo', label: 'cargo', type: 'text', ejemplo: 'Servicios Generales' },
+    { key: 'empresa_usuaria', label: 'empresa_usuaria', type: 'text', ejemplo: 'Transmilenio S.A.', ayuda: 'Nombre de la empresa usuaria' },
+    { key: 'sede', label: 'sede', type: 'text', ejemplo: 'Sede Norte', ayuda: 'Nombre exacto de una sede existente' },
+    { key: 'fecha_ingreso', label: 'fecha_ingreso', type: 'text', ejemplo: '2026-01-15', ayuda: 'AAAA-MM-DD o DD/MM/AAAA' },
+    { key: 'estado', label: 'estado', type: 'enum', enumValues: ESTADO_PERSONA, ejemplo: 'ACTIVO' },
+    { key: 'email', label: 'email', type: 'email', ejemplo: 'mgomez@correo.com' },
+    { key: 'telefono', label: 'telefono', type: 'text', ejemplo: '3001234567' },
+    { key: 'direccion', label: 'direccion', type: 'text', ejemplo: 'Cra 10 # 20-30' },
+    { key: 'eps', label: 'eps', type: 'text', ejemplo: 'Sura EPS' },
+    { key: 'arl', label: 'arl', type: 'text', ejemplo: 'ARL Sura' },
+  ],
+}
+
 export const IMPORT_CONFIGS: Record<string, EntityConfig> = {
   productos: PRODUCTOS_CONFIG,
   proveedores: PROVEEDORES_CONFIG,
   usuarios: USUARIOS_CONFIG,
+  personas: PERSONAS_CONFIG,
 }
 
 // ─── Normalización y validación compartidas ─────────────────────────────────

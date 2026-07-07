@@ -411,9 +411,74 @@ export const SEVERIDAD_LABELS: Record<SeveridadNotificacion, { label: string; co
   CRITICA:     { label: 'Crítica',     color: 'text-red-700',   bg: 'bg-red-50 border-red-100',     dot: 'bg-red-500' },
 }
 
+// ── Gestión Humana ───────────────────────────────────────────────────────────
+export type EstadoPersona = 'ACTIVO' | 'RETIRADO' | 'SUSPENDIDO'
+export type TipoDocumento = 'CC' | 'CE' | 'TI' | 'PA' | 'PEP' | 'NIT'
+
+export interface EmpresaUsuaria {
+  id: string
+  nombre: string
+  nit: string | null
+  ciudad: string | null
+  contacto: string | null
+  telefono: string | null
+  email: string | null
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Persona {
+  id: string
+  tipo_doc: TipoDocumento
+  documento: string
+  nombres: string
+  apellidos: string
+  cargo: string | null
+  empresa_usuaria_id: string | null
+  sede_id: string | null
+  fecha_ingreso: string | null
+  estado: EstadoPersona
+  email: string | null
+  telefono: string | null
+  direccion: string | null
+  eps: string | null
+  arl: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  empresas_usuarias?: { id: string; nombre: string } | null
+  sedes?: { id: string; nombre: string } | null
+}
+
+export interface TipoDocumental {
+  id: string
+  parent_id: string | null
+  nombre: string
+  descripcion: string | null
+  orden: number
+  created_at: string
+}
+
+export interface DocumentoPersona {
+  id: string
+  persona_id: string
+  tipo_documental_id: string | null
+  nombre_archivo: string
+  archivo_path: string
+  mime: string | null
+  tamano: number | null
+  subido_por: string | null
+  created_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
+      empresas_usuarias: { Row: EmpresaUsuaria; Insert: Partial<EmpresaUsuaria>; Update: Partial<EmpresaUsuaria> }
+      personas: { Row: Persona; Insert: Partial<Persona>; Update: Partial<Persona> }
+      tipos_documentales: { Row: TipoDocumental; Insert: Partial<TipoDocumental>; Update: Partial<TipoDocumental> }
+      documentos_persona: { Row: DocumentoPersona; Insert: Partial<DocumentoPersona>; Update: Partial<DocumentoPersona> }
       reglas_alerta: { Row: ReglaAlerta; Insert: Partial<ReglaAlerta>; Update: Partial<ReglaAlerta> }
       notificaciones: { Row: Notificacion; Insert: Partial<Notificacion>; Update: Partial<Notificacion> }
       notificaciones_preferencias: { Row: NotificacionPreferencias; Insert: Partial<NotificacionPreferencias>; Update: Partial<NotificacionPreferencias> }

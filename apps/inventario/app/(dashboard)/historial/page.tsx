@@ -1,12 +1,14 @@
 import type { Metadata } from 'next'
 import { History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { HistorialClient, type CambioRow } from './HistorialClient'
 
 export const metadata: Metadata = { title: 'Historial de cambios' }
 export const revalidate = 0
 
 export default async function HistorialPage() {
+  await requirePermiso('ver_historial')
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('historial_cambios')

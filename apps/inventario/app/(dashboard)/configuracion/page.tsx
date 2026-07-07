@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Building2, User, Shield, Mail, Bell, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { ROL_LABELS, type RolUsuario } from '@/lib/types/database'
 
 export const metadata: Metadata = { title: 'Configuración' }
 
 export default async function ConfiguracionPage() {
+  await requirePermiso('ver_configuracion')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

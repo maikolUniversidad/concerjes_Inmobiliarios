@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { GRUPO_LABELS, type GrupoContrato } from '@/lib/types/database'
 import { SedesClient, type GrupoOpt, type SedeRow } from './SedesClient'
 
@@ -13,6 +14,7 @@ interface SedeRaw {
 }
 
 export default async function ContratosPage() {
+  await requirePermiso('ver_contratos')
   const supabase = await createClient()
   const [{ data: gruposData }, { data: sedesData }] = await Promise.all([
     supabase.from('grupos_contrato').select('id, codigo, nombre, descripcion').eq('activo', true).order('codigo'),

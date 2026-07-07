@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { RefreshCw, FileText, AlertTriangle, Download, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Aprovisionamiento' }
 export const revalidate = 0
@@ -25,6 +26,7 @@ function formatCOP(n: number) {
 }
 
 export default async function AprovisionamientoPage() {
+  await requirePermiso('ver_aprovisionamiento')
   const supabase = await createClient()
   const periodo = 'JUNIO 2026'
 

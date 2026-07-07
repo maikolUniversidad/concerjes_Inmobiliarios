@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { UploadCloud } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { normalizaClave } from '@/lib/import/config'
 import { ImportarClient, type HistorialCarga } from './ImportarClient'
 
@@ -13,6 +14,7 @@ function tok(mk: string, v: unknown): string | null {
 }
 
 export default async function ImportarPage() {
+  await requirePermiso('importar_datos')
   const supabase = await createClient()
 
   const [prod, prov, usu, hist] = await Promise.all([

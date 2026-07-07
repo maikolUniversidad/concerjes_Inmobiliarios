@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { Plus, Download } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { ProductosClient } from './ProductosClient'
 
@@ -9,6 +10,7 @@ export const metadata: Metadata = { title: 'Productos' }
 export const revalidate = 30
 
 export default async function ProductosPage() {
+  await requirePermiso('ver_productos')
   const supabase = await createClient()
 
   const { data: productos, error } = await supabase

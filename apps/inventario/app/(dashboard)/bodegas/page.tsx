@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Warehouse, Plus, MapPin, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Bodegas' }
 export const revalidate = 0
@@ -14,6 +15,7 @@ interface BodegaRow {
 }
 
 export default async function BodegasPage() {
+  await requirePermiso('ver_bodegas')
   const supabase = await createClient()
   const { data } = await supabase
     .from('bodegas')

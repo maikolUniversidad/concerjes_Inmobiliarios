@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { ProveedoresClient, type ProveedorRow } from './ProveedoresClient'
 
 export const metadata: Metadata = { title: 'Proveedores' }
 export const revalidate = 30
 
 export default async function ProveedoresPage() {
+  await requirePermiso('ver_proveedores')
   const supabase = await createClient()
   const { data } = await supabase
     .from('proveedores')

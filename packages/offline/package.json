@@ -1,0 +1,12 @@
+{
+  "name": "@conserjes/offline",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Motor de datos offline-first (local + sync con Supabase) para la app nativa",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  }
+}

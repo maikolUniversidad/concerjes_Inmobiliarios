@@ -2,13 +2,16 @@ import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
   FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
-  UploadCloud, History, ClipboardCheck, Barcode, type LucideIcon,
+  UploadCloud, History, ClipboardCheck, Barcode,
+  Briefcase, Contact, FolderTree, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
   label: string
   href: string
   icon: LucideIcon
+  /** Permiso requerido para ver el ítem. Sin permiso = siempre visible. */
+  permiso?: string
 }
 
 export interface NavModule {
@@ -40,12 +43,12 @@ export const navigation: NavModule[] = [
     title: 'Inventario',
     icon: Package,
     items: [
-      { label: 'Productos',          href: '/productos', icon: Package },
-      { label: 'Stock',              href: '/stock',     icon: BarChart3 },
-      { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight },
-      { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck },
-      { label: 'Bodegas',            href: '/bodegas',   icon: Warehouse },
-      { label: 'Generador Códigos',  href: '/codigos',   icon: Barcode },
+      { label: 'Productos',          href: '/productos', icon: Package, permiso: 'ver_productos' },
+      { label: 'Stock',              href: '/stock',     icon: BarChart3, permiso: 'ver_stock' },
+      { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight, permiso: 'ver_movimientos' },
+      { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck, permiso: 'ver_arqueo' },
+      { label: 'Bodegas',            href: '/bodegas',   icon: Warehouse, permiso: 'ver_bodegas' },
+      { label: 'Generador Códigos',  href: '/codigos',   icon: Barcode, permiso: 'generar_codigos' },
     ],
   },
   {
@@ -53,11 +56,20 @@ export const navigation: NavModule[] = [
     title: 'Gestión',
     icon: Warehouse,
     items: [
-      { label: 'Aprovisionamiento', href: '/aprovisionamiento', icon: Warehouse },
-      { label: 'Contratos/Sedes',   href: '/contratos',         icon: FileText },
-      { label: 'Proveedores',       href: '/proveedores',       icon: Truck },
-      { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText },
-      { label: 'Reportes',          href: '/reportes',          icon: BarChart3 },
+      { label: 'Aprovisionamiento', href: '/aprovisionamiento', icon: Warehouse, permiso: 'ver_aprovisionamiento' },
+      { label: 'Contratos/Sedes',   href: '/contratos',         icon: FileText, permiso: 'ver_contratos' },
+      { label: 'Proveedores',       href: '/proveedores',       icon: Truck, permiso: 'ver_proveedores' },
+      { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText, permiso: 'ver_ordenes_compra' },
+      { label: 'Reportes',          href: '/reportes',          icon: BarChart3, permiso: 'ver_reportes' },
+    ],
+  },
+  {
+    id: 'gestion_humana',
+    title: 'Gestión Humana',
+    icon: Briefcase,
+    items: [
+      { label: 'Personas',   href: '/gestion-humana/personas',   icon: Contact, permiso: 'ver_personas' },
+      { label: 'Documentos', href: '/gestion-humana/documentos', icon: FolderTree, permiso: 'ver_documentos_rrhh' },
     ],
   },
   {
@@ -65,7 +77,7 @@ export const navigation: NavModule[] = [
     title: 'Inteligencia Artificial',
     icon: Brain,
     items: [
-      { label: 'Asistente IA', href: '/ia/asistente', icon: Brain },
+      { label: 'Asistente IA', href: '/ia/asistente', icon: Brain, permiso: 'usar_ia_asistente' },
     ],
   },
   {
@@ -73,23 +85,31 @@ export const navigation: NavModule[] = [
     title: 'Administración',
     icon: Settings,
     items: [
-      { label: 'Cargas masivas',     href: '/importar',         icon: UploadCloud    },
-      { label: 'Historial de Cambios', href: '/historial',      icon: History        },
-      { label: 'Documentos/Galería', href: '/documentos',      icon: FolderOpen     },
-      { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell           },
-      { label: 'Usuarios',           href: '/usuarios',         icon: Users          },
-      { label: 'Roles y Permisos',   href: '/roles',            icon: Shield         },
-      { label: 'Log de Actividad',   href: '/actividad-log',    icon: ClipboardList  },
-      { label: 'Configuración',      href: '/configuracion',    icon: Settings       },
+      { label: 'Cargas masivas',     href: '/importar',         icon: UploadCloud,   permiso: 'importar_datos' },
+      { label: 'Historial de Cambios', href: '/historial',      icon: History,       permiso: 'ver_historial' },
+      { label: 'Documentos/Galería', href: '/documentos',      icon: FolderOpen,     permiso: 'ver_documentos' },
+      { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell,          permiso: 'ver_notificaciones' },
+      { label: 'Usuarios',           href: '/usuarios',         icon: Users,         permiso: 'ver_usuarios' },
+      { label: 'Roles y Permisos',   href: '/roles',            icon: Shield,        permiso: 'gestionar_roles' },
+      { label: 'Log de Actividad',   href: '/actividad-log',    icon: ClipboardList, permiso: 'ver_actividad_log' },
+      { label: 'Configuración',      href: '/configuracion',    icon: Settings,      permiso: 'ver_configuracion' },
     ],
   },
 ]
+
+/** Filtra la navegación según una función de permiso, quitando módulos vacíos. */
+export function navegacionVisible(puede: (permiso?: string) => boolean): NavModule[] {
+  return navigation
+    .map((mod) => ({ ...mod, items: mod.items.filter((it) => puede(it.permiso)) }))
+    .filter((mod) => mod.items.length > 0)
+}
 
 /** Etiqueta corta para mostrar bajo el icono en la barra inferior móvil. */
 export const moduleShortLabel: Record<string, string> = {
   principal: 'Inicio',
   inventario: 'Inventario',
   gestion: 'Gestión',
+  gestion_humana: 'RRHH',
   ia: 'IA',
   administracion: 'Admin',
 }

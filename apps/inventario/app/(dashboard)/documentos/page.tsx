@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { DocumentosClient } from './DocumentosClient'
 import { Info } from 'lucide-react'
 
@@ -7,6 +8,7 @@ export const metadata: Metadata = { title: 'Documentos y Galería' }
 export const revalidate = 0
 
 export default async function DocumentosPage() {
+  await requirePermiso('ver_documentos')
   const supabase = await createClient()
 
   const [{ data: sst }, { data: galeria }] = await Promise.all([

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Package, AlertTriangle, TrendingUp, ArrowLeftRight, Boxes, Users, Share2, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
 import { ReportesExport } from './ReportesExport'
 
@@ -22,6 +23,7 @@ interface ActLog { usuario_nombre: string | null; usuario_email: string | null; 
 interface UsuarioActividad { clave: string; nombre: string; email: string; total: number; modulos: Set<string>; ultima: string }
 
 export default async function ReportesPage() {
+  await requirePermiso('ver_reportes')
   const supabase = await createClient()
 
   const { data: prodRaw } = await supabase
@@ -117,7 +119,7 @@ export default async function ReportesPage() {
         {/* Por categoría */}
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
           <h2 className="font-heading font-semibold text-lg text-gray-900 mb-4">Distribución por rotación (A/B/C/D)</h2>
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {porCat.map(({ cat, n }) => (
               <div key={cat} className="text-center rounded-xl border border-gray-100 p-4">
                 <p className="font-heading font-bold text-2xl text-gray-900">{n}</p>

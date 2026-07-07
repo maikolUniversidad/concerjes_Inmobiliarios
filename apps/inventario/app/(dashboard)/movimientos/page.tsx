@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Plus, ArrowDownToLine, ArrowUpFromLine, RefreshCw, Settings2, ArrowLeftRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import type { TipoMovimiento } from '@/lib/types/database'
 
 export const metadata: Metadata = { title: 'Movimientos' }
@@ -25,6 +26,7 @@ interface MovRow {
 }
 
 export default async function MovimientosPage() {
+  await requirePermiso('ver_movimientos')
   const supabase = await createClient()
   const { data, error } = await supabase
     .from('movimientos')

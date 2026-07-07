@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import RolesClient from './RolesClient'
 
 export const metadata: Metadata = { title: 'Roles y Permisos' }
 export const revalidate = 0
 
 export default async function RolesPage() {
+  await requirePermiso('gestionar_roles')
   const supabase = await createClient()
 
   const { data: roles } = await supabase

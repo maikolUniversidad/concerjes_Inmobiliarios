@@ -8,6 +8,7 @@ import {
   ArrowLeftRight, Mail, UserPlus, Megaphone, type LucideIcon,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useRequierePermiso } from '@/components/permisos/PermisosProvider'
 import {
   SEVERIDAD_LABELS, TIPO_NOTIFICACION_LABELS,
   type Notificacion, type TipoNotificacion, type EstadoNotificacion,
@@ -40,6 +41,7 @@ function tiempoRelativo(iso: string) {
 }
 
 export default function NotificacionesPage() {
+  const permitido = useRequierePermiso('ver_notificaciones')
   const [items, setItems] = useState<Notificacion[]>([])
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('NO_LEIDA')
@@ -112,6 +114,8 @@ export default function NotificacionesPage() {
     { key: 'TODAS', label: 'Todas' },
     { key: 'ARCHIVADA', label: 'Archivadas' },
   ]
+
+  if (!permitido) return null
 
   return (
     <div className="p-4 sm:p-6 space-y-5 max-w-4xl">

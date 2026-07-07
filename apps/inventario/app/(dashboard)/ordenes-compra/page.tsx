@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { FileText, Plus, Ban } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { anularOC } from './actions'
 import type { EstadoOC } from '@/lib/types/database'
@@ -30,6 +31,7 @@ interface OCRow {
 }
 
 export default async function OrdenesCompraPage() {
+  await requirePermiso('ver_ordenes_compra')
   const supabase = await createClient()
   const { data } = await supabase
     .from('ordenes_compra')

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ClipboardCheck, Plus, CheckCircle2, Clock, Ban } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Arqueo de inventario' }
 export const revalidate = 0
@@ -28,6 +29,7 @@ const ESTADO = {
 }
 
 export default async function ArqueoPage() {
+  await requirePermiso('ver_arqueo')
   const supabase = await createClient()
   const { data } = await supabase
     .from('arqueos')

@@ -10,6 +10,7 @@ import {
   RefreshCw,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { useRequierePermiso } from '@/components/permisos/PermisosProvider'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,6 +188,7 @@ function LogRow({ log }: { log: LogEntry }) {
 // ─── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ActividadLogPage() {
+  const permitido = useRequierePermiso('ver_actividad_log')
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -227,6 +229,8 @@ export default function ActividadLogPage() {
       if (intervalRef.current) clearInterval(intervalRef.current)
     }
   }, [fetchLogs])
+
+  if (!permitido) return null
 
   // Derived filter lists
   const allModulos = Array.from(new Set(logs.map((l) => l.modulo))).sort()

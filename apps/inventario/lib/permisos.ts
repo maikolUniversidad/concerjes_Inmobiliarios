@@ -65,6 +65,19 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    grupo: 'Gestión Humana',
+    permisos: [
+      { key: 'ver_personas',              label: 'Ver personas / colaboradores' },
+      { key: 'gestionar_personas',        label: 'Crear / editar personas' },
+      { key: 'importar_personas',         label: 'Cargue masivo de personas' },
+      { key: 'ver_empresas_usuarias',     label: 'Ver empresas usuarias' },
+      { key: 'gestionar_empresas_usuarias', label: 'Gestionar empresas usuarias' },
+      { key: 'ver_documentos_rrhh',       label: 'Ver documentos de personas' },
+      { key: 'gestionar_documentos_rrhh', label: 'Subir / eliminar documentos' },
+      { key: 'gestionar_tipos_documentales', label: 'Gestionar árbol de tipos documentales' },
+    ],
+  },
+  {
     grupo: 'Inteligencia Artificial',
     permisos: [
       { key: 'usar_ia_vision',    label: 'Usar visión IA' },

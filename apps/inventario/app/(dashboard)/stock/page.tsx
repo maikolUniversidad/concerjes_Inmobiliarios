@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion } from '@/lib/types/database'
 import { StockClient, type StockRow } from './StockClient'
 
@@ -17,6 +18,7 @@ interface Row {
 }
 
 export default async function StockPage() {
+  await requirePermiso('ver_stock')
   const supabase = await createClient()
 
   const { data, error } = await supabase

@@ -91,6 +91,64 @@ async function upsertUsuario(supabase: DB, datos: Record<string, unknown>, id: s
   return 'creado'
 }
 
+function parseFecha(v: unknown): string | null {
+  const s = String(v ?? '').trim()
+  if (!s) return null
+  // AAAA-MM-DD
+  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`
+  // DD/MM/AAAA
+  m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(s)
+  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+  return null
+}
+
+async function resolverEmpresaUsuaria(supabase: DB, nombre: unknown): Promise<string | null> {
+  const n = String(nombre ?? '').trim()
+  if (!n) return null
+  const { data } = await supabase.from('empresas_usuarias').select('id').ilike('nombre', n).limit(1).maybeSingle()
+  if (data?.id) return data.id as string
+  // No existe → crear (conveniencia para el cargue masivo)
+  const { data: creada } = await supabase.from('empresas_usuarias').insert({ nombre: n }).select('id').single()
+  return creada?.id ?? null
+}
+
+async function resolverSede(supabase: DB, nombre: unknown): Promise<string | null> {
+  const n = String(nombre ?? '').trim()
+  if (!n) return null
+  const { data } = await supabase.from('sedes').select('id').ilike('nombre', n).limit(1).maybeSingle()
+  return (data?.id as string) ?? null
+}
+
+async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
+  const empresaId = await resolverEmpresaUsuaria(supabase, datos.empresa_usuaria)
+  const sedeId = await resolverSede(supabase, datos.sede)
+  const payload: Record<string, unknown> = {
+    tipo_doc: datos.tipo_doc ?? 'CC',
+    documento: String(datos.documento).trim(),
+    nombres: datos.nombres,
+    apellidos: datos.apellidos,
+    cargo: datos.cargo ?? null,
+    empresa_usuaria_id: empresaId,
+    sede_id: sedeId,
+    fecha_ingreso: parseFecha(datos.fecha_ingreso),
+    estado: datos.estado ?? 'ACTIVO',
+    email: datos.email ?? null,
+    telefono: datos.telefono ?? null,
+    direccion: datos.direccion ?? null,
+    eps: datos.eps ?? null,
+    arl: datos.arl ?? null,
+  }
+  if (id) {
+    const { error } = await supabase.from('personas').update(payload).eq('id', id)
+    if (error) throw new Error(error.message)
+    return 'actualizado'
+  }
+  const { error } = await supabase.from('personas').insert(payload)
+  if (error) throw new Error(error.message)
+  return 'creado'
+}
+
 export async function importarEntidad(entidad: string, rows: FilaCommit[], archivo: string): Promise<ImportResult> {
   const config = IMPORT_CONFIGS[entidad]
   if (!config) return { ok: false, total: 0, creados: 0, actualizados: 0, errores: 0, detalle: [], error: 'Entidad no válida.' }
@@ -110,6 +168,7 @@ export async function importarEntidad(entidad: string, rows: FilaCommit[], archi
       let accion: 'creado' | 'actualizado'
       if (entidad === 'productos') accion = await upsertProducto(supabase, row.datos, id)
       else if (entidad === 'proveedores') accion = await upsertProveedor(supabase, row.datos, id)
+      else if (entidad === 'personas') accion = await upsertPersona(supabase, row.datos, id)
       else accion = await upsertUsuario(supabase, row.datos, id)
 
       if (accion === 'creado') creados++; else actualizados++

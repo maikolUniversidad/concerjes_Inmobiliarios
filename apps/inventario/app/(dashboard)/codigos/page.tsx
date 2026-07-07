@@ -1,11 +1,13 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import CodigosClient from './CodigosClient'
 
 export const metadata: Metadata = { title: 'Generador de Códigos' }
 export const revalidate = 0
 
 export default async function CodigosPage() {
+  await requirePermiso('generar_codigos')
   const supabase = await createClient()
 
   const { data: productos } = await supabase

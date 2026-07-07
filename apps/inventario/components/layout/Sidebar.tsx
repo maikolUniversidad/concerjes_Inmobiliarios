@@ -5,8 +5,9 @@ import Image from 'next/image'
 import { usePathname, useRouter } from 'next/navigation'
 import { ChevronRight, LogOut } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { navigation, isItemActive } from './navigation'
+import { navegacionVisible, isItemActive } from './navigation'
 import { createClient } from '@/lib/supabase/client'
+import { usePermisos } from '@/components/permisos/PermisosProvider'
 
 interface SidebarProps {
   collapsed?: boolean
@@ -16,6 +17,8 @@ interface SidebarProps {
 export function Sidebar({ collapsed = false, onNavigate }: SidebarProps) {
   const pathname = usePathname()
   const router = useRouter()
+  const { puede } = usePermisos()
+  const navigation = navegacionVisible(puede)
 
   async function handleLogout() {
     const supabase = createClient()

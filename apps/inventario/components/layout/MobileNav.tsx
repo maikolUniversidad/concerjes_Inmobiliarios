@@ -5,8 +5,9 @@ import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
 import {
-  navigation, moduleShortLabel, findActiveModule, isItemActive,
+  navegacionVisible, moduleShortLabel, isItemActive, type NavModule,
 } from './navigation'
+import { usePermisos } from '@/components/permisos/PermisosProvider'
 
 /**
  * Barra de navegación inferior para móvil (oculta en desktop `lg+`).
@@ -19,9 +20,13 @@ import {
 export function MobileNav() {
   const pathname = usePathname()
   const router = useRouter()
+  const { puede } = usePermisos()
   const [openId, setOpenId] = useState<string | null>(null)
 
-  const activeModule = findActiveModule(pathname)
+  const navigation = navegacionVisible(puede)
+  const activeModule: NavModule | undefined = navigation.find((mod) =>
+    mod.items.some((item) => isItemActive(pathname, item.href)),
+  )
 
   // Al cambiar de ruta: cerrar la bandeja y sincronizar el módulo activo.
   useEffect(() => {
