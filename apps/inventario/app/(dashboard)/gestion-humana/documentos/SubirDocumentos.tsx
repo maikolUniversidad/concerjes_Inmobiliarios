@@ -52,8 +52,12 @@ export function SubirDocumentos({ personas, tipos }: Props) {
   }, [personas, q])
 
   function addFiles(list: FileList | null) {
-    if (!list) return
-    setFiles((prev) => [...prev, ...Array.from(list)])
+    if (!list || list.length === 0) return
+    // Instantánea síncrona: al seleccionar por clic el input se limpia
+    // (value = '') antes de que React aplique el setState, lo que vaciaría
+    // la FileList "viva". Copiamos los File ahora mismo.
+    const arr = Array.from(list)
+    setFiles((prev) => [...prev, ...arr])
   }
   function quitar(i: number) {
     setFiles((prev) => prev.filter((_, j) => j !== i))
@@ -66,8 +70,11 @@ export function SubirDocumentos({ personas, tipos }: Props) {
     const nuevos: FileState[] = files.map((f) => ({ name: f.name, status: 'pending' }))
     setEstados(nuevos)
 
-    const { data: { user } } = await sb.auth.getUser()
+    let user: { id: string } | null = null
+    try { const r = await sb.auth.getUser(); user = r?.data?.user ?? null } catch { /* sesión */ }
+
     let ok = 0
+    let primerError = ''
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i]
@@ -92,7 +99,11 @@ export function SubirDocumentos({ personas, tipos }: Props) {
         ok++
         setEstados((prev) => prev.map((e, j) => (j === i ? { ...e, status: 'done' } : e)))
       } catch (err) {
-        setEstados((prev) => prev.map((e, j) => (j === i ? { ...e, status: 'error', error: err instanceof Error ? err.message : 'Error' } : e)))
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const msg = (err as any)?.message || (err as any)?.error || 'Error al subir'
+        if (!primerError) primerError = msg
+        console.error('Error subiendo documento:', err)
+        setEstados((prev) => prev.map((e, j) => (j === i ? { ...e, status: 'error', error: msg } : e)))
       }
     }
 
@@ -103,8 +114,11 @@ export function SubirDocumentos({ personas, tipos }: Props) {
         entidad: 'documentos_persona', entidad_id: personaId,
       })
       toast.success(`${ok} documento(s) subido(s).`)
+      setFiles([]) // el panel de resultados muestra el detalle de cada archivo
+    } else if (files.length > 0) {
+      // Nada se subió: conservar la cola para reintentar y mostrar el motivo.
+      toast.error(primerError || 'No se pudo subir. Revisa tus permisos y vuelve a intentar.')
     }
-    setFiles([])
     setSubiendo(false)
   }
 

@@ -1,0 +1,8 @@
+{
+  "name": "conserjes-inventario",
+  "productName": "Conserjes Inventario",
+  "version": "0.1.0",
+  "description": "Conserjes Inventario — escritorio offline-first",
+  "author": "Conserjes Inmobiliarios Ltda",
+  "main": "main.cjs"
+}

@@ -52,19 +52,25 @@ npm run build && npx cap sync ios
 npx cap open ios            # Xcode → firmar y archivar
 ```
 
-## Escritorio (Tauri) — requiere Rust
+## Escritorio (Windows .exe) — Electron ✅ ya empaquetado
+Solo necesita Node (sin Rust). Genera la app portable de escritorio:
 ```bash
 cd apps/movil
-npm i -D @tauri-apps/cli
-npx tauri init             # webDir: dist · devUrl: http://localhost:5173
-npm run build && npx tauri build   # genera .exe (Windows) / .dmg (macOS) / .AppImage (Linux)
+npm run desktop:build       # build web + @electron/packager
 ```
+Salida: `dist-desktop/Conserjes Inventario-win32-x64/Conserjes Inventario.exe`
+(carpeta portable, se puede comprimir y distribuir). Para desarrollo: `npm run electron`.
+
+> Nota: se usa `@electron/packager` (no `electron-builder`) porque el instalador
+> firmado de electron-builder requiere privilegios de symlink en Windows
+> (Modo Desarrollador/admin). Para un instalador `.msi/NSIS` firmado, usar
+> electron-builder en una máquina con Modo Desarrollador activado.
 
 ## Estado
 - ✅ Fase 2: shell nativo, login + caché de sesión, sync (pull/push), Dexie, Productos offline.
 - ✅ Fase 3: Stock, Movimientos (RPC por outbox), Bodegas, Arqueo + navegación por pestañas.
 - ✅ Fase 4: PIN local + permisos por rol offline (gating de pestañas y acciones).
-- ✅ Fase 5: proyecto Android generado (`cap add android`). Falta compilar el APK en una
-  máquina con Android Studio/SDK; iOS (macOS/Xcode) y Tauri (Rust) documentados arriba.
+- ✅ Fase 5: **escritorio Windows empaquetado** (Electron); proyecto **Android generado**
+  (`cap add android`, falta compilar el APK con Android Studio/SDK); **iOS** requiere macOS/Xcode.
 
 Plan completo en `docs/offline-native.md`.
