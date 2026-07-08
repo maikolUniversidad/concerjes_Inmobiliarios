@@ -105,20 +105,22 @@ export function TipoTree({ tipos, onChange }: Props) {
             </span>
           )}
 
-          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+          {/* En móvil (táctil) no hay hover: los botones van siempre visibles.
+              En escritorio (lg+) se revelan al pasar el mouse por la fila. */}
+          <div className="flex items-center gap-0.5 shrink-0 opacity-100 lg:opacity-0 lg:group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
             <button onClick={() => setMuestrasTipo({ id: node.id, label: rutaTipo(node.id, tipos) })} title="Entrenar IA (muestras)"
-              className="p-1.5 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50">
-              <Brain className="w-3.5 h-3.5" />
+              className="p-2 lg:p-1.5 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50">
+              <Brain className="w-4 h-4 lg:w-3.5 lg:h-3.5" />
             </button>
             <button onClick={() => crear(node.id)} title="Añadir subtipo"
-              className="p-1.5 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50">
-              {busy === node.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+              className="p-2 lg:p-1.5 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50">
+              {busy === node.id ? <Loader2 className="w-4 h-4 lg:w-3.5 lg:h-3.5 animate-spin" /> : <Plus className="w-4 h-4 lg:w-3.5 lg:h-3.5" />}
             </button>
-            <button onClick={() => renombrar(node)} title="Renombrar" className="p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50">
-              <Pencil className="w-3.5 h-3.5" />
+            <button onClick={() => renombrar(node)} title="Renombrar" className="p-2 lg:p-1.5 rounded-md text-gray-400 hover:text-blue-600 hover:bg-blue-50">
+              <Pencil className="w-4 h-4 lg:w-3.5 lg:h-3.5" />
             </button>
-            <button onClick={() => eliminar(node)} title="Eliminar" className="p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50">
-              <Trash2 className="w-3.5 h-3.5" />
+            <button onClick={() => eliminar(node)} title="Eliminar" className="p-2 lg:p-1.5 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50">
+              <Trash2 className="w-4 h-4 lg:w-3.5 lg:h-3.5" />
             </button>
           </div>
         </div>

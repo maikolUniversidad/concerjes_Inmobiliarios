@@ -12,14 +12,18 @@ export default async function AsistentePage() {
 
   let carpetas: IACarpeta[] = []
   let conversaciones: IAConversacion[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let personas: any[] = []
 
   if (user) {
-    const [{ data: c }, { data: cv }] = await Promise.all([
+    const [{ data: c }, { data: cv }, { data: pe }] = await Promise.all([
       supabase.from('ia_carpetas').select('*').eq('user_id', user.id).order('orden'),
       supabase.from('ia_conversaciones').select('*').eq('user_id', user.id).order('updated_at', { ascending: false }),
+      supabase.from('personas').select('id, nombres, apellidos, documento, tipo_doc').order('apellidos'),
     ])
     carpetas = c ?? []
     conversaciones = cv ?? []
+    personas = pe ?? []
   }
 
   return (
@@ -29,6 +33,7 @@ export default async function AsistentePage() {
         userId={user?.id ?? ''}
         carpetasIniciales={carpetas}
         conversacionesIniciales={conversaciones}
+        personas={personas}
       />
     </div>
   )

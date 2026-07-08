@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useRef, useState } from 'react'
-import { Menu, Sparkles, ChevronDown, Plus, X } from 'lucide-react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { Menu, Sparkles, ChevronDown, Plus, X, UserSearch, Search, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { IACarpeta, IAConversacion } from '@/lib/types/database'
@@ -12,17 +12,26 @@ import { ChatMessages, type ChatMessage } from './ChatMessages'
 import { ChatComposer } from './ChatComposer'
 import { cn } from '@/lib/utils'
 
+export interface PersonaChat {
+  id: string
+  nombres: string
+  apellidos: string
+  documento: string
+  tipo_doc: string
+}
+
 interface Props {
   userId: string
   carpetasIniciales: IACarpeta[]
   conversacionesIniciales: IAConversacion[]
+  personas: PersonaChat[]
 }
 
 function nuevoId() {
   return (globalThis.crypto?.randomUUID?.() ?? `local-${Date.now()}-${Math.round(Math.random() * 1e6)}`)
 }
 
-export function AsistenteClient({ userId, carpetasIniciales, conversacionesIniciales }: Props) {
+export function AsistenteClient({ userId, carpetasIniciales, conversacionesIniciales, personas }: Props) {
   // El cliente tipado de este proyecto devuelve `never` en escrituras (mismo
   // patrón que el resto de actions del repo): se usa un alias laxo para CRUD.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +48,15 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
   const [modeloOpen, setModeloOpen] = useState(false)
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [parsing, setParsing] = useState(false)
+  const [personaCtx, setPersonaCtx] = useState<PersonaChat | null>(null)
+  const [personaOpen, setPersonaOpen] = useState(false)
+  const [personaQuery, setPersonaQuery] = useState('')
+
+  const personasFiltradas = useMemo(() => {
+    const t = personaQuery.trim().toLowerCase()
+    const base = t ? personas.filter(p => `${p.nombres} ${p.apellidos} ${p.documento}`.toLowerCase().includes(t)) : personas
+    return base.slice(0, 30)
+  }, [personas, personaQuery])
 
   const abortRef = useRef<AbortController | null>(null)
   const convActiva = conversaciones.find(c => c.id === activaId) ?? null
@@ -174,7 +192,7 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
       const res = await fetch('/api/ia/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mensajes: historialParaApi, modelo }),
+        body: JSON.stringify({ mensajes: historialParaApi, modelo, personaId: personaCtx?.id ?? null }),
         signal: controller.signal,
       })
       if (!res.ok || !res.body) throw new Error('Error en la respuesta del asistente')
@@ -224,7 +242,7 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
       setStreaming(false)
       abortRef.current = null
     }
-  }, [activaId, mensajes, modelo, streaming, parsing, attachments, userId, persistInsertConv, persistMensaje])
+  }, [activaId, mensajes, modelo, streaming, parsing, attachments, personaCtx, userId, persistInsertConv, persistMensaje])
 
   const detener = useCallback(() => abortRef.current?.abort(), [])
 
@@ -372,6 +390,56 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
 
         {/* Mensajes */}
         <ChatMessages mensajes={mensajes} streaming={streaming} onPregunta={(t) => enviar(t)} />
+
+        {/* Contexto de persona */}
+        <div className="border-t border-gray-100 bg-white px-3 sm:px-4 pt-2">
+          <div className="mx-auto flex max-w-3xl items-center gap-2">
+            {personaCtx ? (
+              <span className="flex items-center gap-1.5 rounded-full bg-brand-green/10 border border-brand-green/20 px-2.5 py-1 text-xs text-brand-green">
+                <User className="h-3.5 w-3.5" />
+                <span className="font-medium">{personaCtx.nombres} {personaCtx.apellidos}</span>
+                <span className="text-brand-green/60">· {personaCtx.documento}</span>
+                <button onClick={() => setPersonaCtx(null)} className="ml-0.5 rounded-full p-0.5 hover:bg-brand-green/20" aria-label="Quitar persona">
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ) : (
+              <div className="relative">
+                <button onClick={() => setPersonaOpen(o => !o)}
+                  className="flex items-center gap-1.5 rounded-full border border-gray-200 px-2.5 py-1 text-xs text-gray-500 hover:bg-gray-50">
+                  <UserSearch className="h-3.5 w-3.5" /> Preguntar sobre una persona…
+                </button>
+                {personaOpen && (
+                  <>
+                    <div className="fixed inset-0 z-30" onClick={() => setPersonaOpen(false)} />
+                    <div className="absolute bottom-9 left-0 z-40 w-72 rounded-xl border border-gray-200 bg-white shadow-lg">
+                      <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
+                        <Search className="h-4 w-4 text-gray-400" />
+                        <input autoFocus value={personaQuery} onChange={(e) => setPersonaQuery(e.target.value)}
+                          placeholder="Buscar por nombre o documento…" className="flex-1 bg-transparent text-sm outline-none" />
+                      </div>
+                      <div className="max-h-56 overflow-y-auto py-1">
+                        {personasFiltradas.length === 0 && <p className="px-3 py-3 text-sm text-gray-400">Sin resultados</p>}
+                        {personasFiltradas.map((p) => (
+                          <button key={p.id} onClick={() => { setPersonaCtx(p); setPersonaOpen(false); setPersonaQuery('') }}
+                            className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-gray-50">
+                            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-green/10 text-brand-green text-xs font-bold shrink-0">
+                              {(p.nombres[0] ?? '') + (p.apellidos[0] ?? '')}
+                            </span>
+                            <span className="min-w-0">
+                              <span className="block truncate text-sm text-gray-800">{p.nombres} {p.apellidos}</span>
+                              <span className="block text-xs text-gray-400">{p.tipo_doc} {p.documento}</span>
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Composer */}
         <ChatComposer
