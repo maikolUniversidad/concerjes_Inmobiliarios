@@ -1,8 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { Package, Truck, Users, History } from 'lucide-react'
+import { Package, Truck, Users, History, Building2, MapPin } from 'lucide-react'
 import { BulkImport } from '@/components/import/BulkImport'
-import { PRODUCTOS_CONFIG, PROVEEDORES_CONFIG, USUARIOS_CONFIG } from '@/lib/import/config'
+import {
+  PRODUCTOS_CONFIG, PROVEEDORES_CONFIG, USUARIOS_CONFIG,
+  EMPRESAS_USUARIAS_CONFIG, SEDES_CONFIG,
+} from '@/lib/import/config'
 
 export interface HistorialCarga {
   id: string
@@ -16,21 +19,28 @@ export interface HistorialCarga {
   created_at: string
 }
 
+type TabId = 'productos' | 'proveedores' | 'usuarios' | 'empresas_usuarias' | 'sedes'
+
 interface Props {
-  existentes: { productos: string[]; proveedores: string[]; usuarios: string[] }
+  existentes: Record<TabId, string[]>
   historial: HistorialCarga[]
 }
 
 const TABS = [
   { id: 'productos', label: 'Productos', icon: Package, config: PRODUCTOS_CONFIG },
+  { id: 'empresas_usuarias', label: 'Clientes', icon: Building2, config: EMPRESAS_USUARIAS_CONFIG },
+  { id: 'sedes', label: 'Sedes', icon: MapPin, config: SEDES_CONFIG },
   { id: 'proveedores', label: 'Proveedores', icon: Truck, config: PROVEEDORES_CONFIG },
   { id: 'usuarios', label: 'Usuarios', icon: Users, config: USUARIOS_CONFIG },
 ] as const
 
-const ENTIDAD_LABEL: Record<string, string> = { productos: 'Productos', proveedores: 'Proveedores', usuarios: 'Usuarios' }
+const ENTIDAD_LABEL: Record<string, string> = {
+  productos: 'Productos', proveedores: 'Proveedores', usuarios: 'Usuarios',
+  empresas_usuarias: 'Clientes', sedes: 'Sedes', personas: 'Personas',
+}
 
 export function ImportarClient({ existentes, historial }: Props) {
-  const [tab, setTab] = useState<'productos' | 'proveedores' | 'usuarios'>('productos')
+  const [tab, setTab] = useState<TabId>('productos')
   const activa = TABS.find(t => t.id === tab)!
 
   return (

@@ -14,7 +14,7 @@ export interface ColumnDef {
 }
 
 export interface EntityConfig {
-  id: 'productos' | 'proveedores' | 'usuarios' | 'personas'
+  id: 'productos' | 'proveedores' | 'usuarios' | 'personas' | 'empresas_usuarias' | 'sedes'
   label: string
   /** Campos (en orden de prioridad) usados para detectar duplicados y actualizar. */
   matchKeys: string[]
@@ -129,11 +129,53 @@ export const PERSONAS_CONFIG: EntityConfig = {
   ],
 }
 
+export const EMPRESAS_USUARIAS_CONFIG: EntityConfig = {
+  id: 'empresas_usuarias',
+  label: 'Clientes (Empresas usuarias)',
+  matchKeys: ['nombre', 'nit'],
+  matchLabel: 'nombre o NIT',
+  instrucciones: [
+    'Completa una fila por cliente (empresa usuaria). No borres la fila de encabezados.',
+    'Si el nombre (o el NIT) ya existe, el cliente se ACTUALIZA; si no, se CREA.',
+    'El nombre es obligatorio y único.',
+  ],
+  columns: [
+    { key: 'nombre', label: 'nombre', type: 'text', required: true, ejemplo: 'Transmilenio S.A.', ayuda: 'Nombre del cliente (obligatorio, clave única)' },
+    { key: 'nit', label: 'nit', type: 'text', ejemplo: '900.000.000-1', ayuda: 'NIT (recomendado para no duplicar)' },
+    { key: 'ciudad', label: 'ciudad', type: 'text', ejemplo: 'Bogotá D.C.' },
+    { key: 'contacto', label: 'contacto', type: 'text', ejemplo: 'Ana Ramírez' },
+    { key: 'telefono', label: 'telefono', type: 'text', ejemplo: '6011234567' },
+    { key: 'email', label: 'email', type: 'email', ejemplo: 'contacto@cliente.com' },
+  ],
+}
+
+export const SEDES_CONFIG: EntityConfig = {
+  id: 'sedes',
+  label: 'Sedes',
+  matchKeys: ['codigo_interno', 'nombre'],
+  matchLabel: 'código interno o nombre',
+  instrucciones: [
+    'Completa una fila por sede. No borres la fila de encabezados.',
+    'Si el código interno (o el nombre) ya existe, la sede se ACTUALIZA; si no, se CREA.',
+    'grupo es OBLIGATORIO: usa el código del grupo de contrato (CA, MO, MB, PB, AD).',
+    'Si el grupo no existe, la fila se marca con error.',
+  ],
+  columns: [
+    { key: 'grupo', label: 'grupo', type: 'text', required: true, ejemplo: 'CA', ayuda: 'Código del grupo de contrato: CA, MO, MB, PB o AD' },
+    { key: 'nombre', label: 'nombre', type: 'text', required: true, ejemplo: 'Portal Norte', ayuda: 'Nombre de la sede (obligatorio)' },
+    { key: 'codigo_interno', label: 'codigo_interno', type: 'text', ejemplo: 'CA-001', ayuda: 'Código interno (recomendado para no duplicar)' },
+    { key: 'zona', label: 'zona', type: 'text', ejemplo: 'Norte' },
+    { key: 'ciudad', label: 'ciudad', type: 'text', ejemplo: 'Bogotá D.C.' },
+  ],
+}
+
 export const IMPORT_CONFIGS: Record<string, EntityConfig> = {
   productos: PRODUCTOS_CONFIG,
   proveedores: PROVEEDORES_CONFIG,
   usuarios: USUARIOS_CONFIG,
   personas: PERSONAS_CONFIG,
+  empresas_usuarias: EMPRESAS_USUARIAS_CONFIG,
+  sedes: SEDES_CONFIG,
 }
 
 // ─── Normalización y validación compartidas ─────────────────────────────────

@@ -17,10 +17,12 @@ export default async function ImportarPage() {
   await requirePermiso('importar_datos')
   const supabase = await createClient()
 
-  const [prod, prov, usu, hist] = await Promise.all([
+  const [prod, prov, usu, emp, sed, hist] = await Promise.all([
     supabase.from('productos').select('ref, codigo, nombre_estandar'),
     supabase.from('proveedores').select('nit, nombre'),
     supabase.from('usuarios').select('email'),
+    supabase.from('empresas_usuarias').select('nombre, nit'),
+    supabase.from('sedes').select('codigo_interno, nombre'),
     supabase.from('importaciones').select('id, entidad, archivo_nombre, total, creados, actualizados, errores, usuario_email, created_at').order('created_at', { ascending: false }).limit(20),
   ])
 
@@ -36,6 +38,14 @@ export default async function ImportarPage() {
     .map(u => tok('email', u.email))
     .filter((x): x is string => x !== null)
 
+  const empresas_usuarias = ((emp.data as { nombre: string; nit: string | null }[]) ?? [])
+    .flatMap(e => [tok('nombre', e.nombre), tok('nit', e.nit)])
+    .filter((x): x is string => x !== null)
+
+  const sedes = ((sed.data as { codigo_interno: string | null; nombre: string }[]) ?? [])
+    .flatMap(s => [tok('codigo_interno', s.codigo_interno), tok('nombre', s.nombre)])
+    .filter((x): x is string => x !== null)
+
   const historial = (hist.data as unknown as HistorialCarga[]) ?? []
 
   return (
@@ -45,12 +55,12 @@ export default async function ImportarPage() {
           <UploadCloud className="w-6 h-6 text-brand-green" /> Cargas masivas
         </h1>
         <p className="font-body text-sm text-gray-500 mt-0.5">
-          Importa productos, proveedores o usuarios desde Excel/CSV. Si ya existen, se actualizan en lugar de duplicarse.
+          Importa productos, proveedores, usuarios, clientes o sedes desde Excel/CSV. Si ya existen, se actualizan en lugar de duplicarse.
           Todo queda registrado en el historial y versionado.
         </p>
       </div>
 
-      <ImportarClient existentes={{ productos, proveedores, usuarios }} historial={historial} />
+      <ImportarClient existentes={{ productos, proveedores, usuarios, empresas_usuarias, sedes }} historial={historial} />
     </div>
   )
 }

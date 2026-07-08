@@ -149,6 +149,47 @@ async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: s
   return 'creado'
 }
 
+async function upsertEmpresaUsuaria(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
+  const payload = {
+    nombre: datos.nombre,
+    nit: datos.nit ?? null,
+    ciudad: datos.ciudad ?? null,
+    contacto: datos.contacto ?? null,
+    telefono: datos.telefono ?? null,
+    email: datos.email ?? null,
+  }
+  if (id) {
+    const { error } = await supabase.from('empresas_usuarias').update(payload).eq('id', id)
+    if (error) throw new Error(error.message)
+    return 'actualizado'
+  }
+  const { error } = await supabase.from('empresas_usuarias').insert(payload)
+  if (error) throw new Error(error.message)
+  return 'creado'
+}
+
+async function upsertSede(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
+  // Resolver grupo de contrato por código (CA, MO, MB, PB, AD)
+  const codigo = String(datos.grupo ?? '').trim().toUpperCase()
+  const { data: grupo } = await supabase.from('grupos_contrato').select('id').eq('codigo', codigo).limit(1).maybeSingle()
+  if (!grupo?.id) throw new Error(`Grupo "${codigo}" no existe (usa CA, MO, MB, PB o AD).`)
+  const payload = {
+    grupo_id: grupo.id,
+    nombre: datos.nombre,
+    codigo_interno: datos.codigo_interno ?? null,
+    zona: datos.zona ?? null,
+    ciudad: datos.ciudad ?? 'BOGOTÁ D.C.',
+  }
+  if (id) {
+    const { error } = await supabase.from('sedes').update(payload).eq('id', id)
+    if (error) throw new Error(error.message)
+    return 'actualizado'
+  }
+  const { error } = await supabase.from('sedes').insert(payload)
+  if (error) throw new Error(error.message)
+  return 'creado'
+}
+
 export async function importarEntidad(entidad: string, rows: FilaCommit[], archivo: string): Promise<ImportResult> {
   const config = IMPORT_CONFIGS[entidad]
   if (!config) return { ok: false, total: 0, creados: 0, actualizados: 0, errores: 0, detalle: [], error: 'Entidad no válida.' }
@@ -169,6 +210,8 @@ export async function importarEntidad(entidad: string, rows: FilaCommit[], archi
       if (entidad === 'productos') accion = await upsertProducto(supabase, row.datos, id)
       else if (entidad === 'proveedores') accion = await upsertProveedor(supabase, row.datos, id)
       else if (entidad === 'personas') accion = await upsertPersona(supabase, row.datos, id)
+      else if (entidad === 'empresas_usuarias') accion = await upsertEmpresaUsuaria(supabase, row.datos, id)
+      else if (entidad === 'sedes') accion = await upsertSede(supabase, row.datos, id)
       else accion = await upsertUsuario(supabase, row.datos, id)
 
       if (accion === 'creado') creados++; else actualizados++
