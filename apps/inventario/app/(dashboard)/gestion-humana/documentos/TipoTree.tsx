@@ -1,15 +1,16 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ChevronRight, ChevronDown, FolderTree, Folder, FileText, Plus,
-  Pencil, Trash2, Loader2, CornerDownRight,
+  Pencil, Trash2, Loader2, CornerDownRight, Brain,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { cn } from '@/lib/utils'
-import { construirArbol, type TipoDoc, type TipoNode } from './tipos'
+import { construirArbol, rutaTipo, type TipoDoc, type TipoNode } from './tipos'
+import { MuestrasTipo } from './MuestrasTipo'
 
 interface Props {
   tipos: TipoDoc[]
@@ -21,8 +22,18 @@ export function TipoTree({ tipos, onChange }: Props) {
   const [sb] = useState<any>(() => createClient())
   const [colapsados, setColapsados] = useState<Record<string, boolean>>({})
   const [busy, setBusy] = useState<string | null>(null)
+  const [muestrasTipo, setMuestrasTipo] = useState<{ id: string; label: string } | null>(null)
+  const [conteos, setConteos] = useState<Record<string, number>>({})
 
   const arbol = useMemo(() => construirArbol(tipos), [tipos])
+
+  const cargarConteos = async () => {
+    const { data } = await sb.from('tipos_documentales_refs').select('tipo_id')
+    const c: Record<string, number> = {}
+    for (const r of (data ?? []) as { tipo_id: string }[]) c[r.tipo_id] = (c[r.tipo_id] ?? 0) + 1
+    setConteos(c)
+  }
+  useEffect(() => { cargarConteos() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [])
 
   const toggle = (id: string) => setColapsados((s) => ({ ...s, [id]: !s[id] }))
 
@@ -88,7 +99,17 @@ export function TipoTree({ tipos, onChange }: Props) {
           {tieneHijos ? <Folder className="w-4 h-4 text-amber-500 shrink-0" /> : <FileText className="w-4 h-4 text-brand-green shrink-0" />}
           <span className="flex-1 font-body text-sm text-gray-800 truncate">{node.nombre}</span>
 
+          {(conteos[node.id] ?? 0) > 0 && (
+            <span className="flex items-center gap-1 shrink-0 rounded-full bg-brand-green/10 px-1.5 py-0.5 text-[10px] font-medium text-brand-green" title="Muestras de entrenamiento">
+              <Brain className="w-3 h-3" /> {conteos[node.id]}
+            </span>
+          )}
+
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100 transition-opacity">
+            <button onClick={() => setMuestrasTipo({ id: node.id, label: rutaTipo(node.id, tipos) })} title="Entrenar IA (muestras)"
+              className="p-1.5 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50">
+              <Brain className="w-3.5 h-3.5" />
+            </button>
             <button onClick={() => crear(node.id)} title="Añadir subtipo"
               className="p-1.5 rounded-md text-gray-400 hover:text-brand-green hover:bg-green-50">
               {busy === node.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
@@ -131,8 +152,16 @@ export function TipoTree({ tipos, onChange }: Props) {
         )}
       </div>
       <p className="px-4 pb-3 font-body text-[11px] text-gray-400">
-        Pasa el mouse (o toca) un nodo para añadir subtipos, renombrar o eliminar. Puedes anidar ramas ilimitadamente.
+        Pasa el mouse (o toca) un nodo para añadir subtipos, renombrar, eliminar o <Brain className="inline w-3 h-3 text-brand-green" /> entrenar la IA con documentos de muestra. Puedes anidar ramas ilimitadamente.
       </p>
+
+      {muestrasTipo && (
+        <MuestrasTipo
+          tipo={muestrasTipo}
+          onClose={() => setMuestrasTipo(null)}
+          onChanged={cargarConteos}
+        />
+      )}
     </div>
   )
 }
