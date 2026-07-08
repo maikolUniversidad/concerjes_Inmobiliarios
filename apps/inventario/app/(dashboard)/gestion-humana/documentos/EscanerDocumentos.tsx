@@ -68,14 +68,14 @@ export function EscanerDocumentos({ personas, tipos, initialPersonaId = '' }: Pr
           </div>
 
           {/* Grilla de tipos con estado */}
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {opciones.map((o) => {
               const tiene = presentes.has(o.id)
               return (
                 <button
                   key={o.id}
                   onClick={() => setTipoActivo(o)}
-                  className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-all shadow-sm hover:shadow-md ${
+                  className={`flex min-w-0 items-center gap-3 rounded-xl border p-3 text-left transition-all shadow-sm hover:shadow-md ${
                     tiene ? 'border-green-200 bg-green-50/50 hover:border-green-300' : 'border-red-200 bg-red-50/40 hover:border-red-300'
                   }`}
                 >

@@ -127,7 +127,7 @@ export function CumplimientoDashboard({ tipos }: Props) {
   return (
     <div className="space-y-5">
       {/* Filtros */}
-      <div className="grid gap-2 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
         <div className="sm:col-span-1">
           <select value={fEmpresa} onChange={(e) => setFEmpresa(e.target.value)} className={inputCls}>
             <option value="">Todas las empresas</option>
@@ -173,7 +173,7 @@ export function CumplimientoDashboard({ tipos }: Props) {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Ranking */}
         <div className="lg:col-span-2 rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
           <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
