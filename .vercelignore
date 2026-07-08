@@ -1,0 +1,16 @@
+# Carpetas que no deben subirse a Vercel (se reconstruyen en el build remoto).
+# Evita además bloqueos de lectura (EBUSY) en Windows/OneDrive al empaquetar.
+node_modules
+**/node_modules
+.next
+**/.next
+.turbo
+**/.turbo
+.git
+dist
+**/dist
+build
+**/build
+*.log
+apps/movil/android
+apps/movil/dist-electron
