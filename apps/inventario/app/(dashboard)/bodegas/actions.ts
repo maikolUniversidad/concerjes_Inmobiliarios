@@ -149,3 +149,60 @@ export async function asignarProductoUbicacion(productoId: string, ubicacionId: 
   revalidatePath(`/bodegas/${bodega_id}`); revalidatePath('/productos')
   return { ok: true }
 }
+
+// ─── PISOS / PLANO ──────────────────────────────────────────────────────────
+
+/** Crea o actualiza un piso con su plano (dimensiones + elementos). */
+export async function guardarPiso(input: {
+  id?: string
+  bodega_id: string
+  numero: number
+  nombre?: string | null
+  ancho_m: number
+  alto_m: number
+  escala: number
+  fondo_url?: string | null
+  elementos: unknown[]
+}): Promise<ActionResult> {
+  const { supabase, user } = await auth()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const fila = {
+    bodega_id: input.bodega_id,
+    numero: input.numero,
+    nombre: input.nombre ?? null,
+    ancho_m: input.ancho_m,
+    alto_m: input.alto_m,
+    escala: input.escala,
+    fondo_url: input.fondo_url ?? null,
+    elementos: input.elementos,
+  }
+
+  if (input.id) {
+    const { error } = await (supabase as DB).from('bodega_pisos').update(fila).eq('id', input.id)
+    if (error) return { error: traducir(error.message) }
+    revalidatePath(`/bodegas/${input.bodega_id}/plano`)
+    return { ok: true, id: input.id }
+  }
+
+  const { data, error } = await (supabase as DB)
+    .from('bodega_pisos').insert(fila).select('id').single()
+  if (error) return { error: traducir(error.message) }
+
+  await logActivity(supabase, {
+    accion: 'CREATE', modulo: 'Bodegas',
+    descripcion: `Creó el piso ${input.numero} de una bodega`,
+    entidad: 'BodegaPiso', entidad_id: data.id,
+  })
+  revalidatePath(`/bodegas/${input.bodega_id}/plano`)
+  return { ok: true, id: data.id }
+}
+
+export async function eliminarPiso(id: string, bodega_id: string): Promise<ActionResult> {
+  const { supabase, user } = await auth()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const { error } = await (supabase as DB).from('bodega_pisos').delete().eq('id', id)
+  if (error) return { error: traducir(error.message) }
+  revalidatePath(`/bodegas/${bodega_id}/plano`)
+  return { ok: true }
+}

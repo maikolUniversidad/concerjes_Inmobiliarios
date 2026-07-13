@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ArrowLeft, Pencil } from 'lucide-react'
+import { ArrowLeft, Pencil, LayoutTemplate } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { eliminarBodega } from '../actions'
@@ -47,7 +47,10 @@ export default async function BodegaDetallePage({ params }: Props) {
             {b.codigo ? `Código ${b.codigo} · ` : ''}{b.direccion ?? 'Sin dirección'}{b.responsable ? ` · Responsable: ${b.responsable.nombre}` : ''}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Link href={`/bodegas/${id}/plano`} className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-3 py-2 rounded-xl hover:bg-brand-green-dark">
+            <LayoutTemplate className="w-3.5 h-3.5" /> Diseñar plano
+          </Link>
           <Link href={`/bodegas/${id}/editar`} className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-gray-50">
             <Pencil className="w-3.5 h-3.5" /> Editar bodega
           </Link>

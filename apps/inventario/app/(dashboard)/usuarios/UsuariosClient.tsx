@@ -13,6 +13,7 @@ import {
   EyeOff,
   Shield,
   Check,
+  IdCard,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
@@ -58,6 +59,7 @@ export interface Usuario {
   permisos: Record<string, boolean> | null
   grupos_contrato: { id: string; codigo: string; nombre: string } | null
   roles: { id: string; nombre: string; permisos: Record<string, boolean> | null } | null
+  personas?: { id: string; nombres: string; apellidos: string; documento: string }[] | null
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -719,6 +721,11 @@ export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sede
                           {u.nombre}
                         </p>
                         <p className="font-body text-xs text-gray-400">{u.email}</p>
+                        {u.personas && u.personas.length > 0 && (
+                          <p className="font-body text-[11px] text-brand-green flex items-center gap-1 mt-0.5">
+                            <IdCard className="w-3 h-3" /> Colaborador · {u.personas[0].documento}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </td>

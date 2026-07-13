@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { createClient as createAdminSb } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
 import { IMPORT_CONFIGS, parseBool, type EntityConfig } from '@/lib/import/config'
@@ -19,6 +20,75 @@ export interface ImportResult {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any
+
+// ── Provisión de cuentas para el cargue masivo de personas ───────────────────
+// Cada persona nueva queda con acceso a la plataforma (rol por defecto Conserje,
+// login = documento). Requiere service role (auth admin).
+function adminSb(): DB {
+  return createAdminSb(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    { auth: { autoRefreshToken: false, persistSession: false } },
+  )
+}
+
+function loginEmailFor(email: unknown, documento: string): string {
+  const e = String(email ?? '').trim().toLowerCase()
+  if (e && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return e
+  return `${documento.replace(/[^a-z0-9]/gi, '')}@conserje.local`
+}
+
+function pwdFor(documento: string): string {
+  return documento.length >= 6 ? documento : documento.padStart(6, '0')
+}
+
+interface PersonasCtx {
+  admin: DB
+  userId: string
+  rolConserjeId: string | null
+  /** nombre de rol (minúsculas) → id */
+  rolesPorNombre: Map<string, string>
+}
+
+async function crearCtxPersonas(userId: string): Promise<PersonasCtx | null> {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  const admin = adminSb()
+  const { data: roles } = await admin.from('roles').select('id, nombre').eq('activo', true)
+  const rolesPorNombre = new Map<string, string>()
+  for (const r of (roles ?? []) as { id: string; nombre: string }[]) {
+    rolesPorNombre.set(r.nombre.trim().toLowerCase(), r.id)
+  }
+  return { admin, userId, rolConserjeId: rolesPorNombre.get('conserje') ?? null, rolesPorNombre }
+}
+
+/** Crea (o reutiliza) la cuenta de acceso y devuelve su id de usuario. */
+async function provisionCuenta(ctx: PersonasCtx, datos: Record<string, unknown>): Promise<string> {
+  const documento = String(datos.documento).trim()
+  const nombre = `${String(datos.nombres ?? '').trim()} ${String(datos.apellidos ?? '').trim()}`.trim()
+  const loginEmail = loginEmailFor(datos.email, documento)
+  const rolId = ctx.rolesPorNombre.get(String(datos.rol ?? '').trim().toLowerCase()) ?? ctx.rolConserjeId
+
+  const { data: authData, error: authErr } = await ctx.admin.auth.admin.createUser({
+    email: loginEmail,
+    password: pwdFor(documento),
+    email_confirm: true,
+    user_metadata: { nombre },
+  })
+
+  let uid: string | undefined = authData?.user?.id
+  if (authErr || !uid) {
+    const m = (authErr?.message ?? '').toLowerCase()
+    if (m.includes('already') || m.includes('registered') || m.includes('exists')) {
+      // Reutiliza la cuenta existente con ese email de login.
+      const { data: existente } = await ctx.admin.from('usuarios').select('id').eq('email', loginEmail).maybeSingle()
+      uid = (existente?.id as string) ?? undefined
+    }
+    if (!uid) throw new Error(authErr?.message ?? 'No se pudo crear la cuenta de acceso.')
+  }
+
+  await ctx.admin.from('usuarios').update({ nombre, rol_id: rolId, activo: true }).eq('id', uid)
+  return uid
+}
 
 async function buscarExistente(supabase: DB, config: EntityConfig, datos: Record<string, unknown>): Promise<string | null> {
   for (const mk of config.matchKeys) {
@@ -120,7 +190,7 @@ async function resolverSede(supabase: DB, nombre: unknown): Promise<string | nul
   return (data?.id as string) ?? null
 }
 
-async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
+async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: string | null, ctx: PersonasCtx | null): Promise<'creado' | 'actualizado'> {
   const empresaId = await resolverEmpresaUsuaria(supabase, datos.empresa_usuaria)
   const sedeId = await resolverSede(supabase, datos.sede)
   const payload: Record<string, unknown> = {
@@ -140,10 +210,19 @@ async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: s
     arl: datos.arl ?? null,
   }
   if (id) {
+    // Actualiza los datos; no altera la cuenta de acceso existente.
     const { error } = await supabase.from('personas').update(payload).eq('id', id)
     if (error) throw new Error(error.message)
     return 'actualizado'
   }
+  // Persona nueva → provisiona su cuenta de acceso y la enlaza.
+  if (ctx) {
+    const usuarioId = await provisionCuenta(ctx, datos)
+    const { error } = await ctx.admin.from('personas').insert({ ...payload, usuario_id: usuarioId, created_by: ctx.userId })
+    if (error) throw new Error(error.message)
+    return 'creado'
+  }
+  // Sin service role configurado → crea la persona sin acceso (degradado).
   const { error } = await supabase.from('personas').insert(payload)
   if (error) throw new Error(error.message)
   return 'creado'
@@ -203,13 +282,16 @@ export async function importarEntidad(entidad: string, rows: FilaCommit[], archi
   const detalle: ImportResultRow[] = []
   let creados = 0, actualizados = 0, errores = 0
 
+  // Contexto para provisionar cuentas de acceso al importar personas.
+  const personasCtx = entidad === 'personas' ? await crearCtxPersonas(user.id) : null
+
   for (const row of rows) {
     try {
       const id = await buscarExistente(supabase, config, row.datos)
       let accion: 'creado' | 'actualizado'
       if (entidad === 'productos') accion = await upsertProducto(supabase, row.datos, id)
       else if (entidad === 'proveedores') accion = await upsertProveedor(supabase, row.datos, id)
-      else if (entidad === 'personas') accion = await upsertPersona(supabase, row.datos, id)
+      else if (entidad === 'personas') accion = await upsertPersona(supabase, row.datos, id, personasCtx)
       else if (entidad === 'empresas_usuarias') accion = await upsertEmpresaUsuaria(supabase, row.datos, id)
       else if (entidad === 'sedes') accion = await upsertSede(supabase, row.datos, id)
       else accion = await upsertUsuario(supabase, row.datos, id)

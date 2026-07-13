@@ -12,12 +12,17 @@ export const revalidate = 30
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
-const ESTADO_CLS: Record<EstadoOC, string> = {
+const ESTADO_CLS: Record<string, string> = {
   BORRADOR: 'bg-gray-100 text-gray-600',
+  APROBADA: 'bg-indigo-100 text-indigo-700',
   ENVIADA: 'bg-blue-100 text-blue-700',
   PARCIAL: 'bg-amber-100 text-amber-700',
   COMPLETA: 'bg-green-100 text-green-700',
   ANULADA: 'bg-red-100 text-red-700',
+}
+const ESTADO_LABEL: Record<string, string> = {
+  BORRADOR: 'Borrador', APROBADA: 'Aprobada', ENVIADA: 'Comprada',
+  PARCIAL: 'Recepción parcial', COMPLETA: 'Recibida', ANULADA: 'Anulada',
 }
 
 interface OCRow {
@@ -78,12 +83,14 @@ export default async function OrdenesCompraPage() {
               <tbody className="divide-y divide-gray-50">
                 {ordenes.map(o => (
                   <tr key={o.id} className="hover:bg-gray-50/50 group">
-                    <td className="px-4 py-3 font-mono text-sm text-gray-900">{o.numero_oc}</td>
+                    <td className="px-4 py-3">
+                      <Link href={`/ordenes-compra/${o.id}`} className="font-mono text-sm text-brand-green hover:underline">{o.numero_oc}</Link>
+                    </td>
                     <td className="px-4 py-3 font-body text-sm text-gray-700">{o.proveedor?.nombre ?? '—'}</td>
                     <td className="px-4 py-3 font-body text-xs text-gray-500">{new Date(o.fecha_emision).toLocaleDateString('es-CO')}</td>
                     <td className="px-4 py-3 text-right font-heading font-semibold text-sm text-gray-900">{o.valor_total ? cop.format(o.valor_total) : '—'}</td>
                     <td className="px-4 py-3 text-center">
-                      <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${ESTADO_CLS[o.estado]}`}>{o.estado}</span>
+                      <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${ESTADO_CLS[o.estado] ?? 'bg-gray-100 text-gray-600'}`}>{ESTADO_LABEL[o.estado] ?? o.estado}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center justify-center">

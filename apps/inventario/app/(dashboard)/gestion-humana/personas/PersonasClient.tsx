@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import {
-  Users, UploadCloud, Building2, Search, UserPlus, ChevronRight, IdCard,
+  Users, UploadCloud, Building2, Search, UserPlus, ChevronRight, IdCard, KeyRound, KeySquare,
 } from 'lucide-react'
 import { BulkImport } from '@/components/import/BulkImport'
 import { PERSONAS_CONFIG } from '@/lib/import/config'
@@ -22,6 +22,22 @@ export interface EmpresaOption {
 }
 export interface SedeOption { id: string; nombre: string }
 
+export interface RolOption {
+  id: string
+  nombre: string
+  descripcion: string | null
+  permisos: Record<string, boolean> | null
+}
+
+/** Cuenta de plataforma vinculada a la persona (personas.usuario_id → usuarios). */
+export interface CuentaRow {
+  id: string
+  email: string
+  activo: boolean
+  rol_id: string | null
+  roles: { id: string; nombre: string } | null
+}
+
 export interface PersonaRow {
   id: string
   tipo_doc: string
@@ -38,15 +54,18 @@ export interface PersonaRow {
   direccion: string | null
   eps: string | null
   arl: string | null
+  usuario_id: string | null
   created_at: string
   empresas_usuarias: { id: string; nombre: string } | null
   sedes: { id: string; nombre: string } | null
+  cuenta: CuentaRow | null
 }
 
 interface Props {
   personas: PersonaRow[]
   empresas: EmpresaOption[]
   sedes: SedeOption[]
+  roles: RolOption[]
   existentes: string[]
 }
 
@@ -62,7 +81,7 @@ function iniciales(n: string, a: string) {
 
 type Tab = 'personas' | 'masivo' | 'empresas'
 
-export function PersonasClient({ personas: init, empresas: initEmpresas, sedes, existentes }: Props) {
+export function PersonasClient({ personas: init, empresas: initEmpresas, sedes, roles, existentes }: Props) {
   const { puede } = usePermisos()
   const [tab, setTab] = useState<Tab>('personas')
   const [personas, setPersonas] = useState<PersonaRow[]>(init)
@@ -157,6 +176,15 @@ export function PersonasClient({ personas: init, empresas: initEmpresas, sedes, 
                     <span className={`shrink-0 font-body text-[10px] font-medium px-1.5 py-0.5 rounded-full ${ESTADO_BADGE[p.estado] ?? 'bg-gray-100 text-gray-600'}`}>
                       {p.estado.charAt(0) + p.estado.slice(1).toLowerCase()}
                     </span>
+                    {p.usuario_id ? (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 font-body text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-brand-green/10 text-brand-green" title={p.cuenta?.roles?.nombre ? `Acceso: ${p.cuenta.roles.nombre}` : 'Con acceso'}>
+                        <KeyRound className="w-2.5 h-2.5" /> {p.cuenta?.roles?.nombre ?? 'Acceso'}
+                      </span>
+                    ) : (
+                      <span className="shrink-0 inline-flex items-center gap-0.5 font-body text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500" title="Sin acceso a la plataforma">
+                        <KeySquare className="w-2.5 h-2.5" /> Sin acceso
+                      </span>
+                    )}
                   </div>
                   <p className="font-body text-xs text-gray-500 truncate flex items-center gap-1">
                     <IdCard className="w-3 h-3 text-gray-400" /> {p.tipo_doc} {p.documento}
@@ -197,7 +225,7 @@ export function PersonasClient({ personas: init, empresas: initEmpresas, sedes, 
       <div className={`fixed inset-0 z-30 bg-black/20 transition-opacity duration-300 ${drawerOpen ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={close} />
       <div className={`fixed top-0 right-0 z-40 h-full w-full max-w-md bg-white shadow-2xl transition-transform duration-300 ease-out flex flex-col ${drawerOpen ? 'translate-x-0' : 'translate-x-full'}`}>
         {drawerOpen && (
-          <PersonaForm persona={selected} empresas={empresas} sedes={sedes} onClose={close} onSaved={onSaved} onDeleted={onDeleted} />
+          <PersonaForm persona={selected} empresas={empresas} sedes={sedes} roles={roles} onClose={close} onSaved={onSaved} onDeleted={onDeleted} />
         )}
       </div>
     </div>

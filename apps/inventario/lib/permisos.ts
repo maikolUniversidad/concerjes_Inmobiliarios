@@ -78,6 +78,21 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    // Módulos en construcción de la operación de conserjería. Las claves ya
+    // quedan disponibles para configurar los roles; las pantallas se conectan
+    // a medida que se construyen (PQRS, No conformes, Contratos, Gerencia).
+    grupo: 'Operación Conserjería',
+    permisos: [
+      { key: 'ver_pqrs',                       label: 'Ver PQRS' },
+      { key: 'gestionar_pqrs',                 label: 'Radicar / gestionar PQRS' },
+      { key: 'ver_no_conformes',               label: 'Ver no conformes' },
+      { key: 'gestionar_no_conformes',         label: 'Reportar / gestionar no conformes' },
+      { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería' },
+      { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería' },
+      { key: 'ver_panel_gerencia',             label: 'Ver panel de gerencia' },
+    ],
+  },
+  {
     grupo: 'Inteligencia Artificial',
     permisos: [
       { key: 'usar_ia_vision',    label: 'Usar visión IA' },

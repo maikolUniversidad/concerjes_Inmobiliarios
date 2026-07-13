@@ -10,18 +10,20 @@ export default async function PersonasPage() {
   await requirePermiso('ver_personas')
   const supabase = await createClient()
 
-  const [{ data: personas }, { data: empresas }, { data: sedes }] = await Promise.all([
+  const [{ data: personas }, { data: empresas }, { data: sedes }, { data: roles }] = await Promise.all([
     supabase
       .from('personas')
       .select(`
         id, tipo_doc, documento, nombres, apellidos, cargo, empresa_usuaria_id, sede_id,
-        fecha_ingreso, estado, email, telefono, direccion, eps, arl, created_at,
+        fecha_ingreso, estado, email, telefono, direccion, eps, arl, usuario_id, created_at,
         empresas_usuarias ( id, nombre ),
-        sedes ( id, nombre )
+        sedes ( id, nombre ),
+        cuenta:usuarios ( id, email, activo, rol_id, roles ( id, nombre ) )
       `)
       .order('apellidos', { ascending: true }),
     supabase.from('empresas_usuarias').select('*').order('nombre'),
     supabase.from('sedes').select('id, nombre').order('nombre'),
+    supabase.from('roles').select('id, nombre, descripcion, permisos').eq('activo', true).order('nombre'),
   ])
 
   // Claves existentes para el cargue masivo (formato de validarFila: `documento:<valor>`)
@@ -42,6 +44,7 @@ export default async function PersonasPage() {
         personas={personas ?? []}
         empresas={empresas ?? []}
         sedes={sedes ?? []}
+        roles={roles ?? []}
         existentes={existentes}
       />
     </div>

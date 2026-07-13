@@ -65,3 +65,119 @@ export async function anularOC(formData: FormData): Promise<void> {
   await (supabase as any).from('ordenes_compra').update({ estado: 'ANULADA' }).eq('id', id)
   revalidatePath('/ordenes-compra')
 }
+
+// ─── Flujo de proceso + trazabilidad ─────────────────────────────────────────
+
+const TRANSICIONES: Record<string, string[]> = {
+  BORRADOR: ['APROBADA', 'ANULADA'],
+  APROBADA: ['ENVIADA', 'ANULADA'],
+  ENVIADA: ['ANULADA'],
+  PARCIAL: ['ANULADA'],
+  COMPLETA: [],
+  ANULADA: [],
+}
+
+/** Avanza el estado de la OC (aprobar, marcar comprada/enviada, anular). */
+export async function avanzarEstadoOC(id: string, nuevoEstado: string, comentario?: string): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const { data: oc } = await sb.from('ordenes_compra').select('estado').eq('id', id).single()
+  if (!oc) return { error: 'Orden no encontrada.' }
+  if (!(TRANSICIONES[oc.estado] ?? []).includes(nuevoEstado)) {
+    return { error: `No se puede pasar de ${oc.estado} a ${nuevoEstado}.` }
+  }
+
+  const patch: Record<string, unknown> = { estado: nuevoEstado }
+  const ahora = new Date().toISOString()
+  if (nuevoEstado === 'APROBADA') { patch.fecha_aprobacion = ahora; patch.aprobado_por = user.id }
+  if (nuevoEstado === 'ENVIADA') patch.fecha_envio = ahora
+
+  const { error } = await sb.from('ordenes_compra').update(patch).eq('id', id)
+  if (error) {
+    if (error.message.includes('row-level security')) return { error: 'No tienes permisos (requiere Admin o Coord. Compras).' }
+    return { error: error.message }
+  }
+  if (comentario?.trim()) await insertarComentario(sb, id, user.id, comentario.trim())
+
+  revalidatePath('/ordenes-compra')
+  revalidatePath(`/ordenes-compra/${id}`)
+  return {}
+}
+
+/** Registra recepción de ítems y ajusta el estado (PARCIAL/COMPLETA). */
+export async function registrarRecepcionOC(
+  id: string,
+  recepciones: { itemId: string; cantidad: number }[],
+  comentario?: string,
+): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+
+  const { data: items } = await sb.from('oc_items').select('id, cantidad_ped, cantidad_rec').eq('oc_id', id)
+  if (!items || items.length === 0) return { error: 'La orden no tiene ítems.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapItems = new Map((items as any[]).map(it => [it.id, it]))
+  for (const r of recepciones) {
+    const it = mapItems.get(r.itemId)
+    if (!it) continue
+    const nuevo = Math.max(0, Math.min(Number(it.cantidad_ped), Number(r.cantidad)))
+    if (nuevo === Number(it.cantidad_rec)) continue
+    const { error } = await sb.from('oc_items').update({ cantidad_rec: nuevo }).eq('id', r.itemId)
+    if (error) return { error: error.message }
+    it.cantidad_rec = nuevo
+  }
+
+  // Recalcular estado
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const arr = Array.from(mapItems.values()) as any[]
+  const algo = arr.some(it => Number(it.cantidad_rec) > 0)
+  const todo = arr.every(it => Number(it.cantidad_rec) >= Number(it.cantidad_ped))
+  const { data: ocAct } = await sb.from('ordenes_compra').select('estado').eq('id', id).single()
+  const estadoActual = ocAct?.estado
+  let nuevoEstado: string | null = null
+  if (todo && estadoActual !== 'COMPLETA') nuevoEstado = 'COMPLETA'
+  else if (algo && !todo && !['PARCIAL', 'COMPLETA'].includes(estadoActual)) nuevoEstado = 'PARCIAL'
+
+  if (nuevoEstado) {
+    const patch: Record<string, unknown> = { estado: nuevoEstado }
+    if (nuevoEstado === 'COMPLETA') patch.fecha_recepcion = new Date().toISOString()
+    await sb.from('ordenes_compra').update(patch).eq('id', id)
+  }
+  if (comentario?.trim()) await insertarComentario(sb, id, user.id, comentario.trim())
+
+  revalidatePath('/ordenes-compra')
+  revalidatePath(`/ordenes-compra/${id}`)
+  return {}
+}
+
+/** Agrega un comentario a la trazabilidad de la OC. */
+export async function comentarOC(id: string, texto: string): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  if (!texto.trim()) return { error: 'Escribe un comentario.' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const err = await insertarComentario(sb, id, user.id, texto.trim())
+  if (err) return { error: err }
+  revalidatePath(`/ordenes-compra/${id}`)
+  return {}
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function insertarComentario(sb: any, ocId: string, userId: string, texto: string): Promise<string | undefined> {
+  const { data: u } = await sb.from('usuarios').select('nombre, email').eq('id', userId).single()
+  const { error } = await sb.from('oc_eventos').insert({
+    oc_id: ocId, tipo: 'COMENTARIO', descripcion: texto,
+    usuario_id: userId, usuario_email: u?.email ?? null, usuario_nombre: u?.nombre ?? null,
+  })
+  if (error) return error.message.includes('row-level security') ? 'Sin permisos para comentar.' : error.message
+}

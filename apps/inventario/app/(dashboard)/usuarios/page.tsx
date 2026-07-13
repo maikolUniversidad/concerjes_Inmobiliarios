@@ -35,6 +35,12 @@ export default async function UsuariosPage() {
         id,
         nombre,
         permisos
+      ),
+      personas (
+        id,
+        nombres,
+        apellidos,
+        documento
       )
     `)
     .order('created_at', { ascending: false })

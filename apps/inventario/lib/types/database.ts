@@ -4,7 +4,7 @@ export type TipoInsumo =
   | 'MAQUINARIA' | 'JARDINERIA' | 'REPUESTOS' | 'NO_DISPONIBLE' | 'OTROS'
 export type GrupoContrato = 'CA' | 'MO' | 'MB' | 'PB' | 'AD'
 export type TipoMovimiento = 'ENTRADA' | 'SALIDA' | 'TRASLADO' | 'AJUSTE' | 'DEVOLUCION'
-export type EstadoOC = 'BORRADOR' | 'ENVIADA' | 'PARCIAL' | 'COMPLETA' | 'ANULADA'
+export type EstadoOC = 'BORRADOR' | 'APROBADA' | 'ENVIADA' | 'PARCIAL' | 'COMPLETA' | 'ANULADA'
 export type RolUsuario =
   | 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'COORDINADOR_COMPRAS'
   | 'BODEGUERO' | 'AUDITOR' | 'OPERADOR_SEDE'
@@ -444,6 +444,7 @@ export interface Persona {
   direccion: string | null
   eps: string | null
   arl: string | null
+  usuario_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string
