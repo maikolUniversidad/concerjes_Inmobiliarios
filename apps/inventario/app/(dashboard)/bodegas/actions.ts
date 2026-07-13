@@ -152,7 +152,11 @@ export async function asignarProductoUbicacion(productoId: string, ubicacionId: 
 
 // ─── PISOS / PLANO ──────────────────────────────────────────────────────────
 
-/** Crea o actualiza un piso con su plano (dimensiones + elementos). */
+/**
+ * Crea o actualiza un piso con su plano (dimensiones + elementos).
+ * Usa UPSERT por (bodega_id, numero): el plano SIEMPRE queda ligado a su bodega,
+ * ya sea que el piso exista o no, y devuelve el id real de la fila.
+ */
 export async function guardarPiso(input: {
   id?: string
   bodega_id: string
@@ -166,6 +170,7 @@ export async function guardarPiso(input: {
 }): Promise<ActionResult> {
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
+  if (!input.bodega_id) return { error: 'Falta la bodega.' }
 
   const fila = {
     bodega_id: input.bodega_id,
@@ -178,23 +183,21 @@ export async function guardarPiso(input: {
     elementos: input.elementos,
   }
 
-  if (input.id) {
-    const { error } = await (supabase as DB).from('bodega_pisos').update(fila).eq('id', input.id)
-    if (error) return { error: traducir(error.message) }
-    revalidatePath(`/bodegas/${input.bodega_id}/plano`)
-    return { ok: true, id: input.id }
-  }
-
   const { data, error } = await (supabase as DB)
-    .from('bodega_pisos').insert(fila).select('id').single()
+    .from('bodega_pisos')
+    .upsert(fila, { onConflict: 'bodega_id,numero' })
+    .select('id')
+    .single()
+
   if (error) return { error: traducir(error.message) }
 
   await logActivity(supabase, {
-    accion: 'CREATE', modulo: 'Bodegas',
-    descripcion: `Creó el piso ${input.numero} de una bodega`,
+    accion: 'UPDATE', modulo: 'Bodegas',
+    descripcion: `Guardó el plano del piso ${input.numero}`,
     entidad: 'BodegaPiso', entidad_id: data.id,
   })
   revalidatePath(`/bodegas/${input.bodega_id}/plano`)
+  revalidatePath(`/bodegas/${input.bodega_id}`)
   return { ok: true, id: data.id }
 }
 

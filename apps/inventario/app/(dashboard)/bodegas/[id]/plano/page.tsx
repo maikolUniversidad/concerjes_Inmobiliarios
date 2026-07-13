@@ -27,7 +27,23 @@ export default async function PlanoPage({ params }: Props) {
       .select('id, codigo, nombre').eq('bodega_id', id).eq('activo', true).order('codigo'),
   ])
 
-  const pisos = (pisosData as unknown as PlanoPiso[]) ?? []
+  let pisos = (pisosData as unknown as PlanoPiso[]) ?? []
+
+  // Garantiza que la bodega tenga al menos un piso (ligado a ESTA bodega),
+  // aunque se haya creado después de la migración/seed.
+  if (pisos.length === 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: nuevo } = await (supabase as any)
+      .from('bodega_pisos')
+      .upsert(
+        { bodega_id: id, numero: 1, nombre: 'Planta baja', ancho_m: 20, alto_m: 15, escala: 40, elementos: [] },
+        { onConflict: 'bodega_id,numero' },
+      )
+      .select('id, bodega_id, numero, nombre, ancho_m, alto_m, escala, fondo_url, elementos, orden')
+      .single()
+    if (nuevo) pisos = [nuevo as unknown as PlanoPiso]
+  }
+
   const ubicaciones = (ubicData as unknown as { id: string; codigo: string; nombre: string | null }[]) ?? []
   const b = bodega as unknown as { id: string; nombre: string; codigo: string | null }
 

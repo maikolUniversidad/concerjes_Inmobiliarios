@@ -119,8 +119,14 @@ export function PlanoDesigner({ bodegaId, pisosIniciales, ubicaciones }: Props) 
       ancho_m: piso.ancho_m, alto_m: piso.alto_m, escala, fondo_url: piso.fondo_url, elementos: piso.elementos,
     })
     setSaving(false)
-    if (res.error) toast.error(res.error)
-    else toast.success(`Piso "${piso.nombre ?? piso.numero}" guardado`)
+    if (res.error) { toast.error(res.error); return }
+    // Sincroniza el id real (el upsert pudo insertar una fila nueva)
+    if (res.id && res.id !== piso.id) {
+      const realId = res.id
+      setPisos(prev => prev.map(p => (p.id === piso.id ? { ...p, id: realId } : p)))
+      setActiveId(realId)
+    }
+    toast.success(`Plano del piso "${piso.nombre ?? piso.numero}" guardado en la bodega`)
   }
 
   // ── Pisos ──
