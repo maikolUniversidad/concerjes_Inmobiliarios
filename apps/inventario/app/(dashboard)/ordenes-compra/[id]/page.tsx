@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
-import { OCDetalleClient, type OCDetalle, type OCItem, type OCEvento, type ProductoLite } from './OCDetalleClient'
+import { OCDetalleClient, type OCDetalle, type OCItem, type OCEvento, type ProductoLite, type ProveedorLite } from './OCDetalleClient'
 
 export const metadata: Metadata = { title: 'Orden de Compra' }
 export const dynamic = 'force-dynamic'
@@ -21,11 +21,15 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
     .single()
   if (!oc) notFound()
 
-  const [{ data: items }, { data: eventos }, { data: productos }] = await Promise.all([
+  const esBorrador = (oc as { estado: string }).estado === 'BORRADOR'
+  const [{ data: items }, { data: eventos }, { data: productos }, { data: proveedores }] = await Promise.all([
     supabase.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec, precio_unit, subtotal, producto:productos ( nombre_estandar, presentacion )').eq('oc_id', id),
     supabase.from('oc_eventos').select('*').eq('oc_id', id).order('created_at', { ascending: false }),
-    (oc as { estado: string }).estado === 'BORRADOR'
-      ? supabase.from('productos').select('id, nombre_estandar, presentacion, precio_lista').eq('activo', true).order('nombre_estandar')
+    esBorrador
+      ? supabase.from('productos').select('id, nombre_estandar, presentacion, precio_lista, precios:precios_proveedor ( proveedor_id, precio )').eq('activo', true).order('nombre_estandar')
+      : Promise.resolve({ data: [] }),
+    esBorrador
+      ? supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre')
       : Promise.resolve({ data: [] }),
   ])
 
@@ -39,6 +43,7 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
         items={(items as unknown as OCItem[]) ?? []}
         eventos={(eventos as unknown as OCEvento[]) ?? []}
         productos={(productos as unknown as ProductoLite[]) ?? []}
+        proveedores={(proveedores as unknown as ProveedorLite[]) ?? []}
       />
     </div>
   )

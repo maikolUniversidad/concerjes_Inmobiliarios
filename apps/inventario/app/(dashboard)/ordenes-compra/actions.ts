@@ -180,6 +180,7 @@ export async function comentarOC(id: string, texto: string): Promise<ActionResul
 export async function actualizarItemsOC(
   id: string,
   lineas: { id?: string; producto_id: string; cantidad: number; precio: number }[],
+  proveedorId?: string,
 ): Promise<ActionResult> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -220,7 +221,9 @@ export async function actualizarItemsOC(
   }
 
   const valor_total = validas.reduce((a, l) => a + l.cantidad * l.precio, 0)
-  await sb.from('ordenes_compra').update({ valor_total }).eq('id', id)
+  const patch: Record<string, unknown> = { valor_total }
+  if (proveedorId) patch.proveedor_id = proveedorId
+  await sb.from('ordenes_compra').update(patch).eq('id', id)
 
   revalidatePath('/ordenes-compra')
   revalidatePath(`/ordenes-compra/${id}`)

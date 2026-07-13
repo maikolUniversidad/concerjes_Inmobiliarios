@@ -16,6 +16,7 @@ export interface OCDetalle {
   id: string
   numero_oc: string
   estado: string
+  proveedor_id: string | null
   periodo: string
   fecha_emision: string
   fecha_entrega: string | null
@@ -35,7 +36,8 @@ export interface OCItem {
   subtotal: number | null
   producto: { nombre_estandar: string; presentacion: string | null } | null
 }
-export interface ProductoLite { id: string; nombre_estandar: string; presentacion: string | null; precio_lista: number | null }
+export interface ProductoLite { id: string; nombre_estandar: string; presentacion: string | null; precio_lista: number | null; precios: { proveedor_id: string; precio: number | null }[] | null }
+export interface ProveedorLite { id: string; nombre: string }
 export interface OCEvento {
   id: string
   tipo: string
@@ -80,9 +82,9 @@ function fechaHora(iso: string) {
   return new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-interface EditLinea { key: number; id?: string; producto_id: string; cantidad: string; precio: string }
+interface EditLinea { key: number; id?: string; producto_id: string; proveedor_id: string; cantidad: string; precio: string }
 
-export function OCDetalleClient({ oc, items, eventos, productos = [] }: { oc: OCDetalle; items: OCItem[]; eventos: OCEvento[]; productos?: ProductoLite[] }) {
+export function OCDetalleClient({ oc, items, eventos, productos = [], proveedores = [] }: { oc: OCDetalle; items: OCItem[]; eventos: OCEvento[]; productos?: ProductoLite[]; proveedores?: ProveedorLite[] }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [comentario, setComentario] = useState('')
@@ -97,32 +99,62 @@ export function OCDetalleClient({ oc, items, eventos, productos = [] }: { oc: OC
   const puedeEditarItems = oc.estado === 'BORRADOR'
 
   // ── Edición de ítems (solo en borrador) ──
+  const prodMap = useMemo(() => new Map(productos.map(p => [p.id, p])), [productos])
+  const provName = (id: string) => proveedores.find(p => p.id === id)?.nombre ?? '—'
+  const precioDe = (productoId: string, provId: string): number | null =>
+    prodMap.get(productoId)?.precios?.find(x => x.proveedor_id === provId)?.precio ?? null
+  const proveedoresDe = (productoId: string): { id: string; nombre: string; precio: number | null }[] => {
+    const p = prodMap.get(productoId)
+    if (!p?.precios?.length) return []
+    return p.precios.map(x => ({ id: x.proveedor_id, nombre: provName(x.proveedor_id), precio: x.precio }))
+      .sort((a, b) => (a.precio ?? Infinity) - (b.precio ?? Infinity))
+  }
+
   const [editando, setEditando] = useState(false)
   const [lineas, setLineas] = useState<EditLinea[]>([])
   function abrirEdicion() {
-    setLineas(items.map((it, i) => ({ key: i + 1, id: it.id, producto_id: it.producto_id, cantidad: String(Number(it.cantidad_ped)), precio: String(Number(it.precio_unit)) })))
+    setLineas(items.map((it, i) => ({ key: i + 1, id: it.id, producto_id: it.producto_id, proveedor_id: oc.proveedor_id ?? '', cantidad: String(Number(it.cantidad_ped)), precio: String(Number(it.precio_unit)) })))
     setEditando(true)
   }
-  function addLinea() { setLineas(l => [...l, { key: Math.max(0, ...l.map(x => x.key)) + 1, producto_id: '', cantidad: '', precio: '' }]) }
+  function addLinea() { setLineas(l => [...l, { key: Math.max(0, ...l.map(x => x.key)) + 1, producto_id: '', proveedor_id: oc.proveedor_id ?? '', cantidad: '', precio: '' }]) }
   function rmLinea(key: number) { setLineas(l => l.filter(x => x.key !== key)) }
-  function setLinea(key: number, patch: Partial<EditLinea>) {
-    setLineas(l => l.map(x => {
-      if (x.key !== key) return x
-      const next = { ...x, ...patch }
-      if (patch.producto_id && !patch.precio) {
-        const p = productos.find(pr => pr.id === patch.producto_id)
-        if (p?.precio_lista) next.precio = String(p.precio_lista)
-      }
-      return next
+
+  function setProducto(key: number, producto_id: string) {
+    setLineas(ls => ls.map(l => {
+      if (l.key !== key) return l
+      const rel = proveedoresDe(producto_id)
+      let prov = l.proveedor_id
+      if (prov && !rel.some(r => r.id === prov)) prov = ''
+      if (!prov && rel.length === 1) prov = rel[0].id
+      const pr = prov ? precioDe(producto_id, prov) : null
+      const precio = pr != null ? String(pr) : (prodMap.get(producto_id)?.precio_lista ? String(prodMap.get(producto_id)!.precio_lista) : l.precio)
+      return { ...l, producto_id, proveedor_id: prov, precio }
     }))
   }
+  // Una OC = un solo proveedor: al elegir uno se aplica a toda la orden.
+  function elegirProveedor(provId: string) {
+    setLineas(ls => ls.map(l => {
+      if (!l.producto_id) return { ...l, proveedor_id: provId }
+      const pr = precioDe(l.producto_id, provId)
+      return { ...l, proveedor_id: provId, precio: pr != null ? String(pr) : l.precio }
+    }))
+  }
+  function setCampo(key: number, patch: Partial<EditLinea>) {
+    setLineas(l => l.map(x => x.key === key ? { ...x, ...patch } : x))
+  }
+
   const totalEdit = useMemo(() => lineas.reduce((a, l) => a + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0), [lineas])
+  const provsUsados = Array.from(new Set(lineas.filter(l => l.producto_id).map(l => l.proveedor_id).filter(Boolean)))
+  const multiProv = provsUsados.length > 1
+  const ocProveedorEdit = provsUsados.length === 1 ? provsUsados[0] : (oc.proveedor_id ?? '')
+
   function guardarItems() {
+    if (multiProv) { toast.error('Una orden de compra es para un solo proveedor.'); return }
     const payload = lineas
       .filter(l => l.producto_id && Number(l.cantidad) > 0 && l.precio !== '')
       .map(l => ({ id: l.id, producto_id: l.producto_id, cantidad: Number(l.cantidad), precio: Number(l.precio) }))
     if (payload.length === 0) { toast.error('Agrega al menos un ítem válido.'); return }
-    accion(() => actualizarItemsOC(oc.id, payload), 'Ítems actualizados.', () => setEditando(false))
+    accion(() => actualizarItemsOC(oc.id, payload, ocProveedorEdit || undefined), 'Ítems actualizados.', () => setEditando(false))
   }
 
   const recibidoTotal = useMemo(() => items.reduce((a, it) => a + Number(it.cantidad_rec), 0), [items])
@@ -252,21 +284,34 @@ export function OCDetalleClient({ oc, items, eventos, productos = [] }: { oc: OC
               const sub = (Number(l.cantidad) || 0) * (Number(l.precio) || 0)
               return (
                 <div key={l.key} className="grid grid-cols-12 gap-2 items-center">
-                  <div className="col-span-12 sm:col-span-6">
-                    <select value={l.producto_id} onChange={e => setLinea(l.key, { producto_id: e.target.value })}
+                  <div className="col-span-12 sm:col-span-4">
+                    <select value={l.producto_id} onChange={e => setProducto(l.key, e.target.value)}
                       className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-brand-green bg-white">
                       <option value="">— Producto —</option>
                       {productos.map(p => <option key={p.id} value={p.id}>{p.nombre_estandar}{p.presentacion ? ` · ${p.presentacion}` : ''}</option>)}
                     </select>
                   </div>
+                  <div className="col-span-12 sm:col-span-3">
+                    {(() => {
+                      const rel = l.producto_id ? proveedoresDe(l.producto_id) : []
+                      return (
+                        <select value={l.proveedor_id} onChange={e => elegirProveedor(e.target.value)} disabled={!l.producto_id}
+                          className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-brand-green bg-white disabled:bg-gray-50 disabled:text-gray-400">
+                          <option value="">{rel.length ? '— Proveedor —' : 'Sin proveedores relacionados'}</option>
+                          {rel.map(r => <option key={r.id} value={r.id}>{r.nombre}{r.precio != null ? ` · ${cop.format(r.precio)}` : ''}</option>)}
+                          {rel.length === 0 && proveedores.map(pv => <option key={pv.id} value={pv.id}>{pv.nombre}</option>)}
+                        </select>
+                      )
+                    })()}
+                  </div>
                   <div className="col-span-4 sm:col-span-2">
                     <input type="number" min={0} step="0.01" value={l.cantidad} placeholder="Cant."
-                      onChange={e => setLinea(l.key, { cantidad: e.target.value })}
+                      onChange={e => setCampo(l.key, { cantidad: e.target.value })}
                       className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-right outline-none focus:border-brand-green" />
                   </div>
-                  <div className="col-span-5 sm:col-span-3">
+                  <div className="col-span-5 sm:col-span-2">
                     <input type="number" min={0} step="0.01" value={l.precio} placeholder="Precio"
-                      onChange={e => setLinea(l.key, { precio: e.target.value })}
+                      onChange={e => setCampo(l.key, { precio: e.target.value })}
                       className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-right outline-none focus:border-brand-green" />
                   </div>
                   <div className="col-span-3 sm:col-span-1 flex justify-end">
@@ -282,14 +327,19 @@ export function OCDetalleClient({ oc, items, eventos, productos = [] }: { oc: OC
               className="flex items-center gap-1.5 border border-brand-green text-brand-green font-body font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-green-50">
               <Plus className="w-3.5 h-3.5" /> Agregar ítem
             </button>
+            {multiProv && (
+              <p className="flex items-center gap-1.5 font-body text-xs text-amber-600">
+                <Ban className="w-3.5 h-3.5" /> Una orden de compra es para un solo proveedor. Deja todos los ítems con el mismo.
+              </p>
+            )}
             <div className="flex items-center justify-between pt-3 border-t border-gray-100">
               <div>
-                <p className="font-body text-xs text-gray-400">Nuevo total</p>
+                <p className="font-body text-xs text-gray-400">Nuevo total{ocProveedorEdit ? ` · ${provName(ocProveedorEdit)}` : ''}</p>
                 <p className="font-heading font-bold text-xl text-gray-900">{cop.format(totalEdit)}</p>
               </div>
               <div className="flex items-center gap-2">
                 <button onClick={() => setEditando(false)} disabled={pending} className="font-body text-sm text-gray-500 hover:text-gray-700 px-3 py-2">Cancelar</button>
-                <button onClick={guardarItems} disabled={pending}
+                <button onClick={guardarItems} disabled={pending || multiProv}
                   className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-50">
                   {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar ítems
                 </button>

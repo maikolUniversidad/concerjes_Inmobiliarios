@@ -15,7 +15,7 @@ export default async function NuevaOCPage({
   const supabase = await createClient()
   const [{ data: proveedores }, { data: productos }] = await Promise.all([
     supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre'),
-    supabase.from('productos').select('id, nombre_estandar, presentacion, precio_lista').eq('activo', true).order('nombre_estandar'),
+    supabase.from('productos').select('id, nombre_estandar, presentacion, precio_lista, precios:precios_proveedor ( proveedor_id, precio )').eq('activo', true).order('nombre_estandar'),
   ])
 
   return (
