@@ -2,10 +2,11 @@
 
 import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   Check, Ban, Truck, PackageCheck, Loader2, MessageSquare, Send, FilePlus2,
   GitBranch, Pencil, Plus, Minus, ShoppingCart, ClipboardCheck, Building2, Clock,
-  Save, Trash2,
+  Save, Trash2, Printer,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { avanzarEstadoOC, registrarRecepcionOC, comentarOC, actualizarItemsOC } from '../actions'
@@ -258,6 +259,10 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
               <Ban className="w-4 h-4" /> Anular
             </button>
           )}
+          <Link href={`/ordenes-compra/${oc.id}/imprimir`} target="_blank"
+            className="flex items-center gap-2 border border-gray-200 text-gray-700 font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-50 ml-auto">
+            <Printer className="w-4 h-4" /> Imprimir / PDF
+          </Link>
           {pending && <Loader2 className="w-5 h-5 animate-spin text-gray-400 self-center" />}
         </div>
       </div>

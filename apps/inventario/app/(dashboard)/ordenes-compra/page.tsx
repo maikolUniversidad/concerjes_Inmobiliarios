@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { FileText, Plus, Ban, SlidersHorizontal } from 'lucide-react'
+import { FileText, Plus, Ban, SlidersHorizontal, Printer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import { DeleteButton } from '@/components/ui/DeleteButton'
@@ -97,6 +97,10 @@ export default async function OrdenesCompraPage() {
                         <Link href={`/ordenes-compra/${o.id}`} title="Gestionar orden (estados, ítems, recepción)"
                           className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 font-body text-xs font-semibold text-gray-600 hover:border-brand-green hover:text-brand-green hover:bg-green-50 transition-colors">
                           <SlidersHorizontal className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Gestionar</span>
+                        </Link>
+                        <Link href={`/ordenes-compra/${o.id}/imprimir`} target="_blank" title="Imprimir / Guardar PDF"
+                          className="p-2 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
+                          <Printer className="w-3.5 h-3.5" />
                         </Link>
                         {o.estado !== 'ANULADA' && o.estado !== 'COMPLETA' && (
                           <DeleteButton action={anularOC} id={o.id} mensaje={`¿Anular la orden ${o.numero_oc}?`}
