@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation'
 import {
   Check, Ban, Truck, PackageCheck, Loader2, MessageSquare, Send, FilePlus2,
   GitBranch, Pencil, Plus, Minus, ShoppingCart, ClipboardCheck, Building2, Clock,
+  Save, Trash2,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { avanzarEstadoOC, registrarRecepcionOC, comentarOC } from '../actions'
+import { avanzarEstadoOC, registrarRecepcionOC, comentarOC, actualizarItemsOC } from '../actions'
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
@@ -27,12 +28,14 @@ export interface OCDetalle {
 }
 export interface OCItem {
   id: string
+  producto_id: string
   cantidad_ped: number
   cantidad_rec: number
   precio_unit: number
   subtotal: number | null
   producto: { nombre_estandar: string; presentacion: string | null } | null
 }
+export interface ProductoLite { id: string; nombre_estandar: string; presentacion: string | null; precio_lista: number | null }
 export interface OCEvento {
   id: string
   tipo: string
@@ -77,7 +80,9 @@ function fechaHora(iso: string) {
   return new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
-export function OCDetalleClient({ oc, items, eventos }: { oc: OCDetalle; items: OCItem[]; eventos: OCEvento[] }) {
+interface EditLinea { key: number; id?: string; producto_id: string; cantidad: string; precio: string }
+
+export function OCDetalleClient({ oc, items, eventos, productos = [] }: { oc: OCDetalle; items: OCItem[]; eventos: OCEvento[]; productos?: ProductoLite[] }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [comentario, setComentario] = useState('')
@@ -89,15 +94,45 @@ export function OCDetalleClient({ oc, items, eventos }: { oc: OCDetalle; items: 
   const pasoActual = ORDEN[oc.estado] ?? 0
   const anulada = oc.estado === 'ANULADA'
   const puedeRecibir = oc.estado === 'ENVIADA' || oc.estado === 'PARCIAL'
+  const puedeEditarItems = oc.estado === 'BORRADOR'
+
+  // ── Edición de ítems (solo en borrador) ──
+  const [editando, setEditando] = useState(false)
+  const [lineas, setLineas] = useState<EditLinea[]>([])
+  function abrirEdicion() {
+    setLineas(items.map((it, i) => ({ key: i + 1, id: it.id, producto_id: it.producto_id, cantidad: String(Number(it.cantidad_ped)), precio: String(Number(it.precio_unit)) })))
+    setEditando(true)
+  }
+  function addLinea() { setLineas(l => [...l, { key: Math.max(0, ...l.map(x => x.key)) + 1, producto_id: '', cantidad: '', precio: '' }]) }
+  function rmLinea(key: number) { setLineas(l => l.filter(x => x.key !== key)) }
+  function setLinea(key: number, patch: Partial<EditLinea>) {
+    setLineas(l => l.map(x => {
+      if (x.key !== key) return x
+      const next = { ...x, ...patch }
+      if (patch.producto_id && !patch.precio) {
+        const p = productos.find(pr => pr.id === patch.producto_id)
+        if (p?.precio_lista) next.precio = String(p.precio_lista)
+      }
+      return next
+    }))
+  }
+  const totalEdit = useMemo(() => lineas.reduce((a, l) => a + (Number(l.cantidad) || 0) * (Number(l.precio) || 0), 0), [lineas])
+  function guardarItems() {
+    const payload = lineas
+      .filter(l => l.producto_id && Number(l.cantidad) > 0 && l.precio !== '')
+      .map(l => ({ id: l.id, producto_id: l.producto_id, cantidad: Number(l.cantidad), precio: Number(l.precio) }))
+    if (payload.length === 0) { toast.error('Agrega al menos un ítem válido.'); return }
+    accion(() => actualizarItemsOC(oc.id, payload), 'Ítems actualizados.', () => setEditando(false))
+  }
 
   const recibidoTotal = useMemo(() => items.reduce((a, it) => a + Number(it.cantidad_rec), 0), [items])
   const pedidoTotal = useMemo(() => items.reduce((a, it) => a + Number(it.cantidad_ped), 0), [items])
 
-  function accion(fn: () => Promise<{ error?: string }>, ok: string) {
+  function accion(fn: () => Promise<{ error?: string }>, ok: string, onOk?: () => void) {
     startTransition(async () => {
       const r = await fn()
       if (r?.error) toast.error(r.error)
-      else { toast.success(ok); router.refresh() }
+      else { toast.success(ok); onOk?.(); router.refresh() }
     })
   }
 
@@ -197,10 +232,71 @@ export function OCDetalleClient({ oc, items, eventos }: { oc: OCDetalle; items: 
 
       {/* Ítems */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+        <div className="flex items-center justify-between gap-2 px-5 py-3 border-b border-gray-100">
           <h2 className="font-heading font-semibold text-sm text-gray-900 flex items-center gap-2"><Truck className="w-4 h-4 text-brand-green" /> Ítems ({items.length})</h2>
-          <span className="font-body text-xs text-gray-400">Recibido {recibidoTotal} / {pedidoTotal}</span>
+          <div className="flex items-center gap-2">
+            {!editando && <span className="font-body text-xs text-gray-400">Recibido {recibidoTotal} / {pedidoTotal}</span>}
+            {puedeEditarItems && !editando && (
+              <button onClick={abrirEdicion}
+                className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 font-body text-xs font-semibold text-gray-600 hover:border-brand-green hover:text-brand-green hover:bg-green-50 transition-colors">
+                <Pencil className="w-3.5 h-3.5" /> Editar ítems
+              </button>
+            )}
+          </div>
         </div>
+
+        {editando ? (
+          /* ── Editor de ítems (borrador) ── */
+          <div className="p-4 space-y-2">
+            {lineas.map(l => {
+              const sub = (Number(l.cantidad) || 0) * (Number(l.precio) || 0)
+              return (
+                <div key={l.key} className="grid grid-cols-12 gap-2 items-center">
+                  <div className="col-span-12 sm:col-span-6">
+                    <select value={l.producto_id} onChange={e => setLinea(l.key, { producto_id: e.target.value })}
+                      className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm outline-none focus:border-brand-green bg-white">
+                      <option value="">— Producto —</option>
+                      {productos.map(p => <option key={p.id} value={p.id}>{p.nombre_estandar}{p.presentacion ? ` · ${p.presentacion}` : ''}</option>)}
+                    </select>
+                  </div>
+                  <div className="col-span-4 sm:col-span-2">
+                    <input type="number" min={0} step="0.01" value={l.cantidad} placeholder="Cant."
+                      onChange={e => setLinea(l.key, { cantidad: e.target.value })}
+                      className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-right outline-none focus:border-brand-green" />
+                  </div>
+                  <div className="col-span-5 sm:col-span-3">
+                    <input type="number" min={0} step="0.01" value={l.precio} placeholder="Precio"
+                      onChange={e => setLinea(l.key, { precio: e.target.value })}
+                      className="w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-right outline-none focus:border-brand-green" />
+                  </div>
+                  <div className="col-span-3 sm:col-span-1 flex justify-end">
+                    <button onClick={() => rmLinea(l.key)} title="Quitar" className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50">
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                  <div className="col-span-12 -mt-1 text-right font-body text-[11px] text-gray-400">{sub > 0 ? cop.format(sub) : ''}</div>
+                </div>
+              )
+            })}
+            <button onClick={addLinea}
+              className="flex items-center gap-1.5 border border-brand-green text-brand-green font-body font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-green-50">
+              <Plus className="w-3.5 h-3.5" /> Agregar ítem
+            </button>
+            <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+              <div>
+                <p className="font-body text-xs text-gray-400">Nuevo total</p>
+                <p className="font-heading font-bold text-xl text-gray-900">{cop.format(totalEdit)}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setEditando(false)} disabled={pending} className="font-body text-sm text-gray-500 hover:text-gray-700 px-3 py-2">Cancelar</button>
+                <button onClick={guardarItems} disabled={pending}
+                  className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-50">
+                  {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar ítems
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -242,6 +338,7 @@ export function OCDetalleClient({ oc, items, eventos }: { oc: OCDetalle; items: 
             </tbody>
           </table>
         </div>
+        )}
         {puedeRecibir && (
           <div className="flex justify-end px-5 py-3 border-t border-gray-100">
             <button onClick={registrar} disabled={pending}

@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { FileText, Plus, Ban } from 'lucide-react'
+import { FileText, Plus, Ban, SlidersHorizontal } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import { DeleteButton } from '@/components/ui/DeleteButton'
@@ -77,7 +77,7 @@ export default async function OrdenesCompraPage() {
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Emisión</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Valor</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Estado</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3 w-20">Acciones</th>
+                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3 w-40">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -93,10 +93,14 @@ export default async function OrdenesCompraPage() {
                       <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${ESTADO_CLS[o.estado] ?? 'bg-gray-100 text-gray-600'}`}>{ESTADO_LABEL[o.estado] ?? o.estado}</span>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center justify-center">
+                      <div className="flex items-center justify-center gap-1">
+                        <Link href={`/ordenes-compra/${o.id}`} title="Gestionar orden (estados, ítems, recepción)"
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 font-body text-xs font-semibold text-gray-600 hover:border-brand-green hover:text-brand-green hover:bg-green-50 transition-colors">
+                          <SlidersHorizontal className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Gestionar</span>
+                        </Link>
                         {o.estado !== 'ANULADA' && o.estado !== 'COMPLETA' && (
                           <DeleteButton action={anularOC} id={o.id} mensaje={`¿Anular la orden ${o.numero_oc}?`}
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all" >
+                            className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors" >
                             <Ban className="w-3.5 h-3.5" />
                           </DeleteButton>
                         )}
