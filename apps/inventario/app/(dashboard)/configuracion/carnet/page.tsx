@@ -36,7 +36,7 @@ export default async function CarnetPage() {
   const { data: persona } = await supabase
     .from('personas')
     .select(`
-      tipo_doc, documento, cargo, fecha_ingreso, estado,
+      tipo_doc, documento, cargo, fecha_ingreso, estado, eps, arl,
       empresas_usuarias ( nombre ),
       sedes ( nombre )
     `)
@@ -67,6 +67,8 @@ export default async function CarnetPage() {
     empresa: per?.empresas_usuarias?.nombre ?? null,
     sede: per?.sedes?.nombre ?? usr.sedes?.nombre ?? null,
     grupo: usr.grupos_contrato?.nombre ?? null,
+    eps: per?.eps ?? null,
+    arl: per?.arl ?? null,
     estado: per?.estado ?? 'ACTIVO',
     fecha_ingreso: per?.fecha_ingreso ?? null,
     creado: usr.created_at ?? null,
