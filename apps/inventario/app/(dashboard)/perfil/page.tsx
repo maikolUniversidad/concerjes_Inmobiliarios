@@ -1,5 +1,7 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { redirect } from 'next/navigation'
+import { IdCard, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PerfilClient } from './PerfilClient'
 
@@ -33,6 +35,20 @@ export default async function PerfilPage() {
           Actualiza tu foto y tus datos personales
         </p>
       </div>
+
+      <Link
+        href="/configuracion/carnet"
+        className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group"
+      >
+        <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+          <IdCard className="w-5 h-5 text-brand-green" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-heading font-semibold text-base text-gray-900">Mi Carnet Digital</h2>
+          <p className="font-body text-sm text-gray-500 mt-0.5">Preséntalo desde el celular o descárgalo con tu foto y QR.</p>
+        </div>
+        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-brand-green transition-colors" />
+      </Link>
 
       <PerfilClient
         usuario={{
