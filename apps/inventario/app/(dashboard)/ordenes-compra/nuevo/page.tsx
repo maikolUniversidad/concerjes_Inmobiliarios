@@ -6,7 +6,12 @@ import { OCForm } from '../OCForm'
 
 export const metadata: Metadata = { title: 'Nueva orden de compra' }
 
-export default async function NuevaOCPage() {
+export default async function NuevaOCPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ proveedor?: string; producto?: string; precio?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createClient()
   const [{ data: proveedores }, { data: productos }] = await Promise.all([
     supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre'),
@@ -23,7 +28,11 @@ export default async function NuevaOCPage() {
         <p className="font-body text-sm text-gray-500 mt-0.5">Selecciona el proveedor y agrega los ítems a comprar</p>
       </div>
 
-      <OCForm proveedores={proveedores ?? []} productos={(productos as never) ?? []} />
+      <OCForm
+        proveedores={proveedores ?? []}
+        productos={(productos as never) ?? []}
+        initial={{ proveedor_id: sp.proveedor, producto_id: sp.producto, precio: sp.precio }}
+      />
     </div>
   )
 }

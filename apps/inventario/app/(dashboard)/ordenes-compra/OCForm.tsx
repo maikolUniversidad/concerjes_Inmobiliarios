@@ -23,9 +23,13 @@ function SubmitBtn() {
   )
 }
 
-export function OCForm({ proveedores, productos }: { proveedores: Proveedor[]; productos: Producto[] }) {
+interface Initial { proveedor_id?: string; producto_id?: string; precio?: string }
+
+export function OCForm({ proveedores, productos, initial }: { proveedores: Proveedor[]; productos: Producto[]; initial?: Initial }) {
   const [state, formAction] = useActionState<ActionResult, FormData>(crearOC, {})
-  const [lineas, setLineas] = useState<Linea[]>([{ key: 1, producto_id: '', cantidad: '', precio: '' }])
+  const [lineas, setLineas] = useState<Linea[]>([
+    { key: 1, producto_id: initial?.producto_id ?? '', cantidad: initial?.producto_id ? '1' : '', precio: initial?.precio ?? '' },
+  ])
 
   function addLinea() { setLineas(l => [...l, { key: Math.max(0, ...l.map(x => x.key)) + 1, producto_id: '', cantidad: '', precio: '' }]) }
   function rmLinea(key: number) { setLineas(l => l.length > 1 ? l.filter(x => x.key !== key) : l) }
@@ -58,7 +62,7 @@ export function OCForm({ proveedores, productos }: { proveedores: Proveedor[]; p
         <div className="grid sm:grid-cols-3 gap-4">
           <div>
             <label className="font-body font-semibold text-sm text-gray-700">Proveedor *</label>
-            <select name="proveedor_id" required defaultValue="" className={inputCls + ' mt-1 bg-white'}>
+            <select name="proveedor_id" required defaultValue={initial?.proveedor_id ?? ''} className={inputCls + ' mt-1 bg-white'}>
               <option value="" disabled>— Selecciona —</option>
               {proveedores.map(p => <option key={p.id} value={p.id}>{p.nombre}</option>)}
             </select>
