@@ -6,9 +6,12 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { ImagePicker } from '@/components/ui/ImagePicker'
+import Link from 'next/link'
 import {
   crearUbicacion, actualizarUbicacion, moverUbicacion, eliminarUbicacion, asignarProductoUbicacion,
 } from '../actions'
+import { PlanoViewer } from './PlanoViewer'
+import type { PlanoPiso } from './plano/plano-tipos'
 
 export interface Ubic {
   id: string; codigo: string; nombre: string | null; tipo: string | null
@@ -22,10 +25,11 @@ interface Mov { tipo: string; cantidad: number; created_at: string; producto: { 
 const TIPOS = ['ESTANTERIA', 'ZONA', 'NEVERA', 'PALLET', 'VITRINA', 'OTRO']
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green'
 
-export function BodegaPlano({ bodegaId, planoUrl, ubicacionesIniciales, productos: prodsIniciales, usuarios }: {
-  bodegaId: string; planoUrl: string | null
+export function BodegaPlano({ bodegaId, planoUrl, pisos = [], ubicacionesIniciales, productos: prodsIniciales, usuarios }: {
+  bodegaId: string; planoUrl: string | null; pisos?: PlanoPiso[]
   ubicacionesIniciales: Ubic[]; productos: ProdMin[]; usuarios: { id: string; nombre: string }[]
 }) {
+  const tieneDiseno = pisos.some(p => (p.elementos?.length ?? 0) > 0)
   const [ubics, setUbics] = useState<Ubic[]>(ubicacionesIniciales)
   const [prods, setProds] = useState<ProdMin[]>(prodsIniciales)
   const [selId, setSelId] = useState<string | null>(null)
@@ -103,15 +107,23 @@ export function BodegaPlano({ bodegaId, planoUrl, ubicacionesIniciales, producto
             <MapPin className="w-4 h-4 text-brand-green" />
             <h2 className="font-heading font-semibold text-sm text-gray-900">Plano · {colocados.length}/{ubics.length} ubicaciones marcadas</h2>
           </div>
-          {planoUrl && (
-            <button onClick={() => { setEditMode(v => !v); setAddForm(null) }}
-              className={`flex items-center gap-1.5 font-body font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors ${editMode ? 'bg-brand-green text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
-              <Move className="w-3.5 h-3.5" /> {editMode ? 'Editando — toca el plano para agregar' : 'Editar plano'}
-            </button>
-          )}
+          <div className="flex items-center gap-2">
+            <Link href={`/bodegas/${bodegaId}/plano`}
+              className="flex items-center gap-1.5 font-body font-semibold text-xs px-3 py-1.5 rounded-lg border border-brand-green/40 text-brand-green hover:bg-green-50 transition-colors">
+              <Pencil className="w-3.5 h-3.5" /> {tieneDiseno ? 'Editar en el diseñador' : 'Diseñar plano'}
+            </Link>
+            {planoUrl && !tieneDiseno && (
+              <button onClick={() => { setEditMode(v => !v); setAddForm(null) }}
+                className={`flex items-center gap-1.5 font-body font-semibold text-xs px-3 py-1.5 rounded-lg transition-colors ${editMode ? 'bg-brand-green text-white' : 'border border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+                <Move className="w-3.5 h-3.5" /> {editMode ? 'Editando — toca el plano para agregar' : 'Editar marcadores'}
+              </button>
+            )}
+          </div>
         </div>
 
-        {planoUrl ? (
+        {tieneDiseno ? (
+          <PlanoViewer pisos={pisos} />
+        ) : planoUrl ? (
           <div
             ref={planoRef}
             onClick={onPlanoClick}

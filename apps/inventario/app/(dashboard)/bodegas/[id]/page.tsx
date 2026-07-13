@@ -22,17 +22,21 @@ export default async function BodegaDetallePage({ params }: Props) {
     .eq('id', id).single()
   if (error || !bodega) notFound()
 
-  const [{ data: ubic }, { data: usuarios }, { data: prods }] = await Promise.all([
+  const [{ data: ubic }, { data: usuarios }, { data: prods }, { data: pisosData }] = await Promise.all([
     supabase.from('ubicaciones')
       .select('id, codigo, nombre, tipo, descripcion, foto_url, pos_x, pos_y, responsable_id, responsable:usuarios!ubicaciones_responsable_id_fkey ( nombre )')
       .eq('bodega_id', id).eq('activo', true).order('codigo'),
     supabase.from('usuarios').select('id, nombre').eq('activo', true).order('nombre'),
     supabase.from('productos').select('id, nombre_estandar, sku, ref, ubicacion_id').eq('activo', true).order('nombre_estandar'),
+    supabase.from('bodega_pisos')
+      .select('id, bodega_id, numero, nombre, ancho_m, alto_m, escala, fondo_url, elementos, orden')
+      .eq('bodega_id', id).order('numero'),
   ])
 
   const ubicaciones = ((ubic as unknown as (Omit<Ubic, 'responsable_nombre'> & { responsable: { nombre: string } | null })[]) ?? [])
     .map(u => ({ ...u, responsable_nombre: u.responsable?.nombre ?? null }))
   const productos = (prods as unknown as ProdMin[]) ?? []
+  const pisos = (pisosData as unknown as import('./plano/plano-tipos').PlanoPiso[]) ?? []
   const b = bodega as unknown as { id: string; nombre: string; codigo: string | null; direccion: string | null; descripcion: string | null; plano_url: string | null; responsable: { nombre: string } | null }
 
   return (
@@ -64,6 +68,7 @@ export default async function BodegaDetallePage({ params }: Props) {
       <BodegaPlano
         bodegaId={id}
         planoUrl={b.plano_url}
+        pisos={pisos}
         ubicacionesIniciales={ubicaciones}
         productos={productos}
         usuarios={(usuarios as { id: string; nombre: string }[]) ?? []}

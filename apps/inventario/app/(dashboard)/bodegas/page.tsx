@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { Warehouse, Plus, MapPin, User } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
+import { PlanoThumb } from './PlanoThumb'
+import type { PlanoElemento } from './[id]/plano/plano-tipos'
 
 export const metadata: Metadata = { title: 'Bodegas' }
 export const revalidate = 0
@@ -24,6 +26,18 @@ export default async function BodegasPage() {
     .order('nombre')
 
   const bodegas = (data as unknown as BodegaRow[]) ?? []
+
+  // Miniatura del plano: primer piso con elementos por bodega
+  type PisoRow = { bodega_id: string; numero: number; ancho_m: number; alto_m: number; elementos: PlanoElemento[] }
+  const { data: pisosData } = await supabase
+    .from('bodega_pisos')
+    .select('bodega_id, numero, ancho_m, alto_m, elementos')
+    .in('bodega_id', bodegas.map(b => b.id).length ? bodegas.map(b => b.id) : ['—'])
+    .order('numero')
+  const planoPorBodega = new Map<string, PisoRow>()
+  for (const p of ((pisosData as unknown as PisoRow[]) ?? [])) {
+    if ((p.elementos?.length ?? 0) > 0 && !planoPorBodega.has(p.bodega_id)) planoPorBodega.set(p.bodega_id, p)
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -51,10 +65,12 @@ export default async function BodegasPage() {
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {bodegas.map(b => (
             <Link key={b.id} href={`/bodegas/${b.id}`} className="bg-white border border-gray-100 rounded-2xl overflow-hidden shadow-sm hover:shadow-md hover:border-brand-green/30 transition-all">
-              <div className="aspect-video bg-gray-50 relative flex items-center justify-center">
-                {b.plano_url
-                  ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={b.plano_url} alt={b.nombre} className="object-cover w-full h-full" />
-                  : <Warehouse className="w-10 h-10 text-gray-300" />}
+              <div className="aspect-video bg-gray-50 relative flex items-center justify-center p-2">
+                {planoPorBodega.has(b.id)
+                  ? <PlanoThumb {...planoPorBodega.get(b.id)!} />
+                  : b.plano_url
+                    ? /* eslint-disable-next-line @next/next/no-img-element */ <img src={b.plano_url} alt={b.nombre} className="object-cover w-full h-full rounded" />
+                    : <Warehouse className="w-10 h-10 text-gray-300" />}
                 {b.codigo && <span className="absolute top-2 left-2 bg-white/90 font-mono text-xs px-2 py-0.5 rounded">{b.codigo}</span>}
               </div>
               <div className="p-4">
