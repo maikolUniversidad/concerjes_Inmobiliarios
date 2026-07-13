@@ -527,8 +527,8 @@ export function CarnetClient({ data }: { data: CarnetData }) {
         <CarnetFlip data={data} qrUrl={qrUrl} />
 
         <div className="space-y-3">
-          <Link href="/configuracion" className="inline-flex items-center gap-1.5 font-body text-sm text-gray-500 hover:text-brand-green">
-            <ArrowLeft className="w-4 h-4" /> Volver a Configuración
+          <Link href="/dashboard" className="inline-flex items-center gap-1.5 font-body text-sm text-gray-500 hover:text-brand-green">
+            <ArrowLeft className="w-4 h-4" /> Volver al inicio
           </Link>
 
           <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm space-y-3">

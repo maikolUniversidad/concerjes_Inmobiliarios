@@ -3,7 +3,7 @@ import {
   FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode,
-  Briefcase, Contact, FolderTree, Scale, type LucideIcon,
+  Briefcase, Contact, FolderTree, Scale, IdCard, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -36,6 +36,15 @@ export const navigation: NavModule[] = [
     icon: LayoutDashboard,
     items: [
       { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
+    ],
+  },
+  {
+    id: 'carnet',
+    title: 'Carnet',
+    icon: IdCard,
+    // Sin permiso: todo colaborador puede ver su propio carnet.
+    items: [
+      { label: 'Mi Carnet Digital', href: '/carnet', icon: IdCard },
     ],
   },
   {
@@ -108,6 +117,7 @@ export function navegacionVisible(puede: (permiso?: string) => boolean): NavModu
 /** Etiqueta corta para mostrar bajo el icono en la barra inferior móvil. */
 export const moduleShortLabel: Record<string, string> = {
   principal: 'Inicio',
+  carnet: 'Carnet',
   inventario: 'Inventario',
   gestion: 'Gestión',
   gestion_humana: 'RRHH',

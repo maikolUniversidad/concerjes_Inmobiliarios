@@ -37,7 +37,7 @@ export default async function PerfilPage() {
       </div>
 
       <Link
-        href="/configuracion/carnet"
+        href="/carnet"
         className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group"
       >
         <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
