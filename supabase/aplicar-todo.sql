@@ -649,6 +649,18 @@ CREATE TABLE IF NOT EXISTS roles (
   updated_at  TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Compatibilidad: si ya existía una tabla `roles` con otro esquema, garantiza
+-- las columnas y la restricción única que usan las migraciones (ON CONFLICT nombre).
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS nombre      VARCHAR(100);
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS descripcion TEXT;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS permisos    JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS activo      BOOLEAN DEFAULT true;
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS created_at  TIMESTAMPTZ DEFAULT NOW();
+ALTER TABLE roles ADD COLUMN IF NOT EXISTS updated_at  TIMESTAMPTZ DEFAULT NOW();
+DO $$ BEGIN
+  ALTER TABLE roles ADD CONSTRAINT roles_nombre_key UNIQUE (nombre);
+EXCEPTION WHEN duplicate_object THEN null; WHEN duplicate_table THEN null; END $$;
+
 ALTER TABLE roles ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "roles_select_authenticated" ON roles;
 DROP POLICY IF EXISTS "roles_all_authenticated"    ON roles;
