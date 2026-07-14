@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, CheckCircle, ChevronDown } from 'lucide-react'
+import { ArrowRight, CheckCircle, ChevronDown, Briefcase } from 'lucide-react'
 
 const highlights = [
   '36 años de experiencia comprobada',
@@ -62,12 +62,20 @@ export function HeroSection() {
           </ul>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row gap-4">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-4">
             <Link
               href="/contacto"
               className="inline-flex items-center justify-center gap-2.5 bg-white text-brand-green font-body font-bold text-base px-8 py-4 rounded-xl hover:bg-green-50 transition-all duration-200 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 group"
             >
               Solicitar cotización
+              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+            </Link>
+            <Link
+              href="/registro-vacantes"
+              className="inline-flex items-center justify-center gap-2.5 bg-brand-orange text-white font-body font-bold text-base px-8 py-4 rounded-xl hover:bg-brand-orange-light transition-all duration-200 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 group"
+            >
+              <Briefcase className="w-5 h-5" />
+              Trabaja con nosotros
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
