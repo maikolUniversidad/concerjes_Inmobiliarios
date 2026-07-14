@@ -1,12 +1,8 @@
--- =============================================================================
--- Conserjes Inmobiliarios — SCRIPT CONSOLIDADO (todas las migraciones en orden)
--- Idempotente: seguro de correr completo en el SQL Editor de Supabase.
--- Generado por concatenación de supabase/migrations/*.sql en orden cronológico.
--- =============================================================================
+-- CONSOLIDADO (todas las migraciones en orden). Idempotente.
 
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240101000000_init.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240101000000_init.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Esquema canónico ÚNICO
@@ -17,6 +13,26 @@
 -- sobre una existente sin romper nada (IF NOT EXISTS / DROP POLICY IF EXISTS /
 -- ON CONFLICT DO NOTHING). Es la única fuente de verdad del esquema.
 -- =============================================================================
+
+-- =============================================================================
+-- COMPATIBILIDAD: normaliza una tabla `roles` de esquema ANTERIOR incompatible.
+-- Si existe un `roles` viejo (con la columna `role`, ajena al diseño actual),
+-- se aparta a un respaldo con marca de tiempo para que abajo se cree el correcto.
+-- =============================================================================
+DO $$
+DECLARE v_bk text;
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'roles' AND column_name = 'role'
+  ) THEN
+    -- La FK usuarios.rol_id se recreará apuntando al roles nuevo (roles_dinamicos).
+    ALTER TABLE IF EXISTS public.usuarios DROP COLUMN IF EXISTS rol_id;
+    v_bk := 'roles_legacy_' || to_char(now(), 'YYYYMMDD_HH24MISS');
+    EXECUTE format('ALTER TABLE public.roles RENAME TO %I', v_bk);
+    RAISE NOTICE 'Tabla roles incompatible apartada como %', v_bk;
+  END IF;
+END $$;
 
 -- =============================================================================
 -- ENUMS  (idempotentes vía DO/EXCEPTION)
@@ -668,7 +684,7 @@ CREATE POLICY "roles_select_authenticated" ON roles FOR SELECT TO authenticated 
 CREATE POLICY "roles_all_authenticated"    ON roles FOR ALL    TO authenticated USING (true) WITH CHECK (true);
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240102000000_historial_importaciones.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240102000000_historial_importaciones.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Versionado / Historial + Cargas masivas
@@ -789,7 +805,7 @@ DROP POLICY IF EXISTS auth_insert_importaciones ON importaciones;
 CREATE POLICY auth_insert_importaciones ON importaciones FOR INSERT TO authenticated WITH CHECK (true);
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240102000000_ia_chat.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240102000000_ia_chat.sql >>>>
 
 -- =============================================================================
 -- MÓDULO: Asistente IA — Chat con historial, carpetas y multimodelo
@@ -884,7 +900,7 @@ CREATE POLICY ia_msg_owner ON ia_mensajes FOR ALL TO authenticated
   WITH CHECK (user_id = (SELECT auth.uid()));
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240103000000_arqueos.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240103000000_arqueos.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Arqueo / Control de inventario físico
@@ -1095,7 +1111,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240103000000_notificaciones.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240103000000_notificaciones.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Módulo de Notificaciones y Alertas
@@ -1457,7 +1473,7 @@ DO $$ BEGIN
 EXCEPTION WHEN OTHERS THEN null; END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240104000000_codigos_barras.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240104000000_codigos_barras.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Código de barras / QR por producto
@@ -1485,7 +1501,7 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240104000000_perfil_roles_seed.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240104000000_perfil_roles_seed.sql >>>>
 
 -- =============================================================================
 -- PERFIL DE USUARIO + ROLES DE REFERENCIA
@@ -1626,7 +1642,7 @@ ON CONFLICT (nombre) DO UPDATE
       updated_at  = NOW();
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240105000000_roles_dinamicos.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240105000000_roles_dinamicos.sql >>>>
 
 -- =============================================================================
 -- ROLES DINÁMICOS — vincular usuarios ↔ tabla `roles`
@@ -1710,7 +1726,7 @@ $$;
 GRANT EXECUTE ON FUNCTION public.auth_permisos() TO authenticated;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240106000000_gestion_humana.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240106000000_gestion_humana.sql >>>>
 
 -- =============================================================================
 -- MÓDULO: GESTIÓN HUMANA
@@ -1880,7 +1896,7 @@ BEGIN
 END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240106000000_sku_ubicacion_bodega.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240106000000_sku_ubicacion_bodega.sql >>>>
 
 -- =============================================================================
 -- SKU y Ubicación en Bodega por Producto
@@ -1933,7 +1949,7 @@ END;
 $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240107000000_producto_fotos.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240107000000_producto_fotos.sql >>>>
 
 -- =============================================================================
 -- Galería de fotos por producto (múltiples imágenes)
@@ -1959,7 +1975,7 @@ CREATE POLICY "fotos_update" ON public.producto_fotos FOR UPDATE TO authenticate
 CREATE POLICY "fotos_delete" ON public.producto_fotos FOR DELETE TO authenticated USING (true);
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240107000000_tipos_refs.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240107000000_tipos_refs.sql >>>>
 
 -- =============================================================================
 -- ENTRENAMIENTO DE CLASIFICACIÓN DOCUMENTAL
@@ -1993,7 +2009,7 @@ CREATE POLICY gh_write_tiporefs ON tipos_documentales_refs FOR ALL TO authentica
   WITH CHECK (public.auth_rol() IN ('SUPER_ADMIN','ADMIN','SUPERVISOR'));
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240108000000_bodegas_ubicaciones.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240108000000_bodegas_ubicaciones.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Bodegas y Ubicaciones (plano físico)
@@ -2087,7 +2103,7 @@ SELECT 'Bodega Central', 'CENTRAL', 'Bodega principal de Conserjes Inmobiliarios
 WHERE NOT EXISTS (SELECT 1 FROM bodegas);
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240108000000_oc_trazabilidad.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240108000000_oc_trazabilidad.sql >>>>
 
 -- =============================================================================
 -- ÓRDENES DE COMPRA — TRAZABILIDAD Y FLUJO DE PROCESO
@@ -2210,7 +2226,7 @@ CREATE POLICY oc_eventos_write ON oc_eventos FOR INSERT TO authenticated
   WITH CHECK (public.auth_rol() IN ('SUPER_ADMIN','ADMIN','COORDINADOR_COMPRAS'));
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240108000001_movimiento_ubicacion.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240108000001_movimiento_ubicacion.sql >>>>
 
 -- =============================================================================
 -- registrar_movimiento + ubicación física (enlaza el movimiento a una estantería)
@@ -2260,7 +2276,7 @@ BEGIN
 END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240109000000_roles_permisos_modulos.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240109000000_roles_permisos_modulos.sql >>>>
 
 -- =============================================================================
 -- Ajuste de roles existentes con los permisos de los módulos nuevos
@@ -2310,7 +2326,7 @@ UPDATE roles SET permisos = permisos || jsonb_build_object(
 ) WHERE rol_base = 'OPERADOR_SEDE';
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240110000000_bodega_planos.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240110000000_bodega_planos.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Diseñador de planos de bodega (por pisos)
@@ -2378,7 +2394,7 @@ FROM bodegas b
 WHERE NOT EXISTS (SELECT 1 FROM bodega_pisos p WHERE p.bodega_id = b.id);
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240110000000_updated_at_sync.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240110000000_updated_at_sync.sql >>>>
 
 -- =============================================================================
 -- Offline-first (Fase 1) — updated_at uniforme para sincronización incremental
@@ -2429,7 +2445,7 @@ BEGIN
 END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240111000000_personas_usuarios_conserjeria.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240111000000_personas_usuarios_conserjeria.sql >>>>
 
 -- =============================================================================
 -- CONECTAR PERSONAS (Gestión Humana) ↔ USUARIOS (cuentas de plataforma)
@@ -2564,7 +2580,7 @@ UPDATE public.roles SET rol_base = 'ADMIN'         WHERE nombre = 'Gerencia'    
 UPDATE public.roles SET rol_base = 'SUPERVISOR'    WHERE nombre = 'Supervisor de Conserjería' AND rol_base IS NULL;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240112000000_integraciones_correo.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240112000000_integraciones_correo.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Integraciones · Correo electrónico
@@ -2625,7 +2641,7 @@ CREATE POLICY admin_all_integr_correo ON integraciones_correo FOR ALL TO authent
   WITH CHECK (public.auth_rol() IN ('SUPER_ADMIN','ADMIN'));
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240112000000_parametrizacion_sede.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240112000000_parametrizacion_sede.sql >>>>
 
 -- =============================================================================
 -- PARAMETRIZACIÓN POR SEDE
@@ -2695,7 +2711,7 @@ WHERE rol_base IN ('SUPERVISOR','AUDITOR','BODEGUERO')
    OR nombre IN ('Supervisor de Conserjería');
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240113000000_correo_alertas.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240113000000_correo_alertas.sql >>>>
 
 -- =============================================================================
 -- Conserjes Inmobiliarios — Alertas por correo (buzón de salida)
@@ -2792,7 +2808,7 @@ EXCEPTION WHEN OTHERS THEN
 END $$;
 
 
--- >>>>>>>>>>>>>>>>>>>> 20240113000000_ordenes_insumo.sql >>>>>>>>>>>>>>>>>>>>
+-- >>>> 20240113000000_ordenes_insumo.sql >>>>
 
 -- =============================================================================
 -- ÓRDENES DE INSUMO (despacho a bodega + alistamiento + video de despacho)

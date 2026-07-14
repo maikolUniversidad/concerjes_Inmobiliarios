@@ -1,4 +1,12 @@
 -- =============================================================================
+-- Conserjes Inmobiliarios — PARTE 1 · Base (esquema, roles, RLS, auth)
+-- Idempotente. Corre este bloque COMPLETO en el SQL Editor y avísame el resultado.
+-- =============================================================================
+
+
+-- >>>>>>>>>>>>>>>>>>>> 20240101000000_init.sql >>>>>>>>>>>>>>>>>>>>
+
+-- =============================================================================
 -- Conserjes Inmobiliarios — Esquema canónico ÚNICO
 -- Modelo: stock central + sedes/grupos de contrato + aprovisionamiento + OC
 -- Basado en CMI Reabastecimiento (Excel maestro).
