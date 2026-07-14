@@ -18,6 +18,8 @@ export async function POST(req: NextRequest) {
     .from('candidatos')
     .select('numero_documento, email')
     .eq('numero_documento', documento)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
   if (!data) return NextResponse.json({ email: null })
 

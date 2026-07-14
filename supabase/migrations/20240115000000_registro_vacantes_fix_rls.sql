@@ -42,3 +42,11 @@ CREATE POLICY "rv_select" ON storage.objects FOR SELECT TO authenticated
   USING (bucket_id = 'registro-vacantes'
          AND (owner = (SELECT auth.uid())
               OR public.auth_rol() IN ('SUPER_ADMIN','ADMIN','SUPERVISOR')));
+
+-- INSERT: solo se valida el bucket. Supabase asigna `owner = auth.uid()`
+-- automáticamente; validarlo en WITH CHECK puede rechazar subidas válidas según
+-- el momento en que se puebla. La propiedad real se protege en la lectura
+-- (owner/roles arriba) y en la tabla candidato_documentos (dueño del candidato).
+DROP POLICY IF EXISTS "rv_insert" ON storage.objects;
+CREATE POLICY "rv_insert" ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (bucket_id = 'registro-vacantes');

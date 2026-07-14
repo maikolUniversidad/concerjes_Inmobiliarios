@@ -117,7 +117,10 @@ export function Paso2Formulario({ ctx }: { ctx: WizardCtx }) {
             <Input value={form.nacionalidad ?? 'COLOMBIANA'} onChange={(e) => update({ nacionalidad: e.target.value.toUpperCase() })} />
           </Field>
           <Field label="Lugar de expedición del documento">
-            <Select value={form.municipio_nacimiento ?? ''} onChange={(e) => update({ lugar_expedicion_doc: catalogos.municipios.find(m=>m.codigo_dane===e.target.value)?.nombre ?? null })}>
+            <Select
+              value={catalogos.municipios.find((m) => m.nombre === form.lugar_expedicion_doc)?.codigo_dane ?? ''}
+              onChange={(e) => update({ lugar_expedicion_doc: catalogos.municipios.find((m) => m.codigo_dane === e.target.value)?.nombre ?? null })}
+            >
               <option value="">— Selecciona —</option>
               {catalogos.municipios.map((m) => <option key={m.codigo_dane} value={m.codigo_dane}>{m.nombre}</option>)}
             </Select>

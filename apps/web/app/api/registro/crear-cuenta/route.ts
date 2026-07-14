@@ -28,6 +28,8 @@ export async function POST(req: NextRequest) {
     .from('candidatos')
     .select('id, auth_uid, numero_documento, nombres, apellidos, email, celular')
     .eq('auth_uid', uid)
+    .order('updated_at', { ascending: false })
+    .limit(1)
     .maybeSingle()
   if (!cand) return NextResponse.json({ error: 'No encontramos tu registro.' }, { status: 404 })
 
