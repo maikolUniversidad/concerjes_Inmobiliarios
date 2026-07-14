@@ -3,7 +3,7 @@ import {
   FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode,
-  Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, type LucideIcon,
+  Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -102,6 +102,7 @@ export const navigation: NavModule[] = [
       { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell,          permiso: 'ver_notificaciones' },
       { label: 'Usuarios',           href: '/usuarios',         icon: Users,         permiso: 'ver_usuarios' },
       { label: 'Roles y Permisos',   href: '/roles',            icon: Shield,        permiso: 'gestionar_roles' },
+      { label: 'Integraciones',      href: '/integraciones',    icon: Plug,          permiso: 'gestionar_integraciones' },
       { label: 'Log de Actividad',   href: '/actividad-log',    icon: ClipboardList, permiso: 'ver_actividad_log' },
       { label: 'Configuración',      href: '/configuracion',    icon: Settings,      permiso: 'ver_configuracion' },
     ],

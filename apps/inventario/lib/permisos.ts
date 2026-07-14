@@ -64,6 +64,7 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_alertas',    label: 'Configurar reglas de alerta' },
       { key: 'ver_configuracion',    label: 'Ver configuración' },
       { key: 'editar_configuracion', label: 'Editar configuración' },
+      { key: 'gestionar_integraciones', label: 'Gestionar integraciones (correo, etc.)' },
     ],
   },
   {
