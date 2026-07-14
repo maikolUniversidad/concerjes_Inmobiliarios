@@ -8,6 +8,12 @@
 -- IDEMPOTENTE.
 -- =============================================================================
 
+-- Asegura la función helper de rol (por si la migración inicial no se aplicó).
+CREATE OR REPLACE FUNCTION public.auth_rol()
+RETURNS rol_usuario
+LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public
+AS $$ SELECT rol FROM public.usuarios WHERE id = (SELECT auth.uid()) $$;
+
 -- Buzón de salida -------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS correo_saliente (
   id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
