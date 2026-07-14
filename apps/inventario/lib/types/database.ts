@@ -214,6 +214,50 @@ export interface SedeProducto {
   sede?: Sede
 }
 
+export type EstadoOrdenInsumo = 'PENDIENTE' | 'EN_ALISTAMIENTO' | 'ALISTADO' | 'DESPACHADO' | 'ANULADA'
+
+export interface OrdenInsumo {
+  id: string
+  numero: string
+  sede_id: string
+  bodega_id: string | null
+  estado: EstadoOrdenInsumo
+  periodo: string | null
+  observacion: string | null
+  contrato_id: string | null
+  creado_por: string | null
+  alistamiento_iniciado_at: string | null
+  alistado_at: string | null
+  despachado_por: string | null
+  despachado_at: string | null
+  video_path: string | null
+  video_mime: string | null
+  created_at: string
+  updated_at: string
+  sede?: Sede
+}
+
+export interface OrdenInsumoItem {
+  id: string
+  orden_id: string
+  producto_id: string
+  cantidad_solicitada: number
+  cantidad_maxima_ref: number | null
+  cantidad_alistada: number
+  alistado: boolean
+  alistado_por: string | null
+  alistado_at: string | null
+  created_at: string
+  producto?: Producto
+}
+
+export interface OrdenInsumoResponsable {
+  id: string
+  orden_id: string
+  usuario_id: string
+  created_at: string
+}
+
 export interface PrecioProveedor {
   id: string
   producto_id: string
@@ -510,6 +554,9 @@ export type Database = {
       sedes: { Row: Sede; Insert: Partial<Sede>; Update: Partial<Sede> }
       pedidos_sede: { Row: PedidoSede; Insert: Partial<PedidoSede>; Update: Partial<PedidoSede> }
       sede_productos: { Row: SedeProducto; Insert: Partial<SedeProducto>; Update: Partial<SedeProducto> }
+      ordenes_insumo: { Row: OrdenInsumo; Insert: Partial<OrdenInsumo>; Update: Partial<OrdenInsumo> }
+      orden_insumo_items: { Row: OrdenInsumoItem; Insert: Partial<OrdenInsumoItem>; Update: Partial<OrdenInsumoItem> }
+      orden_insumo_responsables: { Row: OrdenInsumoResponsable; Insert: Partial<OrdenInsumoResponsable>; Update: Partial<OrdenInsumoResponsable> }
       rotacion: { Row: Rotacion; Insert: Partial<Rotacion>; Update: Partial<Rotacion> }
       aprovisionamiento: { Row: Aprovisionamiento; Insert: Partial<Aprovisionamiento>; Update: Partial<Aprovisionamiento> }
       ordenes_compra: { Row: OrdenCompra; Insert: Partial<OrdenCompra>; Update: Partial<OrdenCompra> }

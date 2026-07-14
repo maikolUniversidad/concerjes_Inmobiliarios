@@ -68,6 +68,7 @@ export const navigation: NavModule[] = [
       { label: 'Aprovisionamiento', href: '/aprovisionamiento', icon: Warehouse, permiso: 'ver_aprovisionamiento' },
       { label: 'Contratos/Sedes',   href: '/contratos',         icon: FileText, permiso: 'ver_contratos' },
       { label: 'Parametrización',   href: '/parametrizacion',   icon: SlidersHorizontal, permiso: 'ver_parametrizacion' },
+      { label: 'Órdenes de Insumo', href: '/ordenes-insumo',    icon: ClipboardCheck, permiso: 'ver_ordenes_insumo' },
       { label: 'Proveedores',       href: '/proveedores',       icon: Truck, permiso: 'ver_proveedores' },
       { label: 'Comparar Precios',  href: '/comparador-precios', icon: Scale, permiso: 'ver_proveedores' },
       { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText, permiso: 'ver_ordenes_compra' },

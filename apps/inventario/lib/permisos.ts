@@ -50,6 +50,14 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    grupo: 'Alistamiento y Despacho',
+    permisos: [
+      { key: 'ver_ordenes_insumo',    label: 'Ver órdenes de insumo' },
+      { key: 'crear_ordenes_insumo',  label: 'Crear órdenes de insumo' },
+      { key: 'alistar_ordenes_insumo', label: 'Alistar y despachar órdenes' },
+    ],
+  },
+  {
     grupo: 'Administración',
     permisos: [
       { key: 'ver_documentos',       label: 'Ver documentos / galería' },
