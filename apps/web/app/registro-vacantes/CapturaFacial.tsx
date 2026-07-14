@@ -9,14 +9,22 @@ export interface ResultadoFacial {
   resultado?: 'MATCH' | 'DUDA' | 'NO_MATCH' | 'LIVENESS_FAIL'
   candidato_id?: string | null
   ok?: boolean
+  token_hash?: string
+  email?: string
   error?: string
 }
 
 interface Props {
-  modo: 'identificar' | 'enrolar'
+  modo: 'identificar' | 'enrolar' | 'login'
   candidatoId?: string
   onResultado: (r: ResultadoFacial) => void
   onCerrar: () => void
+}
+
+const ENDPOINTS: Record<Props['modo'], string> = {
+  identificar: '/api/registro/facial/identify',
+  enrolar: '/api/registro/facial/enroll',
+  login: '/api/registro/facial/login',
 }
 
 export function CapturaFacial({ modo, candidatoId, onResultado, onCerrar }: Props) {
@@ -69,14 +77,14 @@ export function CapturaFacial({ modo, candidatoId, onResultado, onCerrar }: Prop
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const image = canvas.toDataURL('image/jpeg', 0.85)
 
-      await ensureAnonSession()
+      // El login no necesita sesión previa; identificar/enrolar sí (token del dueño).
+      if (modo !== 'login') await ensureAnonSession()
       const sb = getSupabase()
       const { data: s } = await sb.auth.getSession()
-      const endpoint = modo === 'identificar' ? '/api/registro/facial/identify' : '/api/registro/facial/enroll'
-      const res = await fetch(endpoint, {
+      const res = await fetch(ENDPOINTS[modo], {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.session?.access_token ?? ''}` },
-        body: JSON.stringify(modo === 'identificar' ? { image } : { candidato_id: candidatoId, image }),
+        body: JSON.stringify(modo === 'enrolar' ? { candidato_id: candidatoId, image } : { image }),
       })
       const j: ResultadoFacial = await res.json()
 

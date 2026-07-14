@@ -6,6 +6,7 @@ import { Loader2, Check, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   fetchCatalogos, cargarCandidatoActual, guardarCandidato, cargarDireccion, cargarBeneficiarios,
+  type Credenciales,
 } from '@/lib/registro/datos'
 import type { Catalogos, CandidatoForm, DireccionForm, Beneficiario } from '@/lib/registro/tipos'
 import { Paso0Consentimientos } from './steps/Paso0Consentimientos'
@@ -29,6 +30,7 @@ export interface WizardCtx {
   setBeneficiarios: (b: Beneficiario[]) => void
   consentBiometrico: boolean
   vacanteSlug: string | null
+  setCredenciales: (c: Credenciales) => void
   next: () => void
   prev: () => void
   goTo: (n: number) => void
@@ -53,6 +55,7 @@ export function RegistroWizard() {
   const [direccion, setDireccion] = useState<DireccionForm>({ direccion: '' })
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
   const [consentBiometrico, setConsentBiometrico] = useState(false)
+  const [credenciales, setCredenciales] = useState<Credenciales | null>(null)
 
   const dirtyRef = useRef(false)
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -149,7 +152,7 @@ export function RegistroWizard() {
   const ctx: WizardCtx = {
     catalogos, form, update, candidatoId, setCandidatoId,
     direccion, setDireccion, beneficiarios, setBeneficiarios,
-    consentBiometrico, vacanteSlug, next, prev, goTo,
+    consentBiometrico, vacanteSlug, setCredenciales, next, prev, goTo,
   }
 
   return (
@@ -194,7 +197,7 @@ export function RegistroWizard() {
         {paso === 2 && <Paso2Formulario ctx={ctx} />}
         {paso === 3 && <Paso3Documentos ctx={ctx} />}
         {paso === 4 && <Paso4Revision ctx={ctx} />}
-        {paso === 5 && <Paso5Envio candidatoId={candidatoId} consentBiometrico={consentBiometrico} />}
+        {paso === 5 && <Paso5Envio candidatoId={candidatoId} consentBiometrico={consentBiometrico} credenciales={credenciales} />}
       </div>
 
       {paso < 5 && (

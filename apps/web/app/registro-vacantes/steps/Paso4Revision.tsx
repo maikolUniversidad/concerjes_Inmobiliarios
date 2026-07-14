@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { Loader2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 import type { WizardCtx } from '../RegistroWizard'
-import { registrarConsentimientos, enviarPostulacion, guardarCandidato } from '@/lib/registro/datos'
+import { registrarConsentimientos, enviarPostulacion, guardarCandidato, crearCuentaAcceso } from '@/lib/registro/datos'
 import { VERSION_CONSENTIMIENTOS, hashTexto } from '@/lib/registro/consentimientos'
 
 const DECLARACIONES = [
@@ -16,7 +16,7 @@ const DECLARACIONES = [
 ]
 
 export function Paso4Revision({ ctx }: { ctx: WizardCtx }) {
-  const { form, candidatoId, direccion, catalogos, vacanteSlug, goTo, prev } = ctx
+  const { form, candidatoId, direccion, catalogos, vacanteSlug, setCredenciales, goTo, prev } = ctx
   const [marcadas, setMarcadas] = useState<Record<string, boolean>>({})
   const [enviando, setEnviando] = useState(false)
 
@@ -41,6 +41,10 @@ export function Paso4Revision({ ctx }: { ctx: WizardCtx }) {
       void vacanteSlug
       const err = await enviarPostulacion(candidatoId, null)
       if (err) { toast.error(err); return }
+      // Crea la cuenta de acceso (sesión anónima → permanente), ligada a su info.
+      const cuenta = await crearCuentaAcceso()
+      if (cuenta.credenciales) setCredenciales(cuenta.credenciales)
+      else if (cuenta.error && !cuenta.yaExiste) console.warn('crear-cuenta:', cuenta.error)
       goTo(5)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'No se pudo enviar.')

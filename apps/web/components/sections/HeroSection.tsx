@@ -62,20 +62,12 @@ export function HeroSection() {
           </ul>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row flex-wrap gap-4">
+          <div className="flex flex-col sm:flex-row gap-4">
             <Link
               href="/contacto"
               className="inline-flex items-center justify-center gap-2.5 bg-white text-brand-green font-body font-bold text-base px-8 py-4 rounded-xl hover:bg-green-50 transition-all duration-200 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 group"
             >
               Solicitar cotización
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
-            <Link
-              href="/registro-vacantes"
-              className="inline-flex items-center justify-center gap-2.5 bg-brand-orange text-white font-body font-bold text-base px-8 py-4 rounded-xl hover:bg-brand-orange-light transition-all duration-200 shadow-xl hover:shadow-2xl hover:-translate-y-0.5 group"
-            >
-              <Briefcase className="w-5 h-5" />
-              Trabaja con nosotros
               <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
             </Link>
             <Link
@@ -85,6 +77,19 @@ export function HeroSection() {
               Ver servicios
             </Link>
           </div>
+
+          {/* Link libre — Trabaja con nosotros (empleo) */}
+          <p className="mt-6 text-green-100/90 font-body text-base">
+            <Briefcase className="mr-1.5 inline h-4 w-4 align-[-2px]" />
+            ¿Buscas empleo?{' '}
+            <Link href="/registro-vacantes" className="font-semibold text-white underline underline-offset-4 hover:text-green-200">
+              Trabaja con nosotros
+            </Link>
+            {' · '}
+            <Link href="/ingresar" className="text-white/80 underline underline-offset-4 hover:text-white">
+              Ya me registré
+            </Link>
+          </p>
         </div>
       </div>
 

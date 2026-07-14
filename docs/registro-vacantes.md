@@ -42,6 +42,29 @@ No están aplicadas todavía. Con la conexión del proyecto (ver memoria
 supabase db push            # o aplicar los .sql por orden de nombre
 ```
 
+### Cuenta de plataforma + login (candidato)
+Al terminar el registro, la **sesión anónima se convierte en cuenta permanente**
+(`/api/registro/crear-cuenta`, service role `admin.updateUserById` — mismo
+`auth.uid`, así toda la info queda ligada). El trigger `handle_new_user` ya había
+creado su fila `usuarios` (rol AUDITOR); se le fija correo/nombre/contraseña.
+Credenciales: usuario = correo de contacto o `<documento>@aspirante.conserjesinmobiliarios.com`;
+contraseña = número de documento. Se muestran en la pantalla final.
+
+Login en **`/ingresar`** (apps/web): documento (o correo) + contraseña
+(`resolver-email` traduce documento→correo, luego `signInWithPassword`), **o**
+reconocimiento facial (`/api/registro/facial/login`, env-gated: identify+liveness
+→ 1:N → magic link → `verifyOtp`; sin microservicio cae al documento). Al ingresar
+reanuda `/registro-vacantes` con sus datos.
+
+> ⚠️ FIX de seguridad `20240115000000_registro_vacantes_fix_rls.sql`: como el
+> trigger asigna rol AUDITOR a las sesiones anónimas, las políticas que usaban
+> `auth_rol() IS NOT NULL` como "personal" se cambiaron a la lista explícita
+> `('SUPER_ADMIN','ADMIN','SUPERVISOR')`. **Aplicar esta migración.**
+
+### Entrada desde la landing
+Link libre en el Hero: "¿Buscas empleo? **Trabaja con nosotros** · Ya me registré"
+(→ `/registro-vacantes` y `/ingresar`). Sin botones grandes.
+
 ### Frontend (`apps/web`)
 - `/registro-vacantes` — wizard de 6 pasos, mobile-first, español simple,
   **guardado parcial y reanudable** (autosave con rebote + reanudar por sesión).

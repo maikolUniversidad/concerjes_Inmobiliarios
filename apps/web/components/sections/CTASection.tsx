@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowRight, Phone, Mail, Briefcase } from 'lucide-react'
+import { ArrowRight, Phone, Mail } from 'lucide-react'
 
 export function CTASection() {
   return (
@@ -45,21 +45,6 @@ export function CTASection() {
               </svg>
               WhatsApp directo
             </a>
-          </div>
-
-          {/* Trabaja con nosotros */}
-          <div className="mb-12 flex flex-col items-center gap-3 rounded-2xl border border-white/20 bg-white/10 p-6 backdrop-blur-sm">
-            <p className="font-body text-lg font-semibold text-white">
-              ¿Buscas empleo? Únete a nuestro equipo
-            </p>
-            <Link
-              href="/registro-vacantes"
-              className="inline-flex items-center justify-center gap-2.5 bg-brand-orange text-white font-body font-bold text-base px-8 py-4 rounded-xl hover:bg-brand-orange-light transition-all duration-200 shadow-xl group"
-            >
-              <Briefcase className="w-5 h-5" />
-              Trabaja con nosotros
-              <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-            </Link>
           </div>
 
           {/* Contact chips */}

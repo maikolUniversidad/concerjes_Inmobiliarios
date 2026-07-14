@@ -2,15 +2,17 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, ScanFace, Check } from 'lucide-react'
+import { CheckCircle2, ScanFace, Check, KeyRound, Copy } from 'lucide-react'
 import { toast } from 'sonner'
 import { CapturaFacial, type ResultadoFacial } from '../CapturaFacial'
+import type { Credenciales } from '@/lib/registro/datos'
 
 export function Paso5Envio({
-  candidatoId, consentBiometrico,
+  candidatoId, consentBiometrico, credenciales,
 }: {
   candidatoId?: string | null
   consentBiometrico?: boolean
+  credenciales?: Credenciales | null
 }) {
   const [camara, setCamara] = useState(false)
   const [enrolado, setEnrolado] = useState(false)
@@ -34,6 +36,32 @@ export function Paso5Envio({
         Recibimos tu hoja de vida. Nuestro equipo de Recursos Humanos la revisará y te
         contactará por <strong>correo</strong> o <strong>WhatsApp</strong> si continúas en el proceso.
       </p>
+
+      {/* Credenciales de acceso a la plataforma */}
+      {credenciales && (
+        <div className="w-full max-w-sm rounded-xl border border-brand-green/30 bg-brand-green/5 p-4 text-left">
+          <p className="flex items-center gap-2 text-sm font-semibold text-brand-green">
+            <KeyRound className="h-4 w-4" /> Tu acceso a la plataforma
+          </p>
+          <p className="mt-1 text-xs text-gray-500">
+            Con esto puedes volver a ingresar desde cualquier dispositivo para ver tu estado y actualizar tus datos.
+          </p>
+          <div className="mt-3 space-y-1 font-mono text-sm text-gray-800">
+            <p><span className="text-gray-500">Usuario:</span> {credenciales.login_email}</p>
+            <p><span className="text-gray-500">Contraseña:</span> {credenciales.password}</p>
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard?.writeText(`Usuario: ${credenciales.login_email}\nContraseña: ${credenciales.password}`)
+              toast.success('Credenciales copiadas.')
+            }}
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg border border-brand-green/40 bg-white px-3 py-1.5 text-xs font-semibold text-brand-green hover:bg-brand-green/5"
+          >
+            <Copy className="h-3.5 w-3.5" /> Copiar
+          </button>
+          <p className="mt-2 text-[11px] text-amber-600">Guárdalas. Tu contraseña es tu número de documento.</p>
+        </div>
+      )}
 
       {/* Enrolamiento facial opcional (solo si autorizó el biométrico) */}
       {consentBiometrico && candidatoId && (

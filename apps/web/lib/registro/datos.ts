@@ -190,6 +190,25 @@ export async function registrarConsentimientos(
   )
 }
 
+export interface Credenciales { login_email: string; password: string }
+
+/**
+ * Convierte la sesión anónima en una cuenta permanente de la plataforma.
+ * Devuelve las credenciales para mostrar al candidato, o un error.
+ */
+export async function crearCuentaAcceso(): Promise<{ credenciales?: Credenciales; yaExiste?: boolean; error?: string }> {
+  await ensureAnonSession()
+  const sb = getSupabase()
+  const { data: s } = await sb.auth.getSession()
+  const res = await fetch('/api/registro/crear-cuenta', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${s.session?.access_token ?? ''}` },
+  })
+  const j = await res.json()
+  if (!res.ok) return { yaExiste: j.yaExiste, error: j.error }
+  return { credenciales: { login_email: j.login_email, password: j.password } }
+}
+
 /** Marca el candidato como POSTULADO (Paso 5). Crea la postulación. */
 export async function enviarPostulacion(candidatoId: string, vacanteId?: string | null): Promise<string | null> {
   const sb = getSupabase()
