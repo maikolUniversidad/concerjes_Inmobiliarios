@@ -100,23 +100,38 @@ function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
 
 // ─── Marca de agua viva (se mueve con la fecha/hora) ────────────────────────────
 
+const WM_COLORS = ['#ef4444', '#f59e0b', '#22c55e', '#06b6d4', '#3b82f6', '#a855f7', '#ec4899']
+
 function Watermark() {
   const [reloj, setReloj] = useState(ahora())
-  const [pos, setPos] = useState({ top: 40, left: 30 })
+  const [pos, setPos] = useState({ top: 40, left: 25 })
+  const [ci, setCi] = useState(0)
 
   useEffect(() => {
     const t = setInterval(() => setReloj(ahora()), 1000)
     const m = setInterval(() => {
-      setPos({ top: 8 + Math.random() * 70, left: 4 + Math.random() * 52 })
-    }, 2200)
-    return () => { clearInterval(t); clearInterval(m) }
+      setPos({ top: 8 + Math.random() * 72, left: 4 + Math.random() * 46 })
+    }, 2000)
+    const c = setInterval(() => setCi((i) => (i + 1) % WM_COLORS.length), 300)
+    return () => { clearInterval(t); clearInterval(m); clearInterval(c) }
   }, [])
 
+  // z-40: por encima de las caras y del botón de girar. pointer-events-none
+  // deja pasar los toques al carnet.
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden rounded-3xl">
+    <div className="pointer-events-none absolute inset-0 z-40 overflow-hidden rounded-3xl">
+      <style>{`@keyframes carnetBlink{0%,44%{opacity:1}56%,100%{opacity:.12}}`}</style>
       <div
-        className="absolute whitespace-nowrap font-body text-[11px] font-bold uppercase tracking-wider text-brand-green/25 transition-all duration-1000 ease-in-out select-none"
-        style={{ top: `${pos.top}%`, left: `${pos.left}%`, transform: 'rotate(-18deg)' }}
+        className="absolute whitespace-nowrap font-heading font-extrabold uppercase tracking-wider transition-[top,left] duration-1000 ease-in-out select-none"
+        style={{
+          top: `${pos.top}%`,
+          left: `${pos.left}%`,
+          transform: 'rotate(-16deg)',
+          color: WM_COLORS[ci],
+          fontSize: '15px',
+          textShadow: '0 0 3px rgba(0,0,0,.6), 0 0 7px rgba(255,255,255,.6)',
+          animation: 'carnetBlink .7s steps(1,end) infinite',
+        }}
       >
         Conserjes · {reloj}
       </div>
