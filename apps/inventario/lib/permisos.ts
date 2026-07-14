@@ -86,6 +86,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_documentos_rrhh',       label: 'Ver documentos de personas' },
       { key: 'gestionar_documentos_rrhh', label: 'Subir / eliminar documentos' },
       { key: 'gestionar_tipos_documentales', label: 'Gestionar árbol de tipos documentales' },
+      { key: 'ver_postulaciones',         label: 'Ver postulaciones (registro de vacantes)' },
+      { key: 'gestionar_postulaciones',   label: 'Gestionar postulaciones y verificar documentos' },
     ],
   },
   {

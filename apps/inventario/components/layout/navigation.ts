@@ -80,8 +80,9 @@ export const navigation: NavModule[] = [
     title: 'Gestión Humana',
     icon: Briefcase,
     items: [
-      { label: 'Personas',   href: '/gestion-humana/personas',   icon: Contact, permiso: 'ver_personas' },
-      { label: 'Documentos', href: '/gestion-humana/documentos', icon: FolderTree, permiso: 'ver_documentos_rrhh' },
+      { label: 'Personas',      href: '/gestion-humana/personas',      icon: Contact, permiso: 'ver_personas' },
+      { label: 'Postulaciones', href: '/gestion-humana/postulaciones', icon: ClipboardList, permiso: 'ver_postulaciones' },
+      { label: 'Documentos',    href: '/gestion-humana/documentos',    icon: FolderTree, permiso: 'ver_documentos_rrhh' },
     ],
   },
   {

@@ -11,6 +11,7 @@ const navLinks = [
   { label: 'Servicios', href: '/servicios' },
   { label: 'Nosotros', href: '/nosotros' },
   { label: 'Seguridad y Salud', href: '/seguridad-salud' },
+  { label: 'Trabaja con nosotros', href: '/registro-vacantes' },
   { label: 'Contacto', href: '/contacto' },
 ]
 
