@@ -1,7 +1,4 @@
--- =============================================================================
--- Conserjes Inmobiliarios — PARTE 3 · Gestion Humana, SKU, Bodegas, OC, Movimientos
--- Idempotente. Corre este bloque COMPLETO en el SQL Editor y avísame el resultado.
--- =============================================================================
+-- Conserjes Inmobiliarios — PARTE 3 (idempotente)
 
 
 -- >>>>>>>>>>>>>>>>>>>> 20240106000000_gestion_humana.sql >>>>>>>>>>>>>>>>>>>>
@@ -247,6 +244,10 @@ CREATE INDEX IF NOT EXISTS idx_producto_fotos_producto ON public.producto_fotos 
 
 ALTER TABLE public.producto_fotos ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS "fotos_select" ON public.producto_fotos;
+DROP POLICY IF EXISTS "fotos_insert" ON public.producto_fotos;
+DROP POLICY IF EXISTS "fotos_update" ON public.producto_fotos;
+DROP POLICY IF EXISTS "fotos_delete" ON public.producto_fotos;
 CREATE POLICY "fotos_select" ON public.producto_fotos FOR SELECT TO authenticated USING (true);
 CREATE POLICY "fotos_insert" ON public.producto_fotos FOR INSERT TO authenticated WITH CHECK (true);
 CREATE POLICY "fotos_update" ON public.producto_fotos FOR UPDATE TO authenticated USING (true);

@@ -1,7 +1,4 @@
--- =============================================================================
--- Conserjes Inmobiliarios — PARTE 4 · Planos, Personas, Integraciones, Parametrizacion, Correo
--- Idempotente. Corre este bloque COMPLETO en el SQL Editor y avísame el resultado.
--- =============================================================================
+-- Conserjes Inmobiliarios — PARTE 4 (idempotente)
 
 
 -- >>>>>>>>>>>>>>>>>>>> 20240110000000_bodega_planos.sql >>>>>>>>>>>>>>>>>>>>
@@ -164,10 +161,19 @@ WHERE p.usuario_id IS NULL
   AND NOT EXISTS (SELECT 1 FROM public.personas p2 WHERE p2.usuario_id = u.id);
 
 -- ── 2) Renombrar el Supervisor existente → orientado a conserjería ───────────
--- Idempotente: si ya se renombró, el UPDATE no afecta filas.
-UPDATE public.roles
-SET nombre = 'Supervisor de Conserjería'
-WHERE nombre = 'Supervisor';
+-- Idempotente y a prueba de re-ejecución: si "Supervisor de Conserjería" ya
+-- existe (renombrado en una corrida previa) y perfil_roles_seed re-creó el
+-- "Supervisor" base, elimina el duplicado (si nadie lo usa) en vez de renombrar.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.roles WHERE nombre = 'Supervisor de Conserjería') THEN
+    DELETE FROM public.roles
+    WHERE nombre = 'Supervisor'
+      AND id NOT IN (SELECT rol_id FROM public.usuarios WHERE rol_id IS NOT NULL);
+  ELSE
+    UPDATE public.roles SET nombre = 'Supervisor de Conserjería' WHERE nombre = 'Supervisor';
+  END IF;
+END $$;
 
 -- ── 3) Roles de conserjería (seed idempotente) ───────────────────────────────
 -- Las claves de permisos coinciden con el catálogo de /roles (lib/permisos.ts),
