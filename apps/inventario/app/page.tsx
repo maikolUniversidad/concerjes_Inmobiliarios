@@ -5,7 +5,7 @@ import {
   Phone, Mail, MapPin, ArrowRight, CheckCircle2,
   Coffee, Sparkles, ChevronRight, Facebook,
   HeartPulse, HardHat, ClipboardCheck, BookOpen,
-  FileText, Download, ImageIcon,
+  FileText, Download, ImageIcon, Briefcase,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 
@@ -79,11 +79,18 @@ export default async function LandingPage() {
               <a key={h} href={h} className="font-body text-gray-600 hover:text-brand-green transition-colors">{l}</a>
             ))}
           </div>
-          <Link href="/login" className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2.5 rounded-xl hover:bg-brand-green-dark transition-colors shadow-sm shrink-0">
-            <span className="hidden sm:inline">Plataforma interna</span>
-            <span className="sm:hidden">Ingresar</span>
-            <ArrowRight className="w-3.5 h-3.5" />
-          </Link>
+          <div className="flex items-center gap-2 shrink-0">
+            <Link href="/registro-vacantes" className="flex items-center gap-2 border border-brand-green text-brand-green font-body font-semibold text-sm px-4 py-2.5 rounded-xl hover:bg-brand-green/5 transition-colors">
+              <Briefcase className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Trabaja con nosotros</span>
+              <span className="sm:hidden">Empleo</span>
+            </Link>
+            <Link href="/login" className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2.5 rounded-xl hover:bg-brand-green-dark transition-colors shadow-sm">
+              <span className="hidden sm:inline">Plataforma interna</span>
+              <span className="sm:hidden">Ingresar</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
         </div>
       </nav>
 
@@ -107,10 +114,15 @@ export default async function LandingPage() {
                 saneamiento y cafetería — creando valor a través de una gestión eficiente del
                 talento humano con productos amigables con el medio ambiente.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 mb-10">
+              <div className="flex flex-col sm:flex-row flex-wrap gap-3 mb-6">
                 <a href="#contacto" className="inline-flex items-center justify-center gap-2 bg-white text-brand-green font-body font-bold text-base px-7 py-3.5 rounded-2xl hover:bg-green-50 transition-all shadow-xl hover:-translate-y-0.5 duration-200">Contáctenos ahora</a>
+                <Link href="/registro-vacantes" className="inline-flex items-center justify-center gap-2 bg-brand-orange text-white font-body font-bold text-base px-7 py-3.5 rounded-2xl hover:bg-brand-orange-light transition-all shadow-xl hover:-translate-y-0.5 duration-200"><Briefcase className="w-4 h-4" /> Trabaja con nosotros</Link>
                 <a href="#servicios" className="inline-flex items-center justify-center gap-2 border border-white/30 text-white font-body font-semibold text-base px-7 py-3.5 rounded-2xl hover:bg-white/10 transition-all">Ver servicios <ChevronRight className="w-4 h-4" /></a>
               </div>
+              <p className="font-body text-sm text-green-100/90 mb-10">
+                ¿Ya te registraste?{' '}
+                <Link href="/ingresar" className="font-semibold text-white underline underline-offset-4 hover:text-green-200">Ingresa aquí</Link>
+              </p>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {['Fundados en 1990 · +34 años','Más de 1.000 colaboradores','Insumos biodegradables','SG-SST implementado','Contratos con entidades del Estado','Cobertura en toda Colombia'].map(v => (
                   <div key={v} className="flex items-center gap-2">

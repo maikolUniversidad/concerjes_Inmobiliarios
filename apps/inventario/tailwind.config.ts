@@ -11,8 +11,8 @@ const config: Config = {
     extend: {
       colors: {
         brand: {
-          green: { DEFAULT: '#2E7D32', dark: '#1B5E20', mid: '#388E3C', light: '#4CAF50' },
-          orange: { DEFAULT: '#F57C00' },
+          green: { DEFAULT: '#2E7D32', dark: '#1B5E20', mid: '#388E3C', light: '#4CAF50', pale: '#A5D6A7', bg: '#F1F8E9' },
+          orange: { DEFAULT: '#F57C00', light: '#FFB74D' },
         },
         sidebar: {
           DEFAULT: '#1B5E20',

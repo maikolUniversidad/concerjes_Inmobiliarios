@@ -23,8 +23,14 @@ export async function middleware(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const isAuthRoute   = request.nextUrl.pathname.startsWith('/login')
-  const isPublicRoute = request.nextUrl.pathname === '/' || request.nextUrl.pathname.startsWith('/api')
+  const path = request.nextUrl.pathname
+  const isAuthRoute   = path.startsWith('/login')
+  // Rutas públicas: landing, APIs y el flujo público de Registro de Vacantes.
+  const isPublicRoute =
+    path === '/' ||
+    path.startsWith('/api') ||
+    path.startsWith('/registro-vacantes') ||
+    path.startsWith('/ingresar')
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone()
