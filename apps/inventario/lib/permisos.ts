@@ -39,6 +39,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'editar_aprovisionamiento', label: 'Editar plan de compras' },
       { key: 'ver_contratos',            label: 'Ver contratos / sedes' },
       { key: 'editar_contratos',         label: 'Editar contratos / sedes' },
+      { key: 'ver_parametrizacion',      label: 'Ver parametrización por sede' },
+      { key: 'gestionar_parametrizacion', label: 'Gestionar parametrización por sede' },
       { key: 'ver_proveedores',          label: 'Ver proveedores' },
       { key: 'editar_proveedores',       label: 'Editar proveedores' },
       { key: 'ver_ordenes_compra',       label: 'Ver órdenes de compra' },

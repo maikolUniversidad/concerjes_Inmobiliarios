@@ -3,7 +3,7 @@ import {
   FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode,
-  Briefcase, Contact, FolderTree, Scale, IdCard, type LucideIcon,
+  Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -67,6 +67,7 @@ export const navigation: NavModule[] = [
     items: [
       { label: 'Aprovisionamiento', href: '/aprovisionamiento', icon: Warehouse, permiso: 'ver_aprovisionamiento' },
       { label: 'Contratos/Sedes',   href: '/contratos',         icon: FileText, permiso: 'ver_contratos' },
+      { label: 'Parametrización',   href: '/parametrizacion',   icon: SlidersHorizontal, permiso: 'ver_parametrizacion' },
       { label: 'Proveedores',       href: '/proveedores',       icon: Truck, permiso: 'ver_proveedores' },
       { label: 'Comparar Precios',  href: '/comparador-precios', icon: Scale, permiso: 'ver_proveedores' },
       { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText, permiso: 'ver_ordenes_compra' },

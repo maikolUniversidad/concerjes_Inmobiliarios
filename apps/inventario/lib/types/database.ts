@@ -197,6 +197,23 @@ export interface Usuario {
   sede?: Sede
 }
 
+export interface SedeProducto {
+  id: string
+  sede_id: string
+  producto_id: string
+  cantidad_maxima: number
+  cantidad_minima: number | null
+  activo: boolean
+  observacion: string | null
+  contrato_id: string | null
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  // relations
+  producto?: Producto
+  sede?: Sede
+}
+
 export interface PrecioProveedor {
   id: string
   producto_id: string
@@ -492,6 +509,7 @@ export type Database = {
       grupos_contrato: { Row: GrupoContratoRow; Insert: Partial<GrupoContratoRow>; Update: Partial<GrupoContratoRow> }
       sedes: { Row: Sede; Insert: Partial<Sede>; Update: Partial<Sede> }
       pedidos_sede: { Row: PedidoSede; Insert: Partial<PedidoSede>; Update: Partial<PedidoSede> }
+      sede_productos: { Row: SedeProducto; Insert: Partial<SedeProducto>; Update: Partial<SedeProducto> }
       rotacion: { Row: Rotacion; Insert: Partial<Rotacion>; Update: Partial<Rotacion> }
       aprovisionamiento: { Row: Aprovisionamiento; Insert: Partial<Aprovisionamiento>; Update: Partial<Aprovisionamiento> }
       ordenes_compra: { Row: OrdenCompra; Insert: Partial<OrdenCompra>; Update: Partial<OrdenCompra> }
