@@ -3,10 +3,11 @@
 import { useActionState, useEffect, useState, useTransition } from 'react'
 import { useFormStatus } from 'react-dom'
 import { toast } from 'sonner'
+import Link from 'next/link'
 import {
-  Mail, Send, Inbox, Save, Loader2, CheckCircle2, AlertCircle, RefreshCw, Plug, ShieldCheck,
+  Mail, Send, Inbox, Save, Loader2, CheckCircle2, AlertCircle, RefreshCw, Plug, ShieldCheck, BellRing,
 } from 'lucide-react'
-import { guardarCorreo, probarConexion, enviarPrueba, leerBandeja, type ActionResult, type MensajeBandeja } from '../actions'
+import { guardarCorreo, probarConexion, enviarPrueba, leerBandeja, procesarPendientes, type ActionResult, type MensajeBandeja } from '../actions'
 
 export interface CorreoDefaults {
   nombre: string; from_nombre: string; from_email: string
@@ -36,13 +37,22 @@ function SaveBtn() {
   )
 }
 
-export function CorreoForm({ defaults: d }: { defaults: CorreoDefaults }) {
+export function CorreoForm({ defaults: d, pendientes }: { defaults: CorreoDefaults; pendientes: number }) {
   const [state, action] = useActionState<ActionResult, FormData>(guardarCorreo, {})
   const [smtp, setSmtp] = useState({ host: d.smtp_host, port: d.smtp_port, secure: d.smtp_secure })
   const [imap, setImap] = useState({ host: d.imap_host, port: d.imap_port, secure: d.imap_secure })
   const [probando, startProbar] = useTransition()
   const [bandeja, setBandeja] = useState<MensajeBandeja[] | null>(null)
   const [cargandoBandeja, startBandeja] = useTransition()
+  const [procesando, startProcesar] = useTransition()
+
+  function enviarPendientes() {
+    startProcesar(async () => {
+      const r = await procesarPendientes()
+      if (r.error) toast.error(r.error)
+      else toast.success(`Enviados: ${r.enviados ?? 0}${r.errores ? ` · con ${r.errores} error(es)` : ''}`)
+    })
+  }
 
   useEffect(() => {
     if (state.ok) toast.success('Configuración guardada')
@@ -175,6 +185,29 @@ export function CorreoForm({ defaults: d }: { defaults: CorreoDefaults }) {
           <span className="font-body text-xs text-gray-400">Las credenciales quedan protegidas con acceso solo para administradores.</span>
         </div>
       </form>
+
+      {/* Alertas por correo */}
+      <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2">
+            <BellRing className="w-4 h-4 text-brand-green" />
+            <h2 className="font-heading font-semibold text-base text-gray-900">Alertas por correo</h2>
+          </div>
+          <button onClick={enviarPendientes} disabled={procesando || !d.configurado}
+            className="flex items-center gap-1.5 border border-gray-200 rounded-xl px-3 py-2 font-body text-xs text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+            {procesando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />} Enviar pendientes {pendientes > 0 ? `(${pendientes})` : ''}
+          </button>
+        </div>
+        <p className="font-body text-sm text-gray-500 mt-2">
+          Las alertas del sistema con <strong>“Enviar email”</strong> activado se encolan aquí y se envían automáticamente (cada pocos minutos) con esta cuenta.
+          Actívalo por alerta en <Link href="/configuracion/alertas" className="text-brand-green font-semibold hover:underline">Configuración de alertas</Link>.
+        </p>
+        {pendientes > 0 && (
+          <p className="font-body text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mt-2 inline-block">
+            {pendientes} correo(s) pendiente(s) de envío.
+          </p>
+        )}
+      </div>
 
       {/* Enviar prueba */}
       <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">

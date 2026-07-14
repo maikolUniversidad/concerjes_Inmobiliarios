@@ -11,7 +11,10 @@ export const revalidate = 0
 export default async function CorreoIntegracionPage() {
   await requirePermiso('gestionar_integraciones')
   const supabase = await createClient()
-  const { data } = await supabase.from('integraciones_correo').select('*').limit(1).maybeSingle()
+  const [{ data }, { count: pendientes }] = await Promise.all([
+    supabase.from('integraciones_correo').select('*').limit(1).maybeSingle(),
+    supabase.from('correo_saliente').select('id', { count: 'exact', head: true }).eq('estado', 'PENDIENTE'),
+  ])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const c = data as any
 
@@ -50,7 +53,7 @@ export default async function CorreoIntegracionPage() {
         </p>
       </div>
 
-      <CorreoForm defaults={defaults} />
+      <CorreoForm defaults={defaults} pendientes={pendientes ?? 0} />
     </div>
   )
 }

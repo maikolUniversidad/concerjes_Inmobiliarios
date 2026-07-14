@@ -89,7 +89,7 @@ function ReglaCard({ regla, esAdmin }: { regla: ReglaAlerta; esAdmin: boolean })
                   <input type="checkbox" name="canal_app" defaultChecked={regla.canal_app} className="rounded border-gray-300 text-[#2E7D32] focus:ring-[#2E7D32]" />
                   Notificar en la app
                 </label>
-                <label className="flex items-center gap-2 font-body text-xs text-gray-400" title="Disponible próximamente">
+                <label className="flex items-center gap-2 font-body text-xs text-gray-700" title="Requiere la integración de correo configurada">
                   <input type="checkbox" name="canal_email" defaultChecked={regla.canal_email} className="rounded border-gray-300 text-[#2E7D32] focus:ring-[#2E7D32]" />
                   Enviar email
                 </label>

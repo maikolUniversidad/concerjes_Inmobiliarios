@@ -5,6 +5,7 @@ import { ImapFlow } from 'imapflow'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
+import { procesarCorreoSaliente } from '@/lib/email/procesar'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -126,6 +127,16 @@ export async function enviarPrueba(_prev: ActionResult, formData: FormData): Pro
   } catch (e) {
     return { error: 'No se pudo enviar: ' + (e instanceof Error ? e.message : 'error') }
   }
+}
+
+/** Envía manualmente los correos pendientes del buzón (alertas por email). */
+export async function procesarPendientes(): Promise<{ ok?: boolean; error?: string; enviados?: number; errores?: number }> {
+  const { supabase, user } = await auth()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const res = await procesarCorreoSaliente(supabase, 50)
+  if (res.sinConfig) return { error: 'Configura y activa el envío (SMTP) primero.' }
+  revalidatePath('/integraciones/correo')
+  return { ok: true, enviados: res.enviados, errores: res.errores }
 }
 
 export interface MensajeBandeja {
