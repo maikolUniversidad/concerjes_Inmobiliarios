@@ -74,10 +74,21 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'No se pudo crear tu cuenta: ' + error.message }, { status: 500 })
   }
 
-  // 2) Completa la fila usuarios (creada por el trigger) con datos de contacto.
+  // 2) Completa la fila usuarios (creada por el trigger) con datos de contacto
+  //    y le asigna el rol "Aspirante" (mínimo privilegio).
+  //    OJO: NO se usa "Conserje" aquí — su rol_base es OPERADOR_SEDE y, vía el
+  //    trigger sync_usuario_rol, daría a un candidato sin verificar permiso RLS
+  //    para escribir en movimientos/pedidos_sede. RRHH lo promueve al contratar.
+  const { data: rolAspirante } = await admin
+    .from('roles').select('id').eq('nombre', 'Aspirante').maybeSingle()
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   await (admin as any).from('usuarios').update({
-    nombre, email: loginEmail, telefono: c.celular ?? null, activo: true,
+    nombre,
+    email: loginEmail,
+    telefono: c.celular ?? null,
+    activo: true,
+    ...(rolAspirante ? { rol_id: (rolAspirante as { id: string }).id } : {}),
   }).eq('id', uid)
 
   await admin.from('vac_auditoria').insert({

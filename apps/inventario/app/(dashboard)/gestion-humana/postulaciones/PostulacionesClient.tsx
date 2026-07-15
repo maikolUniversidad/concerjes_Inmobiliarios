@@ -21,6 +21,7 @@ export interface TipoDoc {
   id: string; codigo: string; nombre: string; grupo: string
   obligatorio: boolean; min_archivos: number; max_archivos: number; ola: number
 }
+export interface RolOpcion { id: string; nombre: string; rol_base: string | null }
 
 interface Props {
   candidatos: CandidatoRow[]
@@ -31,6 +32,7 @@ interface Props {
   municipios: Muni[]
   vacantes: VacanteRow[]
   tipos: TipoDoc[]
+  roles: RolOpcion[]
 }
 
 export function PostulacionesClient(props: Props) {
@@ -151,6 +153,7 @@ export function PostulacionesClient(props: Props) {
           puedeGestionar={puedeGestionar}
           vacantes={props.vacantes}
           tipos={props.tipos}
+          roles={props.roles}
           postulacion={props.postulaciones.find((p) => p.candidato_id === abierto.id) ?? null}
           cargoMap={cargoMap}
           epsMap={epsMap}

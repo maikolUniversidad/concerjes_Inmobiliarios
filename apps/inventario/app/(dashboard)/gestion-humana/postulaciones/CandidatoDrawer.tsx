@@ -2,13 +2,13 @@
 
 import { useEffect, useState } from 'react'
 import {
-  X, Loader2, FileText, Eye, Check, Ban, ExternalLink, Briefcase, ShieldCheck, IdCard, Sparkles, AlertTriangle,
+  X, Loader2, FileText, Eye, Check, Ban, ExternalLink, Briefcase, ShieldCheck, IdCard, Sparkles, AlertTriangle, KeyRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { ESTADOS, estadoMeta, DOC_ESTADO } from './estados'
-import type { CandidatoRow, PostulacionRow, VacanteRow, TipoDoc } from './PostulacionesClient'
+import type { CandidatoRow, PostulacionRow, VacanteRow, TipoDoc, RolOpcion } from './PostulacionesClient'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 interface DocFull {
@@ -48,6 +48,7 @@ interface Props {
   puedeGestionar: boolean
   vacantes: VacanteRow[]
   tipos: TipoDoc[]
+  roles: RolOpcion[]
   postulacion: PostulacionRow | null
   cargoMap: Map<string, string>
   epsMap: Map<string, string>
@@ -57,7 +58,7 @@ interface Props {
 }
 
 export function CandidatoDrawer({
-  candidato, puedeGestionar, vacantes, tipos, postulacion, cargoMap, epsMap, muniMap, onClose, onActualizado,
+  candidato, puedeGestionar, vacantes, tipos, roles, postulacion, cargoMap, epsMap, muniMap, onClose, onActualizado,
 }: Props) {
   const [sb] = useState<any>(() => createClient())
   const [docs, setDocs] = useState<DocFull[]>([])
@@ -69,6 +70,8 @@ export function CandidatoDrawer({
   const [guardando, setGuardando] = useState(false)
   const [analizando, setAnalizando] = useState<string | null>(null)
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
+  const [rolId, setRolId] = useState<string>('')
+  const [rolCargado, setRolCargado] = useState(false)
 
   const tipoMap = new Map(tipos.map((t) => [t.id, t]))
 
@@ -84,6 +87,12 @@ export function CandidatoDrawer({
       setDocs(d.data ?? []); setConsents(c.data ?? []); setDireccion(dir.data ?? null)
       setCargando(false)
 
+      // Rol de la cuenta de plataforma del candidato (si ya terminó su registro)
+      if (candidato.auth_uid) {
+        const { data: u } = await sb.from('usuarios').select('rol_id').eq('id', candidato.auth_uid).maybeSingle()
+        if (vivo) { setRolId(u?.rol_id ?? ''); setRolCargado(true) }
+      }
+
       // Foto de perfil (bucket privado → URL firmada de vida corta)
       if (candidato.foto_perfil_path) {
         const { data: f } = await sb.storage
@@ -93,7 +102,20 @@ export function CandidatoDrawer({
       }
     })()
     return () => { vivo = false }
-  }, [candidato.id, candidato.foto_perfil_path, sb])
+  }, [candidato.id, candidato.foto_perfil_path, candidato.auth_uid, sb])
+
+  async function guardarRol() {
+    setGuardando(true)
+    try {
+      const res = await fetch('/api/gestion-humana/postulaciones/rol', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidato_id: candidato.id, rol_id: rolId || null }),
+      })
+      const j = await res.json()
+      if (!res.ok) { toast.error(j.error ?? 'No se pudo cambiar el rol.'); return }
+      toast.success('Rol actualizado.')
+    } finally { setGuardando(false) }
+  }
 
   async function verDoc(doc: DocFull) {
     const { data, error } = await sb.storage.from('registro-vacantes').createSignedUrl(doc.storage_path, 120)
@@ -205,6 +227,48 @@ export function CandidatoDrawer({
                   </button>
                 </div>
               </div>
+              {/* Rol de la cuenta de plataforma */}
+              <div>
+                <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-gray-600">
+                  <KeyRound className="h-3.5 w-3.5" /> Rol en la plataforma
+                </label>
+                {!candidato.auth_uid ? (
+                  <p className="rounded-lg bg-gray-100 px-3 py-2 text-xs text-gray-500">
+                    Aún no tiene cuenta (no ha terminado su registro).
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex gap-2">
+                      <select value={rolId} onChange={(e) => setRolId(e.target.value)} disabled={!rolCargado}
+                        className="flex-1 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-green disabled:opacity-50">
+                        <option value="">— Sin rol —</option>
+                        {roles.map((r) => (
+                          <option key={r.id} value={r.id}>{r.nombre}</option>
+                        ))}
+                      </select>
+                      <button onClick={guardarRol} disabled={guardando || !rolCargado}
+                        className="rounded-lg border border-brand-green px-3 py-2 text-sm font-semibold text-brand-green disabled:opacity-50">
+                        Guardar
+                      </button>
+                    </div>
+                    {(() => {
+                      const r = roles.find((x) => x.id === rolId)
+                      const operativo = r?.rol_base && !['AUDITOR'].includes(r.rol_base)
+                      return operativo ? (
+                        <p className="mt-1 flex items-start gap-1 text-[11px] text-amber-700">
+                          <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                          «{r?.nombre}» da acceso operativo real ({r?.rol_base}). Asígnalo solo si la persona ya está contratada.
+                        </p>
+                      ) : (
+                        <p className="mt-1 text-[11px] text-gray-400">
+                          «Aspirante» = solo ve y actualiza su propia hoja de vida.
+                        </p>
+                      )
+                    })()}
+                  </>
+                )}
+              </div>
+
               <div>
                 <label className="mb-1 flex items-center gap-1.5 text-xs font-semibold text-gray-600"><Briefcase className="h-3.5 w-3.5" /> Vacante (obra / cliente)</label>
                 <div className="flex gap-2">
