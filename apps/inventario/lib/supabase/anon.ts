@@ -29,8 +29,23 @@ export async function ensureAnonSession(): Promise<string> {
   if (s.session?.user) return s.session.user.id
   const { data, error } = await sb.auth.signInAnonymously()
   if (error || !data.user) {
+    // Mensajes accionables: el 422 de /auth/v1/signup casi siempre es uno de estos
+    // dos ajustes del proyecto Supabase (no es un problema de código).
+    const detalle = `${error?.message ?? ''} ${(error as { code?: string } | null)?.code ?? ''}`
+    if (/anonymous/i.test(detalle)) {
+      throw new Error(
+        'El registro anónimo está deshabilitado en Supabase. Actívalo en: Authentication → Sign In / Providers → Anonymous Sign-Ins.'
+      )
+    }
+    if (/signup|not allowed/i.test(detalle)) {
+      throw new Error(
+        'Los registros nuevos están deshabilitados en Supabase. Activa "Allow new users to sign up" en: Authentication → Sign In / Providers.'
+      )
+    }
     throw new Error(
-      'No se pudo iniciar la sesión. Verifica que el registro anónimo esté habilitado en Supabase.'
+      error?.message
+        ? `No se pudo iniciar la sesión: ${error.message}`
+        : 'No se pudo iniciar la sesión. Verifica que el registro anónimo esté habilitado en Supabase.'
     )
   }
   return data.user.id
