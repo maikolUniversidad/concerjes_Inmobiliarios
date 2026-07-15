@@ -9,6 +9,17 @@ function adminClient() {
   )
 }
 
+/** Traduce los errores de Auth a algo entendible (GoTrue a veces responde "{}"). */
+function mensajeAuth(err: { message?: string } | null): string {
+  const m = err?.message?.trim()
+  if (!m || m === '{}') {
+    return 'Auth rechazó la creación de la cuenta. Suele pasar cuando el correo ya está registrado o ya existe un perfil con ese correo.'
+  }
+  if (/already.*registered|already exists/i.test(m)) return 'Ese correo ya tiene una cuenta registrada.'
+  if (/password/i.test(m) && /short|least/i.test(m)) return 'La contraseña es demasiado corta (mínimo 6 caracteres).'
+  return m
+}
+
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
@@ -17,25 +28,36 @@ export async function POST(req: NextRequest) {
     if (!nombre || !email || !password) {
       return NextResponse.json({ error: 'nombre, email y password son obligatorios.' }, { status: 400 })
     }
+    const correo = String(email).trim()
+    const admin = adminClient()
 
-    // 1. Crear usuario en Supabase Auth
-    const { data: authData, error: authErr } = await adminClient().auth.admin.createUser({
-      email,
+    // 0. El perfil (public.usuarios) tiene UNIQUE(email). Si ya hay uno con ese
+    //    correo, el trigger on_auth_user_created falla y Auth devuelve un 500
+    //    opaco. Se valida antes para dar un mensaje claro.
+    const { data: yaExiste } = await admin.from('usuarios').select('id, email').ilike('email', correo).maybeSingle()
+    if (yaExiste) {
+      return NextResponse.json({ error: `Ya existe un usuario con el correo ${correo}.` }, { status: 400 })
+    }
+
+    // 1. Crear usuario en Supabase Auth.
+    //    El trigger `on_auth_user_created` ya inserta el perfil base en usuarios.
+    const { data: authData, error: authErr } = await admin.auth.admin.createUser({
+      email: correo,
       password,
       email_confirm: true,
       user_metadata: { nombre },
     })
     if (authErr || !authData.user) {
-      return NextResponse.json({ error: authErr?.message ?? 'Error al crear usuario en Auth.' }, { status: 400 })
+      return NextResponse.json({ error: mensajeAuth(authErr) }, { status: 400 })
     }
 
-    // 2. Insertar en tabla usuarios con el mismo UUID que Auth
-    const { data: usuario, error: dbErr } = await adminClient()
+    // 2. Completar el perfil creado por el trigger (upsert, no insert: la fila ya existe).
+    const { data: usuario, error: dbErr } = await admin
       .from('usuarios')
-      .insert({
+      .upsert({
         id: authData.user.id,
         nombre: nombre.trim(),
-        email: email.trim(),
+        email: correo,
         telefono: telefono?.trim() || null,
         // El enum `rol` lo sincroniza el trigger a partir del rol asignado.
         rol_id: rol_id || null,
@@ -43,19 +65,20 @@ export async function POST(req: NextRequest) {
         sede_id: sede_id || null,
         activo: activo ?? true,
         avatar_url: null,
-      })
+      }, { onConflict: 'id' })
       .select(`id, nombre, email, rol, rol_id, grupo_id, sede_id, activo, ultimo_acceso, created_at, avatar_url, telefono, permisos, grupos_contrato(id, codigo, nombre), roles(id, nombre, permisos)`)
       .single()
 
     if (dbErr || !usuario) {
-      // Si falla el insert, eliminar el auth user para no dejar huérfanos
-      await adminClient().auth.admin.deleteUser(authData.user.id)
-      return NextResponse.json({ error: dbErr?.message ?? 'Error al registrar usuario en BD.' }, { status: 400 })
+      // Rollback: quitar el perfil (lo pudo crear el trigger) y el usuario de Auth.
+      await admin.from('usuarios').delete().eq('id', authData.user.id)
+      await admin.auth.admin.deleteUser(authData.user.id)
+      return NextResponse.json({ error: dbErr?.message || 'Error al registrar usuario en BD.' }, { status: 400 })
     }
 
     return NextResponse.json({ usuario }, { status: 201 })
   } catch (e) {
-    return NextResponse.json({ error: String(e) }, { status: 500 })
+    return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 })
   }
 }
 
