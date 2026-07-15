@@ -16,6 +16,13 @@ async function sesion() {
   return { supabase, user }
 }
 
+/** Nombre legible del usuario actual, para columnas "modificado por". */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function nombreUsuario(sb: any, userId: string): Promise<string> {
+  const { data } = await sb.from('usuarios').select('nombre').eq('id', userId).single()
+  return data?.nombre ?? 'Usuario'
+}
+
 // ── Crear orden de insumo a partir de la parametrización de una sede ──────────
 export async function crearOrdenInsumo(input: {
   sede_id: string
@@ -103,8 +110,12 @@ export async function actualizarItemSolicitado(
   const { data: antes } = await sb.from('orden_insumo_items')
     .select('cantidad_solicitada, producto:productos ( nombre_estandar )').eq('id', itemId).single()
 
+  const quien = await nombreUsuario(sb, user.id)
   const { error } = await sb.from('orden_insumo_items')
-    .update({ cantidad_solicitada: cant, cantidad_alistada: cant })
+    .update({
+      cantidad_solicitada: cant, cantidad_alistada: cant,
+      modificado_por: user.id, modificado_nombre: quien, modificado_at: new Date().toISOString(),
+    })
     .eq('id', itemId)
   if (error) return { error: error.message }
 
@@ -118,6 +129,75 @@ export async function actualizarItemSolicitado(
     })
   }
 
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
+}
+
+/** El supervisor agrega un producto a la propuesta (parametrizado o adicional). */
+export async function agregarItemSolicitado(
+  ordenId: string, productoId: string, cantidad: number, esAdicional: boolean,
+): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso para editar la propuesta.' }
+  const sb = supabase as DB
+
+  const cant = Math.max(1, Number(cantidad) || 0)
+  if (!productoId) return { error: 'Selecciona un producto.' }
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
+
+  // Evita duplicar el mismo producto en la orden.
+  const { data: existe } = await sb.from('orden_insumo_items')
+    .select('id').eq('orden_id', ordenId).eq('producto_id', productoId).maybeSingle()
+  if (existe) return { error: 'Ese producto ya está en la orden. Ajusta su cantidad.' }
+
+  const { data: prod } = await sb.from('productos').select('nombre_estandar').eq('id', productoId).single()
+  const quien = await nombreUsuario(sb, user.id)
+
+  const { error } = await sb.from('orden_insumo_items').insert({
+    orden_id: ordenId, producto_id: productoId,
+    cantidad_solicitada: cant, cantidad_maxima_ref: null,
+    es_adicional: esAdicional, cantidad_alistada: cant,
+    modificado_por: user.id, modificado_nombre: quien, modificado_at: new Date().toISOString(),
+  })
+  if (error) return { error: error.message }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'ITEM_AGREGADO',
+    p_mensaje: `Agregó «${prod?.nombre_estandar ?? 'producto'}» (${cant}) ${esAdicional ? '· adicional' : '· parametrizado'}`,
+    p_detalle: { producto_id: productoId, cantidad: cant, es_adicional: esAdicional },
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
+}
+
+/** El supervisor quita un producto de la propuesta. */
+export async function quitarItemSolicitado(ordenId: string, itemId: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso para editar la propuesta.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
+
+  const { data: item } = await sb.from('orden_insumo_items')
+    .select('producto:productos ( nombre_estandar )').eq('id', itemId).single()
+
+  const { error } = await sb.from('orden_insumo_items').delete().eq('id', itemId)
+  if (error) return { error: error.message }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'ITEM_QUITADO',
+    p_mensaje: `Quitó «${item?.producto?.nombre_estandar ?? 'producto'}» de la orden.`,
+    p_detalle: { item_id: itemId },
+  })
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }

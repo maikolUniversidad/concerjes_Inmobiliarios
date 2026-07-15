@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { OrdenDetalleClient } from './OrdenDetalleClient'
+import { SolicitudItems } from './SolicitudItems'
 import { FlujoOrden, type EventoOrden } from './FlujoOrden'
 import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
 
@@ -23,7 +24,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
       sede:sedes ( nombre, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, producto:productos ( nombre_estandar, presentacion ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)
@@ -41,6 +42,10 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   // El alistamiento SOLO se habilita cuando ya firmaron las dos partes.
   const estado = (orden as unknown as { estado: string }).estado
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'RECIBIDO'].includes(estado)
+  // En la etapa de solicitud (borrador / cambios) se ajustan cantidades y se
+  // agregan/quitan productos; el alistamiento no existe todavía.
+  const enSolicitud = !aprobada
+  const puedeEditarSolicitud = perm.puede('crear_ordenes_insumo') && ['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(estado)
 
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -76,12 +81,25 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         esSolicitante={Boolean(user && o.creado_por === user.id)}
         puedeRecibir={perm.puede('recibir_ordenes_insumo')}
       />
-      <OrdenDetalleClient
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        orden={orden as any}
-        usuarios={(usuarios ?? []) as { id: string; nombre: string }[]}
-        puedeAlistar={perm.puede('alistar_ordenes_insumo') && aprobada}
-      />
+      {/* Etapa de SOLICITUD: ajustar cantidades / agregar / quitar productos. */}
+      {enSolicitud && (
+        <SolicitudItems
+          ordenId={id}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          items={(o.items ?? []) as any}
+          puedeEditar={puedeEditarSolicitud}
+        />
+      )}
+
+      {/* Etapa de ALISTAMIENTO/DESPACHO: solo una vez aprobada por ambas partes. */}
+      {aprobada && (
+        <OrdenDetalleClient
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          orden={orden as any}
+          usuarios={(usuarios ?? []) as { id: string; nombre: string }[]}
+          puedeAlistar={perm.puede('alistar_ordenes_insumo')}
+        />
+      )}
       <DocumentosPDF datos={datosDoc} />
     </div>
   )
