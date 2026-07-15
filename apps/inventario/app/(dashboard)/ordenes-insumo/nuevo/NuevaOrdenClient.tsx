@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Package, Users, MapPin, AlertCircle } from 'lucide-react'
+import { Loader2, Package, MapPin, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { crearOrdenInsumo } from '../actions'
@@ -26,7 +26,8 @@ interface ProdOpt { id: string; nombre: string; presentacion: string | null }
 const inputCls =
   'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white transition-colors'
 
-export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[]; bodegas: BodegaOpt[]; usuarios: UsuarioOpt[] }) {
+// El responsable queda asignado automáticamente a quien crea la orden.
+export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas: BodegaOpt[]; usuarios?: UsuarioOpt[] }) {
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sb] = useState<any>(() => createClient())
@@ -34,24 +35,36 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
   const [bodegaId, setBodegaId] = useState('')
   const [observacion, setObservacion] = useState('')
   const [items, setItems] = useState<ItemForm[]>([])
-  const [resp, setResp] = useState<string[]>([])
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
   // Catálogo completo para agregar productos fuera de la parametrización.
   const [catalogo, setCatalogo] = useState<ProdOpt[]>([])
-  const [addProd, setAddProd] = useState('')
+  const [buscar, setBuscar] = useState('')
+
+  /** Búsqueda inteligente: filtra mientras se escribe (sin tildes, multi-palabra). */
+  const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+  const sugerencias = (() => {
+    const q = norm(buscar.trim())
+    const libres = catalogo.filter((p) => !items.some((i) => i.producto_id === p.id))
+    if (!q) return libres.slice(0, 8)
+    const tokens = q.split(/\s+/)
+    return libres
+      .filter((p) => {
+        const hay = norm(`${p.nombre} ${p.presentacion ?? ''}`)
+        return tokens.every((t) => hay.includes(t))
+      })
+      .slice(0, 8)
+  })()
 
   /** Agrega un producto que NO está parametrizado: sin tope, marcado como adicional. */
-  function agregarAdicional() {
-    const p = catalogo.find((x) => x.id === addProd)
-    if (!p) return
+  function agregarAdicional(p: ProdOpt) {
     if (items.some((i) => i.producto_id === p.id)) { toast.info('Ese producto ya está en la orden.'); return }
     setItems((prev) => [...prev, {
       producto_id: p.id, nombre: p.nombre, presentacion: p.presentacion,
       maximo: 0, cantidad: 1, es_adicional: true,
     }])
-    setAddProd('')
+    setBuscar('')
   }
 
   function quitarItem(i: number) {
@@ -102,10 +115,6 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
     }))
   }
 
-  function toggleResp(id: string) {
-    setResp((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id])
-  }
-
   async function guardar() {
     setError(null)
     const conCantidad = items.filter((it) => it.cantidad > 0)
@@ -120,7 +129,6 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
         items: conCantidad.map((it) => ({
           producto_id: it.producto_id, cantidad: it.cantidad, maximo: it.maximo, es_adicional: it.es_adicional,
         })),
-        responsables: resp,
       })
       // crearOrdenInsumo redirige en éxito; si volvió, hubo error.
       if (res?.error) { setError(res.error); return }
@@ -236,39 +244,34 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
               ¿Falta algo? Agrega productos <strong>adicionales</strong> aunque no estén parametrizados para esta sede — sin tope.
               La central los revisa al aprobar.
             </p>
-            <div className="flex flex-wrap gap-2">
-              <select value={addProd} onChange={(e) => setAddProd(e.target.value)} className={`${inputCls} flex-1 min-w-[220px]`}>
-                <option value="">— Buscar producto del catálogo —</option>
-                {catalogo
-                  .filter((p) => !items.some((i) => i.producto_id === p.id))
-                  .map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.presentacion ? ` · ${p.presentacion}` : ''}</option>)}
-              </select>
-              <button type="button" onClick={agregarAdicional} disabled={!addProd}
-                className="rounded-lg border border-brand-green px-4 py-2 font-body text-sm font-semibold text-brand-green hover:bg-green-50 disabled:opacity-40">
-                Agregar adicional
-              </button>
+            {/* Buscador inteligente: filtra al escribir; clic en el resultado lo agrega */}
+            <div className="relative">
+              <input
+                value={buscar}
+                onChange={(e) => setBuscar(e.target.value)}
+                placeholder="Escribe para buscar un producto del catálogo…"
+                className={inputCls}
+              />
+              {buscar.trim() !== '' && (
+                <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                  {sugerencias.length === 0 ? (
+                    <p className="px-3 py-3 font-body text-sm text-gray-400">Sin resultados para “{buscar}”.</p>
+                  ) : (
+                    sugerencias.map((p) => (
+                      <button
+                        key={p.id} type="button" onClick={() => agregarAdicional(p)}
+                        className="w-full text-left px-3 py-2 hover:bg-green-50 border-b border-gray-50 last:border-0"
+                      >
+                        <span className="font-body text-sm text-gray-800">{p.nombre}</span>
+                        {p.presentacion && <span className="font-body text-xs text-gray-400"> · {p.presentacion}</span>}
+                      </button>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
-      </div>
-
-      {/* Responsables */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <p className="font-heading font-semibold text-sm text-gray-900 flex items-center gap-2 mb-3">
-          <Users className="w-4 h-4 text-brand-green" /> Responsables del alistamiento
-        </p>
-        <div className="flex flex-wrap gap-2">
-          {usuarios.map((u) => {
-            const on = resp.includes(u.id)
-            return (
-              <button key={u.id} type="button" onClick={() => toggleResp(u.id)}
-                className={`font-body text-xs font-medium px-3 py-1.5 rounded-full border transition-colors ${on ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-                {u.nombre}
-              </button>
-            )
-          })}
-          {usuarios.length === 0 && <p className="font-body text-xs text-gray-400">No hay usuarios disponibles.</p>}
-        </div>
       </div>
 
       {/* Observación */}

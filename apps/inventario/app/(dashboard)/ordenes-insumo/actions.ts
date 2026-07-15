@@ -61,11 +61,11 @@ export async function crearOrdenInsumo(input: {
   const { error: itErr } = await sb.from('orden_insumo_items').insert(itemsInsert)
   if (itErr) return { error: 'Orden creada pero falló el guardado de ítems: ' + itErr.message }
 
-  if (input.responsables?.length) {
-    await sb.from('orden_insumo_responsables').insert(
-      input.responsables.map((usuario_id) => ({ orden_id: orden.id, usuario_id })),
-    )
-  }
+  // El responsable es quien sube la orden (+ cualquiera que se pase explícitamente).
+  const responsables = Array.from(new Set([user.id, ...(input.responsables ?? [])]))
+  await sb.from('orden_insumo_responsables').insert(
+    responsables.map((usuario_id) => ({ orden_id: orden.id, usuario_id })),
+  )
 
   await sb.rpc('oi_evento', {
     p_orden: orden.id, p_tipo: 'CREACION',
@@ -99,10 +99,24 @@ export async function actualizarItemSolicitado(
   if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
 
   const cant = Math.max(0, Number(cantidad) || 0)
+  // Se captura el valor anterior para dejar el cambio en la trazabilidad.
+  const { data: antes } = await sb.from('orden_insumo_items')
+    .select('cantidad_solicitada, producto:productos ( nombre_estandar )').eq('id', itemId).single()
+
   const { error } = await sb.from('orden_insumo_items')
     .update({ cantidad_solicitada: cant, cantidad_alistada: cant })
     .eq('id', itemId)
   if (error) return { error: error.message }
+
+  // Quién modificó qué queda registrado (oi_evento captura al usuario).
+  const prod = antes?.producto?.nombre_estandar ?? 'producto'
+  if (antes && Number(antes.cantidad_solicitada) !== cant) {
+    await sb.rpc('oi_evento', {
+      p_orden: ordenId, p_tipo: 'AJUSTE',
+      p_mensaje: `Ajustó «${prod}»: ${antes.cantidad_solicitada} → ${cant}`,
+      p_detalle: { item_id: itemId, antes: antes.cantidad_solicitada, despues: cant },
+    })
+  }
 
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
