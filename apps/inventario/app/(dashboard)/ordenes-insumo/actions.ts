@@ -91,6 +91,16 @@ export async function crearOrdenInsumo(input: {
 /** Estados en los que el coordinador todavía puede editar su propuesta. */
 const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS']
 
+/**
+ * Cualquier cambio en la orden invalida las aprobaciones: las dos partes deben
+ * volver a dar el visto bueno cuando ya no haya más cambios.
+ */
+const RESET_APROBACIONES = {
+  aprobado_solicitante_por: null, aprobado_solicitante_at: null,
+  aprobado_coordinador_por: null, aprobado_coordinador_at: null,
+  aprobado_por: null, aprobado_at: null,
+}
+
 /** El coordinador ajusta la cantidad propuesta de un ítem (antes de aprobar). */
 export async function actualizarItemSolicitado(
   ordenId: string, itemId: string, cantidad: number,
@@ -241,7 +251,9 @@ export async function solicitarCambios(ordenId: string, mensaje: string): Promis
   if (!orden) return { error: 'Orden no encontrada.' }
   if (orden.estado !== 'EN_REVISION') return { error: 'Solo se piden cambios sobre órdenes en revisión.' }
 
-  const { error } = await sb.from('ordenes_insumo').update({ estado: 'CAMBIOS_SOLICITADOS' }).eq('id', ordenId)
+  // Pedir cambios invalida cualquier firma previa: ambos aprueban de nuevo.
+  const { error } = await sb.from('ordenes_insumo')
+    .update({ estado: 'CAMBIOS_SOLICITADOS', ...RESET_APROBACIONES }).eq('id', ordenId)
   if (error) return { error: error.message }
 
   await sb.rpc('oi_evento', {

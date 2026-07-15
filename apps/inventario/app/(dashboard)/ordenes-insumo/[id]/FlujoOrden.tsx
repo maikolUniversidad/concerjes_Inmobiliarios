@@ -127,8 +127,24 @@ export function FlujoOrden({
     })
   }
 
+  const descripcion =
+    estado === 'BORRADOR' ? 'Propuesta en borrador. Ajusta las cantidades y agrega o quita productos; envíala a la central cuando esté lista.'
+    : estado === 'EN_REVISION' ? 'En revisión. Deben aprobarla el solicitante y el coordinador de conserjes; cualquiera puede solicitar cambios.'
+    : estado === 'CAMBIOS_SOLICITADOS' ? 'La central solicitó cambios. Se retiraron las aprobaciones: ajusta la propuesta, reenvíala y ambos deben aprobar de nuevo.'
+    : estado === 'APROBADA' ? 'Aprobada por ambas partes ✅ — ya está disponible en Alistamiento de bodega.'
+    : ['EN_ALISTAMIENTO', 'ALISTADO'].includes(estado) ? 'Aprobada. El proceso continúa en Alistamiento.'
+    : estado === 'DESPACHADO' ? 'Enviada. Falta el recibido del supervisor del contrato.'
+    : estado === 'RECIBIDO' ? 'Recibida en sede. Proceso finalizado.'
+    : estado === 'ANULADA' ? 'Orden anulada.'
+    : ''
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+      {/* Descripción del estado — lo primero que se ve */}
+      <div className="rounded-xl bg-brand-green/5 border border-brand-green/15 px-4 py-3">
+        <p className="font-body text-sm text-gray-700">{descripcion}</p>
+      </div>
+
       <div className="flex items-center gap-2">
         <PenLine className="w-4 h-4 text-brand-green" />
         <h2 className="font-heading font-semibold text-base text-gray-900">Solicitud y aprobación</h2>
@@ -136,18 +152,6 @@ export function FlujoOrden({
 
       {/* Línea de estado del proceso completo */}
       <LineaEstado estado={estado} />
-
-      {/* Guía del estado actual */}
-      <p className="font-body text-sm text-gray-500">
-        {estado === 'BORRADOR' && 'Propuesta en borrador. Ajusta las cantidades y envíala a la central cuando esté lista.'}
-        {estado === 'EN_REVISION' && 'En revisión por la central. Puede aprobarla o solicitar cambios.'}
-        {estado === 'CAMBIOS_SOLICITADOS' && 'La central solicitó cambios. Ajusta la propuesta y vuelve a enviarla.'}
-        {estado === 'APROBADA' && 'Aprobada por ambas partes ✅ — ya está disponible en Alistamiento de bodega.'}
-        {['EN_ALISTAMIENTO', 'ALISTADO'].includes(estado) && 'Aprobada. El proceso continúa en Alistamiento.'}
-        {estado === 'DESPACHADO' && 'Enviada. Falta el recibido del supervisor del contrato.'}
-        {estado === 'RECIBIDO' && 'Recibida en sede. Proceso finalizado.'}
-        {estado === 'ANULADA' && 'Orden anulada.'}
-      </p>
 
       {/* Doble visto bueno: la orden solo avanza cuando firman los dos */}
       {!['BORRADOR', 'ANULADA'].includes(estado) && (

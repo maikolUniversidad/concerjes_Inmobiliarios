@@ -32,12 +32,9 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
 
   if (!orden) notFound()
 
-  const [{ data: usuarios }, { data: eventosData }] = await Promise.all([
-    supabase.from('usuarios').select('id, nombre').eq('activo', true).order('nombre'),
-    supabase.from('orden_insumo_eventos')
-      .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
-      .eq('orden_id', id).order('created_at', { ascending: true }),
-  ])
+  const { data: eventosData } = await supabase.from('orden_insumo_eventos')
+    .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
+    .eq('orden_id', id).order('created_at', { ascending: true })
 
   // El alistamiento SOLO se habilita cuando ya firmaron las dos partes.
   const estado = (orden as unknown as { estado: string }).estado
@@ -96,7 +93,6 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         <OrdenDetalleClient
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           orden={orden as any}
-          usuarios={(usuarios ?? []) as { id: string; nombre: string }[]}
           puedeAlistar={perm.puede('alistar_ordenes_insumo')}
         />
       )}

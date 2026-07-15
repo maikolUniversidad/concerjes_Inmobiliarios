@@ -1,19 +1,17 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  ArrowLeft, MapPin, Users, Package, Truck, Loader2, Plus, X, Check,
+  ArrowLeft, MapPin, Package, Truck, Loader2, Check,
   Ban, Video, CheckCircle2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { metaEstado } from '../OrdenesInsumoClient'
-import {
-  actualizarItemAlistamiento, asignarResponsable, quitarResponsable, despacharOrden, anularOrden,
-} from '../actions'
+import { actualizarItemAlistamiento, despacharOrden, anularOrden } from '../actions'
 import { VideoDespacho } from './VideoDespacho'
 
 interface Item {
@@ -26,7 +24,6 @@ interface Item {
   es_adicional?: boolean
   producto: { nombre_estandar: string; presentacion: string | null } | null
 }
-interface Resp { usuario_id: string; usuario: { id: string; nombre: string } | null }
 interface Orden {
   id: string
   numero: string
@@ -38,7 +35,6 @@ interface Orden {
   sede: { nombre: string; grupo: { nombre: string } | null } | null
   bodega: { nombre: string } | null
   items: Item[]
-  responsables: Resp[]
 }
 
 function fmt(iso: string | null) {
@@ -46,17 +42,14 @@ function fmt(iso: string | null) {
   return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export function OrdenDetalleClient({ orden, usuarios, puedeAlistar }: {
+export function OrdenDetalleClient({ orden, puedeAlistar }: {
   orden: Orden
-  usuarios: { id: string; nombre: string }[]
   puedeAlistar: boolean
 }) {
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sb] = useState<any>(() => createClient())
   const [items, setItems] = useState<Item[]>(orden.items ?? [])
-  const [resp, setResp] = useState<Resp[]>(orden.responsables ?? [])
-  const [addResp, setAddResp] = useState('')
   const [busyItem, setBusyItem] = useState<string | null>(null)
   const [showVideo, setShowVideo] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
@@ -100,19 +93,6 @@ export function OrdenDetalleClient({ orden, usuarios, puedeAlistar }: {
     if (res.error) toast.error(res.error)
   }
 
-  async function agregarResp() {
-    if (!addResp) return
-    const u = usuarios.find((x) => x.id === addResp)
-    const res = await asignarResponsable(orden.id, addResp)
-    if (res.error) { toast.error(res.error); return }
-    setResp((prev) => [...prev, { usuario_id: addResp, usuario: u ? { id: u.id, nombre: u.nombre } : null }])
-    setAddResp('')
-  }
-  async function removerResp(usuarioId: string) {
-    await quitarResponsable(orden.id, usuarioId)
-    setResp((prev) => prev.filter((r) => r.usuario_id !== usuarioId))
-  }
-
   async function onVideoListo(path: string, mime: string | null) {
     setShowVideo(false)
     setDespachando(true)
@@ -130,11 +110,6 @@ export function OrdenDetalleClient({ orden, usuarios, puedeAlistar }: {
     if (res.error) { toast.error(res.error); return }
     router.refresh()
   }
-
-  const dispResp = useMemo(
-    () => usuarios.filter((u) => !resp.some((r) => r.usuario_id === u.id)),
-    [usuarios, resp],
-  )
 
   return (
     <div className="space-y-4">
@@ -177,32 +152,6 @@ export function OrdenDetalleClient({ orden, usuarios, puedeAlistar }: {
             </div>
           </div>
         )}
-      </div>
-
-      {/* Responsables */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <p className="font-heading font-semibold text-sm text-gray-900 flex items-center gap-2 mb-3">
-          <Users className="w-4 h-4 text-brand-green" /> Responsables del alistamiento
-        </p>
-        <div className="flex flex-wrap items-center gap-2">
-          {resp.length === 0 && <span className="font-body text-xs text-gray-400">Sin responsables asignados.</span>}
-          {resp.map((r) => (
-            <span key={r.usuario_id} className="inline-flex items-center gap-1.5 bg-green-50 text-brand-green font-body text-xs font-medium px-2.5 py-1 rounded-full">
-              {r.usuario?.nombre ?? 'Usuario'}
-              {editable && <button onClick={() => removerResp(r.usuario_id)} className="hover:text-red-600"><X className="w-3 h-3" /></button>}
-            </span>
-          ))}
-          {editable && dispResp.length > 0 && (
-            <span className="inline-flex items-center gap-1">
-              <select value={addResp} onChange={(e) => setAddResp(e.target.value)}
-                className="border border-gray-200 rounded-lg px-2 py-1 font-body text-xs outline-none focus:border-brand-green bg-white">
-                <option value="">Agregar…</option>
-                {dispResp.map((u) => <option key={u.id} value={u.id}>{u.nombre}</option>)}
-              </select>
-              <button onClick={agregarResp} disabled={!addResp} className="p-1 rounded-lg text-brand-green hover:bg-green-50 disabled:opacity-40"><Plus className="w-4 h-4" /></button>
-            </span>
-          )}
-        </div>
       </div>
 
       {/* Alistamiento (checklist) */}
