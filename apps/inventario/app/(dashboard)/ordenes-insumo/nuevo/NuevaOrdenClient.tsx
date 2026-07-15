@@ -82,7 +82,8 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
         sb.from('sede_productos')
           .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion )')
           .eq('sede_id', id).eq('activo', true),
-        sb.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar'),
+        // limit alto: PostgREST corta en 1000 filas por defecto y el catálogo puede ser mayor.
+        sb.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar').limit(5000),
       ])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = ((data ?? []) as any[])
@@ -244,8 +245,10 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
               ¿Falta algo? Agrega productos <strong>adicionales</strong> aunque no estén parametrizados para esta sede — sin tope.
               La central los revisa al aprobar.
             </p>
-            {/* Buscador inteligente: filtra al escribir; clic en el resultado lo agrega */}
-            <div className="relative">
+            {/* Buscador inteligente: filtra al escribir; clic en el resultado lo agrega.
+                La lista va en flujo normal (no absolute) porque la tarjeta recorta
+                con overflow-hidden. */}
+            <div>
               <input
                 value={buscar}
                 onChange={(e) => setBuscar(e.target.value)}
@@ -253,9 +256,11 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
                 className={inputCls}
               />
               {buscar.trim() !== '' && (
-                <div className="absolute z-20 mt-1 w-full max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                <div className="mt-1 max-h-64 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-sm">
                   {sugerencias.length === 0 ? (
-                    <p className="px-3 py-3 font-body text-sm text-gray-400">Sin resultados para “{buscar}”.</p>
+                    <p className="px-3 py-3 font-body text-sm text-gray-500">
+                      No existe ningún producto en el inventario para “<strong>{buscar}</strong>”.
+                    </p>
                   ) : (
                     sugerencias.map((p) => (
                       <button
