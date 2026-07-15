@@ -52,6 +52,8 @@ export async function crearOrdenInsumo(input: {
   const itemsInsert = items.map((it) => ({
     orden_id: orden.id, producto_id: it.producto_id,
     cantidad_solicitada: it.cantidad, cantidad_maxima_ref: it.maximo ?? null,
+    // El alistamiento arranca con lo solicitado: si hay menos, se baja a mano.
+    cantidad_alistada: it.cantidad,
   }))
   const { error: itErr } = await sb.from('orden_insumo_items').insert(itemsInsert)
   if (itErr) return { error: 'Orden creada pero falló el guardado de ítems: ' + itErr.message }
