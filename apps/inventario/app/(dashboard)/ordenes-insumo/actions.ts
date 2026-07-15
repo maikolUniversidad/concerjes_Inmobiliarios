@@ -21,7 +21,7 @@ export async function crearOrdenInsumo(input: {
   sede_id: string
   bodega_id?: string | null
   observacion?: string | null
-  items: { producto_id: string; cantidad: number; maximo: number }[]
+  items: { producto_id: string; cantidad: number; maximo: number; es_adicional?: boolean }[]
   responsables?: string[]
 }): Promise<ActionResult> {
   const { supabase, user } = await sesion()
@@ -53,6 +53,8 @@ export async function crearOrdenInsumo(input: {
   const itemsInsert = items.map((it) => ({
     orden_id: orden.id, producto_id: it.producto_id,
     cantidad_solicitada: it.cantidad, cantidad_maxima_ref: it.maximo ?? null,
+    // Adicional = pedido fuera de la parametrización de la sede (sin tope).
+    es_adicional: !!it.es_adicional,
     // El alistamiento arranca con lo solicitado: si hay menos, se baja a mano.
     cantidad_alistada: it.cantidad,
   }))

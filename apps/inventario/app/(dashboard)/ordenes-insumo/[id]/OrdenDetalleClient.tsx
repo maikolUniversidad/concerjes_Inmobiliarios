@@ -23,6 +23,7 @@ interface Item {
   cantidad_maxima_ref: number | null
   cantidad_alistada: number
   alistado: boolean
+  es_adicional?: boolean
   producto: { nombre_estandar: string; presentacion: string | null } | null
 }
 interface Resp { usuario_id: string; usuario: { id: string; nombre: string } | null }
@@ -231,7 +232,14 @@ export function OrdenDetalleClient({ orden, usuarios, puedeAlistar }: {
                     </button>
                   </td>
                   <td className="px-3 py-2.5">
-                    <p className="font-body text-sm text-gray-900 truncate max-w-[240px]">{it.producto?.nombre_estandar ?? '—'}</p>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <p className="font-body text-sm text-gray-900 truncate max-w-[240px]">{it.producto?.nombre_estandar ?? '—'}</p>
+                      {it.es_adicional ? (
+                        <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
+                      ) : (
+                        <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
+                      )}
+                    </div>
                     {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
                   </td>
                   <td className="px-3 py-2.5 text-center font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</td>

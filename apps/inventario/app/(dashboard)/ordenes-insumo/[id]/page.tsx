@@ -22,7 +22,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
       sede:sedes ( nombre, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, producto:productos ( nombre_estandar, presentacion ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, producto:productos ( nombre_estandar, presentacion ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)

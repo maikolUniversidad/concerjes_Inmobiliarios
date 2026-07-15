@@ -17,7 +17,11 @@ interface ItemForm {
   presentacion: string | null
   maximo: number
   cantidad: number
+  /** true = pedido fuera de la parametrización de la sede (sin tope). */
+  es_adicional: boolean
 }
+
+interface ProdOpt { id: string; nombre: string; presentacion: string | null }
 
 const inputCls =
   'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white transition-colors'
@@ -34,6 +38,25 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Catálogo completo para agregar productos fuera de la parametrización.
+  const [catalogo, setCatalogo] = useState<ProdOpt[]>([])
+  const [addProd, setAddProd] = useState('')
+
+  /** Agrega un producto que NO está parametrizado: sin tope, marcado como adicional. */
+  function agregarAdicional() {
+    const p = catalogo.find((x) => x.id === addProd)
+    if (!p) return
+    if (items.some((i) => i.producto_id === p.id)) { toast.info('Ese producto ya está en la orden.'); return }
+    setItems((prev) => [...prev, {
+      producto_id: p.id, nombre: p.nombre, presentacion: p.presentacion,
+      maximo: 0, cantidad: 1, es_adicional: true,
+    }])
+    setAddProd('')
+  }
+
+  function quitarItem(i: number) {
+    setItems((prev) => prev.filter((_, idx) => idx !== i))
+  }
 
   async function onSede(id: string) {
     setSedeId(id)
@@ -42,11 +65,12 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
     if (!id) return
     setCargando(true)
     try {
-      const { data } = await sb
-        .from('sede_productos')
-        .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion )')
-        .eq('sede_id', id)
-        .eq('activo', true)
+      const [{ data }, { data: prods }] = await Promise.all([
+        sb.from('sede_productos')
+          .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion )')
+          .eq('sede_id', id).eq('activo', true),
+        sb.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar'),
+      ])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = ((data ?? []) as any[])
         .filter((r) => r.producto)
@@ -56,17 +80,26 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
           presentacion: r.producto.presentacion ?? null,
           maximo: Number(r.cantidad_maxima) || 0,
           cantidad: Number(r.cantidad_maxima) || 0,
+          es_adicional: false,
         }))
         .sort((a, b) => a.nombre.localeCompare(b.nombre))
       setItems(rows)
-      if (rows.length === 0) setError('Esta sede no tiene productos parametrizados. Configúralos en Parametrización.')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      setCatalogo(((prods ?? []) as any[]).map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null })))
+      // No es bloqueante: siempre se pueden agregar productos adicionales.
+      if (rows.length === 0) setError('Esta sede no tiene productos parametrizados. Puedes agregar los que necesites como adicionales.')
     } finally {
       setCargando(false)
     }
   }
 
   function setCantidad(i: number, v: number) {
-    setItems((prev) => prev.map((it, idx) => idx === i ? { ...it, cantidad: Math.max(0, Math.min(it.maximo || Infinity, v)) } : it))
+    // Los parametrizados topan en su máximo; los adicionales no tienen tope.
+    setItems((prev) => prev.map((it, idx) => {
+      if (idx !== i) return it
+      const tope = it.es_adicional || !it.maximo ? Infinity : it.maximo
+      return { ...it, cantidad: Math.max(0, Math.min(tope, v)) }
+    }))
   }
 
   function toggleResp(id: string) {
@@ -84,7 +117,9 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
         sede_id: sedeId,
         bodega_id: bodegaId || null,
         observacion: observacion || null,
-        items: conCantidad.map((it) => ({ producto_id: it.producto_id, cantidad: it.cantidad, maximo: it.maximo })),
+        items: conCantidad.map((it) => ({
+          producto_id: it.producto_id, cantidad: it.cantidad, maximo: it.maximo, es_adicional: it.es_adicional,
+        })),
         responsables: resp,
       })
       // crearOrdenInsumo redirige en éxito; si volvió, hubo error.
@@ -149,27 +184,70 @@ export function NuevaOrdenClient({ sedes, bodegas, usuarios }: { sedes: SedeOpt[
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Producto</th>
+                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-32">Origen</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-24">Máximo</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Cantidad</th>
+                  <th className="px-3 py-2.5 w-10" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {items.map((it, i) => (
-                  <tr key={it.producto_id} className="hover:bg-gray-50/60">
+                  <tr key={it.producto_id} className={`hover:bg-gray-50/60 ${it.es_adicional ? 'bg-amber-50/40' : ''}`}>
                     <td className="px-4 py-2">
                       <p className="font-body text-sm text-gray-900 truncate max-w-[260px]">{it.nombre}</p>
                       {it.presentacion && <p className="font-body text-[11px] text-gray-400">{it.presentacion}</p>}
                     </td>
-                    <td className="px-3 py-2 text-center font-body text-sm text-gray-500">{it.maximo}</td>
                     <td className="px-3 py-2">
-                      <input type="number" min={0} max={it.maximo || undefined} step="1" value={it.cantidad}
+                      {it.es_adicional ? (
+                        <span className="inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                          <AlertCircle className="w-3 h-3" /> Adicional
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+                          Parametrizado
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-center font-body text-sm text-gray-500">
+                      {it.es_adicional ? <span className="text-gray-300">sin tope</span> : it.maximo}
+                    </td>
+                    <td className="px-3 py-2">
+                      <input type="number" min={0} max={it.es_adicional ? undefined : (it.maximo || undefined)} step="1" value={it.cantidad}
                         onChange={(e) => setCantidad(i, Number(e.target.value) || 0)}
                         className={`${inputCls} text-center font-semibold`} />
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {it.es_adicional && (
+                        <button type="button" onClick={() => quitarItem(i)} title="Quitar"
+                          className="text-gray-300 hover:text-red-500 transition-colors">×</button>
+                      )}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Agregar producto fuera de la parametrización (no restrictivo) */}
+        {sedeId && (
+          <div className="border-t border-gray-100 px-4 py-3 bg-gray-50/60">
+            <p className="font-body text-xs text-gray-500 mb-2">
+              ¿Falta algo? Agrega productos <strong>adicionales</strong> aunque no estén parametrizados para esta sede — sin tope.
+              La central los revisa al aprobar.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <select value={addProd} onChange={(e) => setAddProd(e.target.value)} className={`${inputCls} flex-1 min-w-[220px]`}>
+                <option value="">— Buscar producto del catálogo —</option>
+                {catalogo
+                  .filter((p) => !items.some((i) => i.producto_id === p.id))
+                  .map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.presentacion ? ` · ${p.presentacion}` : ''}</option>)}
+              </select>
+              <button type="button" onClick={agregarAdicional} disabled={!addProd}
+                className="rounded-lg border border-brand-green px-4 py-2 font-body text-sm font-semibold text-brand-green hover:bg-green-50 disabled:opacity-40">
+                Agregar adicional
+              </button>
+            </div>
           </div>
         )}
       </div>
