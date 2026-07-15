@@ -191,9 +191,9 @@ export function CandidatoDrawer({
     `${v.cargo?.nombre ?? 'Cargo'} · ${v.obra?.cliente?.nombre ?? ''} ${v.obra?.codigo_contrato_servicio ?? ''}`.trim()
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-lg flex-col bg-white shadow-xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className="absolute inset-0 bg-black/40" onClick={onClose} />
+      <div className="relative flex h-[94vh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
         <div className="flex shrink-0 items-center justify-between border-b border-gray-100 px-5 py-4">
           <div className="flex items-center gap-2">
             <IdCard className="h-4 w-4 text-brand-green" />
@@ -205,7 +205,10 @@ export function CandidatoDrawer({
           <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X className="h-5 w-5" /></button>
         </div>
 
-        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[minmax(0,400px)_minmax(0,1fr)]">
+            {/* ── Columna izquierda: gestión + datos ── */}
+            <div className="space-y-5">
           {/* Gestión de estado + vacante */}
           {puedeGestionar && (
             <div className="space-y-3 rounded-xl border border-gray-200 bg-gray-50/60 p-3">
@@ -310,7 +313,10 @@ export function CandidatoDrawer({
               {dato('Tallas', [candidato.talla_camisa, candidato.talla_pantalon, candidato.talla_calzado].filter(Boolean).join(' / '))}
             </div>
           </section>
+            </div>
 
+            {/* ── Columna derecha: documentos + autorizaciones ── */}
+            <div className="space-y-5">
           {/* Documentos */}
           <section>
             <h3 className="mb-1 font-heading text-sm font-bold text-gray-700">Documentos</h3>
@@ -410,6 +416,8 @@ export function CandidatoDrawer({
               </ul>
             )}
           </section>
+            </div>
+          </div>
         </div>
       </div>
     </div>

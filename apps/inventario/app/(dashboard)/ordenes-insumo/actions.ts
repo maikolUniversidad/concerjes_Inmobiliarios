@@ -39,9 +39,10 @@ export async function crearOrdenInsumo(input: {
   const { count } = await sb.from('ordenes_insumo').select('*', { count: 'exact', head: true })
   const numero = `OI-${now.toISOString().slice(0, 7).replace('-', '')}-${String((count ?? 0) + 1).padStart(3, '0')}`
 
+  // Nace como PROPUESTA del coordinador de sede: BORRADOR hasta enviarla a revisión.
   const { data: orden, error } = await sb.from('ordenes_insumo').insert({
     numero, sede_id: input.sede_id, bodega_id: input.bodega_id || null,
-    observacion: input.observacion?.trim() || null, periodo, estado: 'PENDIENTE', creado_por: user.id,
+    observacion: input.observacion?.trim() || null, periodo, estado: 'BORRADOR', creado_por: user.id,
   }).select('id').single()
 
   if (error || !orden) {
@@ -64,8 +65,132 @@ export async function crearOrdenInsumo(input: {
     )
   }
 
+  await sb.rpc('oi_evento', {
+    p_orden: orden.id, p_tipo: 'CREACION',
+    p_mensaje: `Propuesta creada con ${items.length} producto(s).`,
+    p_nue: 'BORRADOR',
+  })
+
   revalidatePath('/ordenes-insumo')
   redirect(`/ordenes-insumo/${orden.id}`)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FLUJO DE APROBACIÓN (coordinador de sede ⇄ central)
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Estados en los que el coordinador todavía puede editar su propuesta. */
+const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS']
+
+/** El coordinador ajusta la cantidad propuesta de un ítem (antes de aprobar). */
+export async function actualizarItemSolicitado(
+  ordenId: string, itemId: string, cantidad: number,
+): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso para editar la propuesta.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
+
+  const cant = Math.max(0, Number(cantidad) || 0)
+  const { error } = await sb.from('orden_insumo_items')
+    .update({ cantidad_solicitada: cant, cantidad_alistada: cant })
+    .eq('id', itemId)
+  if (error) return { error: error.message }
+
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
+}
+
+/** Coordinador → envía la propuesta a la central para revisión. */
+export async function enviarARevision(ordenId: string, mensaje?: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'Esta orden ya fue enviada o aprobada.' }
+
+  const { error } = await sb.from('ordenes_insumo')
+    .update({ estado: 'EN_REVISION', enviado_revision_at: new Date().toISOString() })
+    .eq('id', ordenId)
+  if (error) return { error: error.message }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'ENVIO_REVISION',
+    p_mensaje: mensaje?.trim() || 'Propuesta enviada a la central para revisión.',
+    p_ant: orden.estado, p_nue: 'EN_REVISION',
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo')
+  return { ok: true }
+}
+
+/** Central → pide cambios: la orden vuelve al coordinador. */
+export async function solicitarCambios(ordenId: string, mensaje: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('aprobar_ordenes_insumo')) return { error: 'Solo la central puede solicitar cambios.' }
+  if (!mensaje?.trim()) return { error: 'Escribe qué cambios se requieren.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (orden.estado !== 'EN_REVISION') return { error: 'Solo se piden cambios sobre órdenes en revisión.' }
+
+  const { error } = await sb.from('ordenes_insumo').update({ estado: 'CAMBIOS_SOLICITADOS' }).eq('id', ordenId)
+  if (error) return { error: error.message }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'CAMBIOS_SOLICITADOS', p_mensaje: mensaje.trim(),
+    p_ant: 'EN_REVISION', p_nue: 'CAMBIOS_SOLICITADOS',
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo')
+  return { ok: true }
+}
+
+/** Central → aprueba: la orden pasa al módulo de Alistamiento. */
+export async function aprobarOrden(ordenId: string, mensaje?: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('aprobar_ordenes_insumo')) return { error: 'Solo la central puede aprobar.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (orden.estado !== 'EN_REVISION') return { error: 'Solo se aprueban órdenes en revisión.' }
+
+  const { error } = await sb.from('ordenes_insumo')
+    .update({ estado: 'APROBADA', aprobado_por: user.id, aprobado_at: new Date().toISOString() })
+    .eq('id', ordenId)
+  if (error) return { error: error.message }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'APROBACION',
+    p_mensaje: mensaje?.trim() || 'Orden aprobada. Pasa a alistamiento en bodega.',
+    p_ant: 'EN_REVISION', p_nue: 'APROBADA',
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return { ok: true }
+}
+
+/** Comentario libre en la trazabilidad (ambas partes). */
+export async function comentarOrden(ordenId: string, mensaje: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  if (!mensaje?.trim()) return { error: 'Escribe un mensaje.' }
+  const sb = supabase as DB
+  await sb.rpc('oi_evento', { p_orden: ordenId, p_tipo: 'COMENTARIO', p_mensaje: mensaje.trim() })
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
 }
 
 // ── Alistamiento: marcar/actualizar un ítem ──────────────────────────────────
@@ -78,6 +203,13 @@ export async function actualizarItemAlistamiento(
   if (!perm.puede('alistar_ordenes_insumo')) return { error: 'No tienes permiso para alistar.' }
   const sb = supabase as DB
 
+  // El alistamiento SOLO existe una vez la orden fue aprobada por la central.
+  const { data: previa } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!previa) return { error: 'Orden no encontrada.' }
+  if (!['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO'].includes(previa.estado)) {
+    return { error: 'La orden aún no está aprobada por la central.' }
+  }
+
   const upd: Record<string, unknown> = {}
   if (patch.cantidad_alistada !== undefined) upd.cantidad_alistada = Math.max(0, patch.cantidad_alistada)
   if (patch.alistado !== undefined) {
@@ -88,10 +220,14 @@ export async function actualizarItemAlistamiento(
   const { error } = await sb.from('orden_insumo_items').update(upd).eq('id', itemId)
   if (error) return { error: error.message.includes('row-level security') ? 'Sin permisos.' : error.message }
 
-  // Arranca el alistamiento en la cabecera si estaba PENDIENTE.
+  // Arranca el alistamiento en la cabecera si la orden recién fue aprobada.
   const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
-  if (orden?.estado === 'PENDIENTE') {
+  if (orden?.estado === 'APROBADA') {
     await sb.from('ordenes_insumo').update({ estado: 'EN_ALISTAMIENTO', alistamiento_iniciado_at: new Date().toISOString() }).eq('id', ordenId)
+    await sb.rpc('oi_evento', {
+      p_orden: ordenId, p_tipo: 'ALISTAMIENTO', p_mensaje: 'Inició el alistamiento en bodega.',
+      p_ant: 'APROBADA', p_nue: 'EN_ALISTAMIENTO',
+    })
   }
 
   // Si todos los ítems quedaron alistados → ALISTADO; si no, mantener EN_ALISTAMIENTO.
@@ -107,6 +243,7 @@ export async function actualizarItemAlistamiento(
 
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   revalidatePath('/ordenes-insumo')
+  revalidatePath('/alistamiento'); revalidatePath(`/alistamiento/${ordenId}`)
   return { ok: true }
 }
 
@@ -170,7 +307,7 @@ export async function despacharOrden(ordenId: string, videoPath: string, videoMi
   }
 
   const { error: updErr } = await sb.from('ordenes_insumo').update({
-    estado: 'DESPACHADO', despachado_por: user.id, despachado_at: new Date().toISOString(),
+    estado: 'DESPACHADO' as const, despachado_por: user.id, despachado_at: new Date().toISOString(),
     video_path: videoPath, video_mime: videoMime,
   }).eq('id', ordenId)
   if (updErr) return { error: 'Salida registrada pero no se pudo cerrar la orden: ' + updErr.message }

@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Package, BarChart3, ArrowLeftRight,
   FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
-  UploadCloud, History, ClipboardCheck, Barcode,
+  UploadCloud, History, ClipboardCheck, Barcode, PackageCheck,
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug, type LucideIcon,
 } from 'lucide-react'
 
@@ -69,6 +69,7 @@ export const navigation: NavModule[] = [
       { label: 'Contratos/Sedes',   href: '/contratos',         icon: FileText, permiso: 'ver_contratos' },
       { label: 'Parametrización',   href: '/parametrizacion',   icon: SlidersHorizontal, permiso: 'ver_parametrizacion' },
       { label: 'Órdenes de Insumo', href: '/ordenes-insumo',    icon: ClipboardCheck, permiso: 'ver_ordenes_insumo' },
+      { label: 'Alistamiento',      href: '/alistamiento',      icon: PackageCheck,   permiso: 'ver_alistamiento' },
       { label: 'Proveedores',       href: '/proveedores',       icon: Truck, permiso: 'ver_proveedores' },
       { label: 'Comparar Precios',  href: '/comparador-precios', icon: Scale, permiso: 'ver_proveedores' },
       { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText, permiso: 'ver_ordenes_compra' },
