@@ -18,11 +18,20 @@ export interface OrdenRow {
 }
 
 export const ESTADO_META: Record<EstadoOrdenInsumo, { label: string; cls: string }> = {
+  BORRADOR:            { label: 'Borrador',            cls: 'bg-gray-100 text-gray-600' },
+  EN_REVISION:         { label: 'En revisión',         cls: 'bg-blue-100 text-blue-700' },
+  CAMBIOS_SOLICITADOS: { label: 'Cambios solicitados', cls: 'bg-amber-100 text-amber-800' },
+  APROBADA:            { label: 'Aprobada',            cls: 'bg-teal-100 text-teal-700' },
   PENDIENTE:       { label: 'Pendiente',       cls: 'bg-amber-100 text-amber-700' },
   EN_ALISTAMIENTO: { label: 'En alistamiento', cls: 'bg-blue-100 text-blue-700' },
   ALISTADO:        { label: 'Alistado',        cls: 'bg-indigo-100 text-indigo-700' },
   DESPACHADO:      { label: 'Despachado',      cls: 'bg-green-100 text-green-700' },
   ANULADA:         { label: 'Anulada',         cls: 'bg-gray-100 text-gray-500' },
+}
+
+/** Metadatos del estado con respaldo: nunca revienta si llega un estado nuevo. */
+export function metaEstado(estado: string): { label: string; cls: string } {
+  return ESTADO_META[estado as EstadoOrdenInsumo] ?? { label: estado, cls: 'bg-gray-100 text-gray-600' }
 }
 
 function fmt(iso: string | null) {
@@ -72,7 +81,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
       ) : (
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {lista.map((o) => {
-            const meta = ESTADO_META[o.estado]
+            const meta = metaEstado(o.estado)
             const pct = o.total_items > 0 ? Math.round((o.alistados / o.total_items) * 100) : 0
             return (
               <Link key={o.id} href={`/ordenes-insumo/${o.id}`}

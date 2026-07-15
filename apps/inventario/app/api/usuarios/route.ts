@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase/server'
+import { getPermisosUsuario } from '@/lib/permisos-server'
 
 function adminClient() {
   return createClient(
@@ -7,6 +9,22 @@ function adminClient() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
     { auth: { autoRefreshToken: false, persistSession: false } }
   )
+}
+
+/**
+ * Esta ruta usa la service role (puede crear cuentas y asignar cualquier rol),
+ * así que DEBE exigir sesión y permiso. Sin esto, cualquiera podría hacer POST
+ * y crearse un SUPER_ADMIN.
+ */
+async function autorizar() {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.', status: 401 as const }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('gestionar_usuarios')) {
+    return { error: 'No tienes permiso para gestionar usuarios.', status: 403 as const }
+  }
+  return { user }
 }
 
 /** Traduce los errores de Auth a algo entendible (GoTrue a veces responde "{}"). */
@@ -22,6 +40,9 @@ function mensajeAuth(err: { message?: string } | null): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const auth = await autorizar()
+    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
     const body = await req.json()
     const { nombre, email, password, telefono, rol_id, grupo_id, sede_id, activo } = body
 
@@ -84,6 +105,9 @@ export async function POST(req: NextRequest) {
 
 export async function PUT(req: NextRequest) {
   try {
+    const auth = await autorizar()
+    if ('error' in auth) return NextResponse.json({ error: auth.error }, { status: auth.status })
+
     const body = await req.json()
     const { id, password, ...fields } = body
 

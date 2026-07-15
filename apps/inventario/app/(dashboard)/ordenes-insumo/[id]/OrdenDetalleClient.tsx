@@ -10,7 +10,7 @@ import {
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
-import { ESTADO_META } from '../OrdenesInsumoClient'
+import { metaEstado } from '../OrdenesInsumoClient'
 import {
   actualizarItemAlistamiento, asignarResponsable, quitarResponsable, despacharOrden, anularOrden,
 } from '../actions'
@@ -61,7 +61,7 @@ export function OrdenDetalleClient({ orden, usuarios, puedeAlistar }: {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [despachando, setDespachando] = useState(false)
 
-  const meta = ESTADO_META[orden.estado]
+  const meta = metaEstado(orden.estado)
   const despachado = orden.estado === 'DESPACHADO'
   const anulada = orden.estado === 'ANULADA'
   const editable = puedeAlistar && !despachado && !anulada
