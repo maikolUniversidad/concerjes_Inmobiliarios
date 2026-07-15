@@ -18,7 +18,8 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   const { data: orden } = await supabase
     .from('ordenes_insumo')
     .select(`
-      id, numero, estado, periodo, observacion, created_at, aprobado_at,
+      id, numero, estado, periodo, observacion, created_at, aprobado_at, creado_por,
+      aprobado_solicitante_at, aprobado_coordinador_at, recibido_at, recibido_obs,
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
       sede:sedes ( nombre, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
@@ -37,9 +38,11 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       .eq('orden_id', id).order('created_at', { ascending: true }),
   ])
 
-  // El alistamiento SOLO se habilita cuando la central ya aprobó la propuesta.
+  // El alistamiento SOLO se habilita cuando ya firmaron las dos partes.
   const estado = (orden as unknown as { estado: string }).estado
-  const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO'].includes(estado)
+  const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'RECIBIDO'].includes(estado)
+
+  const { data: { user } } = await supabase.auth.getUser()
 
   // Datos planos para los PDF (orden / remisión que viaja con el pedido).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -68,6 +71,10 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         eventos={(eventosData as unknown as EventoOrden[]) ?? []}
         puedeProponer={perm.puede('crear_ordenes_insumo')}
         puedeAprobar={perm.puede('aprobar_ordenes_insumo')}
+        firmaSolicitante={o.aprobado_solicitante_at ?? null}
+        firmaCoordinador={o.aprobado_coordinador_at ?? null}
+        esSolicitante={Boolean(user && o.creado_por === user.id)}
+        puedeRecibir={perm.puede('recibir_ordenes_insumo')}
       />
       <OrdenDetalleClient
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

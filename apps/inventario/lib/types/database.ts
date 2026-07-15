@@ -218,7 +218,7 @@ export type EstadoOrdenInsumo =
   // Flujo de aprobación (coordinador de sede ⇄ central)
   | 'BORRADOR' | 'EN_REVISION' | 'CAMBIOS_SOLICITADOS' | 'APROBADA'
   // Bodega
-  | 'PENDIENTE' | 'EN_ALISTAMIENTO' | 'ALISTADO' | 'DESPACHADO' | 'ANULADA'
+  | 'PENDIENTE' | 'EN_ALISTAMIENTO' | 'ALISTADO' | 'DESPACHADO' | 'RECIBIDO' | 'ANULADA'
 
 export interface OrdenInsumo {
   id: string

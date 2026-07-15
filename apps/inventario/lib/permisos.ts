@@ -50,6 +50,7 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'aprobar_ordenes_insumo',   label: 'Aprobar órdenes de insumo (central)' },
       { key: 'ver_alistamiento',         label: 'Ver alistamiento de bodega' },
       { key: 'alistar_ordenes_insumo',   label: 'Alistar y despachar órdenes' },
+      { key: 'recibir_ordenes_insumo',   label: 'Dar el recibido en sede (supervisor del contrato)' },
       { key: 'ver_reportes',             label: 'Ver reportes' },
       { key: 'exportar_datos',           label: 'Exportar datos a Excel' },
     ],

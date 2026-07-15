@@ -172,27 +172,87 @@ export async function solicitarCambios(ordenId: string, mensaje: string): Promis
   return { ok: true }
 }
 
-/** Central → aprueba: la orden pasa al módulo de Alistamiento. */
+/**
+ * Aprobación a dos manos: firman el solicitante (supervisor de la sede que la
+ * propuso) y el coordinador de conserjes. La orden solo pasa a Alistamiento
+ * cuando existen AMBOS vistos buenos.
+ *
+ * El lado que firma se deduce del usuario: si creó la orden firma como
+ * solicitante; si no, firma como coordinador (requiere aprobar_ordenes_insumo).
+ */
 export async function aprobarOrden(ordenId: string, mensaje?: string): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const perm = await getPermisosUsuario()
-  if (!perm.puede('aprobar_ordenes_insumo')) return { error: 'Solo la central puede aprobar.' }
   const sb = supabase as DB
 
-  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  const { data: orden } = await sb.from('ordenes_insumo')
+    .select('estado, creado_por, aprobado_solicitante_at, aprobado_coordinador_at')
+    .eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
   if (orden.estado !== 'EN_REVISION') return { error: 'Solo se aprueban órdenes en revisión.' }
 
-  const { error } = await sb.from('ordenes_insumo')
-    .update({ estado: 'APROBADA', aprobado_por: user.id, aprobado_at: new Date().toISOString() })
-    .eq('id', ordenId)
+  const esSolicitante = orden.creado_por === user.id
+  const lado: 'SOLICITANTE' | 'COORDINADOR' = esSolicitante ? 'SOLICITANTE' : 'COORDINADOR'
+  if (!esSolicitante && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'Solo el coordinador de conserjes o quien solicitó pueden aprobar.' }
+  }
+
+  const ahora = new Date().toISOString()
+  const patch: Record<string, unknown> = esSolicitante
+    ? { aprobado_solicitante_por: user.id, aprobado_solicitante_at: ahora }
+    : { aprobado_coordinador_por: user.id, aprobado_coordinador_at: ahora }
+
+  // ¿Con esta firma quedan las dos? Solo entonces pasa a alistamiento.
+  const otraFirma = esSolicitante ? orden.aprobado_coordinador_at : orden.aprobado_solicitante_at
+  const completa = Boolean(otraFirma)
+  if (completa) Object.assign(patch, { estado: 'APROBADA', aprobado_por: user.id, aprobado_at: ahora })
+
+  const { error } = await sb.from('ordenes_insumo').update(patch).eq('id', ordenId)
   if (error) return { error: error.message }
 
   await sb.rpc('oi_evento', {
     p_orden: ordenId, p_tipo: 'APROBACION',
-    p_mensaje: mensaje?.trim() || 'Orden aprobada. Pasa a alistamiento en bodega.',
-    p_ant: 'EN_REVISION', p_nue: 'APROBADA',
+    p_mensaje: mensaje?.trim() || (completa
+      ? `Visto bueno de ${lado === 'SOLICITANTE' ? 'quien solicitó' : 'el coordinador'}. Aprobada por ambas partes: pasa a alistamiento.`
+      : `Visto bueno de ${lado === 'SOLICITANTE' ? 'quien solicitó' : 'el coordinador'}. Falta la otra firma para aprobar.`),
+    p_ant: 'EN_REVISION', p_nue: completa ? 'APROBADA' : 'EN_REVISION',
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return { ok: true }
+}
+
+/**
+ * Recibido en sede: lo confirma el supervisor del contrato (mismo grupo de
+ * contrato que la sede de la orden). Cierra el proceso.
+ */
+export async function confirmarRecepcion(ordenId: string, observacion?: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('recibir_ordenes_insumo')) return { error: 'No tienes permiso para dar el recibido.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (orden.estado !== 'DESPACHADO') return { error: 'Solo se recibe una orden ya enviada.' }
+
+  // Solo el supervisor de ESE contrato puede recibir.
+  const { data: delGrupo } = await sb.rpc('oi_es_del_grupo', { p_orden: ordenId })
+  if (delGrupo === false) return { error: 'Solo el supervisor del contrato de esa sede puede dar el recibido.' }
+
+  const { error } = await sb.from('ordenes_insumo')
+    .update({
+      estado: 'RECIBIDO', recibido_por: user.id,
+      recibido_at: new Date().toISOString(), recibido_obs: observacion?.trim() || null,
+    })
+    .eq('id', ordenId)
+  if (error) return { error: error.message }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'RECEPCION',
+    p_mensaje: observacion?.trim() || 'Recibido en sede. Proceso finalizado.',
+    p_ant: 'DESPACHADO', p_nue: 'RECIBIDO',
   })
   revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
   return { ok: true }

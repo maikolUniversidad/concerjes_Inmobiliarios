@@ -25,7 +25,8 @@ export const ESTADO_META: Record<EstadoOrdenInsumo, { label: string; cls: string
   PENDIENTE:       { label: 'Pendiente',       cls: 'bg-amber-100 text-amber-700' },
   EN_ALISTAMIENTO: { label: 'En alistamiento', cls: 'bg-blue-100 text-blue-700' },
   ALISTADO:        { label: 'Alistado',        cls: 'bg-indigo-100 text-indigo-700' },
-  DESPACHADO:      { label: 'Despachado',      cls: 'bg-green-100 text-green-700' },
+  DESPACHADO:      { label: 'Enviado',         cls: 'bg-green-100 text-green-700' },
+  RECIBIDO:        { label: 'Recibido',        cls: 'bg-emerald-100 text-emerald-800' },
   ANULADA:         { label: 'Anulada',         cls: 'bg-gray-100 text-gray-500' },
 }
 
@@ -105,7 +106,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
                   </span>
                 </div>
 
-                {o.estado !== 'DESPACHADO' && o.estado !== 'ANULADA' && (
+                {!['DESPACHADO', 'RECIBIDO', 'ANULADA'].includes(o.estado) && (
                   <div className="mt-3">
                     <div className="flex items-center justify-between font-body text-[11px] text-gray-400 mb-1">
                       <span>Alistado</span><span>{o.alistados}/{o.total_items}</span>
