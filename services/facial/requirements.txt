@@ -1,18 +1,17 @@
 # Servicio facial — Conserjes Inmobiliarios
+# Todas con wheels manylinux: instalan sin compilar (clave para Vercel).
+# NO incluye insightface ni torch a propósito: no caben en serverless.
 fastapi==0.115.6
-uvicorn[standard]==0.34.0
 pydantic==2.10.4
 
-# Detección (SCRFD) + embedding ArcFace 512-d (buffalo_l)
-insightface==0.7.3
-# GPU: onnxruntime-gpu · CPU (pruebas): cambiar por onnxruntime
-onnxruntime-gpu==1.20.1
+# Inferencia ONNX en CPU (~50 MB)
+onnxruntime==1.20.1
 
+# YuNet (detección + 5 puntos) viene dentro de OpenCV
 opencv-python-headless==4.10.0.84
 numpy==1.26.4
 
-# Anti-spoofing pasivo (MiniFASNet). Arrastra torch; descarga pesos solo.
-# Si no quieres anti-spoofing, quita esta línea y usa LIVENESS_MODE=disabled
-# (SOLO para pruebas: sin liveness, una foto impresa puede engañar al sistema).
-deepface==0.0.93
-tf-keras==2.18.0
+# Solo on-premise (Docker): descomenta para anti-spoofing MiniFASNet real.
+# Arrastra torch (~800 MB) → NO cabe en Vercel. Requiere LIVENESS_MODE=fasnet.
+# deepface==0.0.93
+# tf-keras==2.18.0

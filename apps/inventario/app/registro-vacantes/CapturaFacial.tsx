@@ -8,6 +8,8 @@ export interface ResultadoFacial {
   disponible?: boolean
   resultado?: 'MATCH' | 'DUDA' | 'NO_MATCH' | 'LIVENESS_FAIL'
   candidato_id?: string | null
+  /** true = reconocido pero sin prueba de vida: hay que confirmar por documento. */
+  requiere2fa?: boolean
   ok?: boolean
   token_hash?: string
   email?: string

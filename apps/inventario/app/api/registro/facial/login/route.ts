@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
   const ua = req.headers.get('user-agent')
 
   // 1) Embedding + liveness
-  let emb: { embedding: number[]; liveness_score: number }
+  let emb: { embedding: number[]; liveness_score: number | null }
   try {
     const r = await fetch(`${url.replace(/\/$/, '')}/face/identify`, {
       method: 'POST',
@@ -40,10 +40,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ disponible: false })
   }
 
-  if (emb.liveness_score < LIVENESS) {
+  if (emb.liveness_score != null && emb.liveness_score < LIVENESS) {
     await admin.from('intentos_identificacion').insert({ resultado: 'LIVENESS_FAIL', score: emb.liveness_score, ip, user_agent: ua })
     return NextResponse.json({ resultado: 'LIVENESS_FAIL' })
   }
+  // SEGURIDAD: sin anti-spoofing (liveness null) el rostro NO basta para otorgar
+  // sesión — una foto impresa podría suplantar al candidato. En ese caso el
+  // rostro solo sugiere identidad y se exige ingresar con documento+contraseña.
+  const sinLiveness = emb.liveness_score == null
 
   // 2) Búsqueda 1:N
   const { data, error } = await admin.rpc('vac_buscar_rostro', { p_embedding: emb.embedding, p_limite: 1 })
@@ -52,6 +56,12 @@ export async function POST(req: NextRequest) {
   if (!mejor || mejor.similitud < MATCH) {
     await admin.from('intentos_identificacion').insert({ resultado: 'NO_MATCH', score: mejor?.similitud ?? 0, ip, user_agent: ua })
     return NextResponse.json({ resultado: 'NO_MATCH' })
+  }
+
+  // Reconocido, pero sin prueba de vida no se otorga sesión.
+  if (sinLiveness) {
+    await admin.from('intentos_identificacion').insert({ resultado: 'MATCH', score: mejor.similitud, candidato_id: mejor.candidato_id, ip, user_agent: ua })
+    return NextResponse.json({ resultado: 'MATCH', requiere2fa: true })
   }
 
   // 3) Usuario dueño del candidato → magic link

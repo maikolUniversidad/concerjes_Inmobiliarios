@@ -55,6 +55,10 @@ export function IngresarClient() {
       router.push('/registro-vacantes')
       return
     }
+    if (r.requiere2fa) {
+      toast.info('Te reconocimos. Por seguridad, confirma con tu documento y contraseña para entrar.')
+      return
+    }
     if (r.resultado === 'NO_MATCH') toast.info('No te reconocimos. Ingresa con tu documento.')
     else if (r.resultado === 'LIVENESS_FAIL') toast.error('No pudimos verificar tu rostro. Intenta con mejor luz o usa tu documento.')
   }

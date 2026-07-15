@@ -24,8 +24,8 @@ export async function POST(req: NextRequest) {
   const DUDA = Number(process.env.FACIAL_UMBRAL_DUDA ?? '0.38')
   const LIVENESS = Number(process.env.FACIAL_LIVENESS_MIN ?? '0.90')
 
-  // 1) Embedding + liveness en el microservicio GPU.
-  let emb: { embedding: number[]; quality: number; liveness_score: number }
+  // 1) Embedding + liveness en el microservicio.
+  let emb: { embedding: number[]; quality: number; liveness_score: number | null }
   try {
     const r = await fetch(`${url.replace(/\/$/, '')}/face/identify`, {
       method: 'POST',
@@ -45,7 +45,11 @@ export async function POST(req: NextRequest) {
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0] ?? null
   const ua = req.headers.get('user-agent')
 
-  if (emb.liveness_score < LIVENESS) {
+  // liveness_score = null → el motor no tiene anti-spoofing (serverless sin torch).
+  // Aquí solo IDENTIFICAMOS para sugerir identidad, y la app SIEMPRE exige el 2º
+  // factor antes de mostrar datos personales, así que se permite continuar.
+  // Si hay motor y el puntaje es bajo, se rechaza.
+  if (emb.liveness_score != null && emb.liveness_score < LIVENESS) {
     await admin.from('intentos_identificacion').insert({ resultado: 'LIVENESS_FAIL', score: emb.liveness_score, ip, user_agent: ua })
     return NextResponse.json({ resultado: 'LIVENESS_FAIL' })
   }
