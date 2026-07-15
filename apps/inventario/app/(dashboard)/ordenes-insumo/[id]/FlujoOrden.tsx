@@ -27,6 +27,7 @@ const TIPO_META: Record<string, { label: string; color: string }> = {
   AJUSTE:              { label: 'Cantidad ajustada',  color: 'bg-sky-100 text-sky-700' },
   ITEM_AGREGADO:       { label: 'Producto agregado',  color: 'bg-lime-100 text-lime-700' },
   ITEM_QUITADO:        { label: 'Producto quitado',   color: 'bg-rose-100 text-rose-700' },
+  APROBACION_RETIRADA: { label: 'Aprobación retirada', color: 'bg-orange-100 text-orange-800' },
   COMENTARIO:          { label: 'Comentario',         color: 'bg-gray-100 text-gray-600' },
   ALISTAMIENTO:        { label: 'Alistamiento',       color: 'bg-violet-100 text-violet-700' },
   DESPACHO:            { label: 'Enviado',            color: 'bg-emerald-100 text-emerald-700' },
@@ -129,7 +130,7 @@ export function FlujoOrden({
 
   const descripcion =
     estado === 'BORRADOR' ? 'Propuesta en borrador. Ajusta las cantidades y agrega o quita productos; envíala a la central cuando esté lista.'
-    : estado === 'EN_REVISION' ? 'En revisión. Deben aprobarla el solicitante y el coordinador de conserjes; cualquiera puede solicitar cambios.'
+    : estado === 'EN_REVISION' ? 'En revisión. Deben aprobarla el solicitante y el coordinador de conserjes. Aún puedes ajustar el pedido: si lo cambias, se retiran las aprobaciones y ambos deben aprobar de nuevo.'
     : estado === 'CAMBIOS_SOLICITADOS' ? 'La central solicitó cambios. Se retiraron las aprobaciones: ajusta la propuesta, reenvíala y ambos deben aprobar de nuevo.'
     : estado === 'APROBADA' ? 'Aprobada por ambas partes ✅ — ya está disponible en Alistamiento de bodega.'
     : ['EN_ALISTAMIENTO', 'ALISTADO'].includes(estado) ? 'Aprobada. El proceso continúa en Alistamiento.'

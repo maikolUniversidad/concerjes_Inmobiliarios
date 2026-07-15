@@ -42,7 +42,11 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   // En la etapa de solicitud (borrador / cambios) se ajustan cantidades y se
   // agregan/quitan productos; el alistamiento no existe todavía.
   const enSolicitud = !aprobada
-  const puedeEditarSolicitud = perm.puede('crear_ordenes_insumo') && ['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(estado)
+  // Se puede editar en borrador, con cambios y también en revisión (ajustar el
+  // pedido durante la revisión retira las aprobaciones, ver actions.ts).
+  const puedeEditarSolicitud =
+    (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo'))
+    && ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION'].includes(estado)
 
   const { data: { user } } = await supabase.auth.getUser()
 

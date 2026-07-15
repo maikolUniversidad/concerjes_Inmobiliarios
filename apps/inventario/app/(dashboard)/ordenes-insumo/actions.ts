@@ -88,8 +88,11 @@ export async function crearOrdenInsumo(input: {
 // FLUJO DE APROBACIÓN (coordinador de sede ⇄ central)
 // ═══════════════════════════════════════════════════════════════════════════
 
-/** Estados en los que el coordinador todavía puede editar su propuesta. */
-const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS']
+/**
+ * Estados en los que aún se puede editar el pedido. También en revisión: si se
+ * ajusta algo estando en revisión, se retiran las aprobaciones (ver más abajo).
+ */
+const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION']
 
 /**
  * Cualquier cambio en la orden invalida las aprobaciones: las dos partes deben
@@ -101,6 +104,25 @@ const RESET_APROBACIONES = {
   aprobado_por: null, aprobado_at: null,
 }
 
+/**
+ * Si el pedido se edita estando EN_REVISION y ya había alguna firma, se retiran
+ * las aprobaciones (ambas partes deben volver a aprobar) y queda registrado.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function retirarAprobacionesSiRevision(sb: any, ordenId: string, estado: string) {
+  if (estado !== 'EN_REVISION') return
+  const { data: o } = await sb.from('ordenes_insumo')
+    .select('aprobado_solicitante_at, aprobado_coordinador_at').eq('id', ordenId).single()
+  const habiaFirma = Boolean(o?.aprobado_solicitante_at || o?.aprobado_coordinador_at)
+  if (!habiaFirma) return
+
+  await sb.from('ordenes_insumo').update(RESET_APROBACIONES).eq('id', ordenId)
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'APROBACION_RETIRADA',
+    p_mensaje: 'Se retiraron las aprobaciones por un cambio en el pedido durante la revisión. Ambas partes deben aprobar de nuevo.',
+  })
+}
+
 /** El coordinador ajusta la cantidad propuesta de un ítem (antes de aprobar). */
 export async function actualizarItemSolicitado(
   ordenId: string, itemId: string, cantidad: number,
@@ -108,12 +130,14 @@ export async function actualizarItemSolicitado(
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const perm = await getPermisosUsuario()
-  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso para editar la propuesta.' }
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para editar el pedido.' }
+  }
   const sb = supabase as DB
 
   const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (ya fue aprobada).' }
 
   const cant = Math.max(0, Number(cantidad) || 0)
   // Se captura el valor anterior para dejar el cambio en la trazabilidad.
@@ -137,6 +161,7 @@ export async function actualizarItemSolicitado(
       p_mensaje: `Ajustó «${prod}»: ${antes.cantidad_solicitada} → ${cant}`,
       p_detalle: { item_id: itemId, antes: antes.cantidad_solicitada, despues: cant },
     })
+    await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
   }
 
   revalidatePath(`/ordenes-insumo/${ordenId}`)
@@ -150,7 +175,9 @@ export async function agregarItemSolicitado(
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const perm = await getPermisosUsuario()
-  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso para editar la propuesta.' }
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para editar el pedido.' }
+  }
   const sb = supabase as DB
 
   const cant = Math.max(1, Number(cantidad) || 0)
@@ -158,7 +185,7 @@ export async function agregarItemSolicitado(
 
   const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (ya fue aprobada).' }
 
   // Evita duplicar el mismo producto en la orden.
   const { data: existe } = await sb.from('orden_insumo_items')
@@ -181,6 +208,7 @@ export async function agregarItemSolicitado(
     p_mensaje: `Agregó «${prod?.nombre_estandar ?? 'producto'}» (${cant}) ${esAdicional ? '· adicional' : '· parametrizado'}`,
     p_detalle: { producto_id: productoId, cantidad: cant, es_adicional: esAdicional },
   })
+  await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }
@@ -190,12 +218,14 @@ export async function quitarItemSolicitado(ordenId: string, itemId: string): Pro
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const perm = await getPermisosUsuario()
-  if (!perm.puede('crear_ordenes_insumo')) return { error: 'No tienes permiso para editar la propuesta.' }
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para editar el pedido.' }
+  }
   const sb = supabase as DB
 
   const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (está en revisión o aprobada).' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (ya fue aprobada).' }
 
   const { data: item } = await sb.from('orden_insumo_items')
     .select('producto:productos ( nombre_estandar )').eq('id', itemId).single()
@@ -208,6 +238,7 @@ export async function quitarItemSolicitado(ordenId: string, itemId: string): Pro
     p_mensaje: `Quitó «${item?.producto?.nombre_estandar ?? 'producto'}» de la orden.`,
     p_detalle: { item_id: itemId },
   })
+  await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }
