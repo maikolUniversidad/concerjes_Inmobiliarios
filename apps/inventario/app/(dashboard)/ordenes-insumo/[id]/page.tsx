@@ -4,6 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { OrdenDetalleClient } from './OrdenDetalleClient'
 import { FlujoOrden, type EventoOrden } from './FlujoOrden'
+import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
 
 export const metadata: Metadata = { title: 'Orden de insumo' }
 export const dynamic = 'force-dynamic'
@@ -17,7 +18,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   const { data: orden } = await supabase
     .from('ordenes_insumo')
     .select(`
-      id, numero, estado, periodo, observacion, created_at,
+      id, numero, estado, periodo, observacion, created_at, aprobado_at,
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
       sede:sedes ( nombre, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
@@ -40,6 +41,25 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   const estado = (orden as unknown as { estado: string }).estado
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO'].includes(estado)
 
+  // Datos planos para los PDF (orden / remisión que viaja con el pedido).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const o = orden as any
+  const datosDoc: DatosDoc = {
+    numero: o.numero, estado, created_at: o.created_at,
+    aprobado_at: o.aprobado_at ?? null, despachado_at: o.despachado_at ?? null,
+    observacion: o.observacion ?? null,
+    sede: o.sede?.nombre ?? 'Sin sede',
+    grupo: o.sede?.grupo?.nombre ?? null,
+    bodega: o.bodega?.nombre ?? null,
+    responsables: (o.responsables ?? []).map((r: any) => r.usuario?.nombre).filter(Boolean),
+    items: (o.items ?? []).map((i: any) => ({
+      nombre: i.producto?.nombre_estandar ?? '—',
+      presentacion: i.producto?.presentacion ?? null,
+      solicitada: Number(i.cantidad_solicitada ?? 0),
+      alistada: Number(i.cantidad_alistada ?? 0),
+    })),
+  }
+
   return (
     <div className="p-4 sm:p-6 max-w-4xl mx-auto space-y-5">
       <FlujoOrden
@@ -55,6 +75,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         usuarios={(usuarios ?? []) as { id: string; nombre: string }[]}
         puedeAlistar={perm.puede('alistar_ordenes_insumo') && aprobada}
       />
+      <DocumentosPDF datos={datosDoc} />
     </div>
   )
 }
