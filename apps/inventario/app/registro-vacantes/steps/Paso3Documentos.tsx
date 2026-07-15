@@ -7,9 +7,11 @@ import type { WizardCtx } from '../RegistroWizard'
 import { fetchTiposDocumentales } from '@/lib/registro/datos'
 import {
   subirDocumento, listarDocumentos, eliminarDocumento, tipoAplica, fetchCargoFlags,
+  dataUrlAFile, marcarFotoPerfil,
   type DocumentoSubido,
 } from '@/lib/registro/documentos'
 import type { TipoDocumental } from '@/lib/registro/tipos'
+import { CapturaFacial } from '../CapturaFacial'
 
 const GRUPOS: Record<string, string> = {
   PERSONALES: 'Documentos personales',
@@ -117,23 +119,37 @@ function TipoCard({
   onSubido: (d: DocumentoSubido) => void; onEliminar: (d: DocumentoSubido) => void
 }) {
   const [subiendo, setSubiendo] = useState(false)
+  const [camara, setCamara] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const completo = docs.length >= tipo.min_archivos
   const lleno = docs.length >= tipo.max_archivos
+  // La selfie se toma con la cámara frontal y además queda como foto de perfil.
+  const esSelfie = tipo.codigo === 'FOTO_CARNET'
   const faltante = tipo.obligatorio && !completo
   // Etiqueta especial para cédula (frente/reverso)
   const etiquetaSlot = (i: number) =>
     tipo.codigo === 'CEDULA' ? (i === 0 ? ' (frente)' : ' (reverso)') : ''
 
-  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file) return
+  async function subirArchivo(file: File) {
     setSubiendo(true)
     const r = await subirDocumento(candidatoId, tipo, file, docs.length + 1)
     setSubiendo(false)
     if (r.error) { toast.error(r.error); return }
-    if (r.doc) { onSubido(r.doc); toast.success('Documento cargado.') }
+    if (!r.doc) return
+    onSubido(r.doc)
+    if (esSelfie) {
+      // Queda como foto de perfil/carnet y disponible para procesarla después.
+      await marcarFotoPerfil(candidatoId, r.doc.storage_path)
+      toast.success('Foto de perfil guardada.')
+    } else {
+      toast.success('Documento cargado.')
+    }
+  }
+
+  async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (file) await subirArchivo(file)
   }
 
   return (
@@ -178,16 +194,36 @@ function TipoCard({
       )}
 
       {!lleno && (
-        <button
-          type="button"
-          onClick={() => inputRef.current?.click()}
-          disabled={subiendo}
-          className="mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-brand-green/60 py-2.5 text-sm font-semibold text-brand-green disabled:opacity-50"
-        >
-          {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Camera className="h-4 w-4" /><Upload className="h-4 w-4" /> Subir {etiquetaSlot(docs.length).trim() || 'archivo'}</>}
-        </button>
+        <div className="mt-3 flex gap-2">
+          {esSelfie && (
+            <button
+              type="button"
+              onClick={() => setCamara(true)}
+              disabled={subiendo}
+              className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-green py-2.5 text-sm font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50"
+            >
+              {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Camera className="h-4 w-4" /> Tomar mi foto</>}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => inputRef.current?.click()}
+            disabled={subiendo}
+            className="flex flex-1 items-center justify-center gap-2 rounded-lg border border-dashed border-brand-green/60 py-2.5 text-sm font-semibold text-brand-green disabled:opacity-50"
+          >
+            {subiendo && !esSelfie ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Upload className="h-4 w-4" /> {esSelfie ? 'Subir archivo' : `Subir ${etiquetaSlot(docs.length).trim() || 'archivo'}`}</>}
+          </button>
+        </div>
       )}
       <input ref={inputRef} type="file" accept="image/*,application/pdf" capture="environment" hidden onChange={onFile} />
+
+      {camara && (
+        <CapturaFacial
+          modo="foto"
+          onResultado={(r) => { if (r.imagen) void subirArchivo(dataUrlAFile(r.imagen)) }}
+          onCerrar={() => setCamara(false)}
+        />
+      )}
     </div>
   )
 }

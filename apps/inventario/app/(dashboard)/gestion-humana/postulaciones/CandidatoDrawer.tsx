@@ -68,6 +68,7 @@ export function CandidatoDrawer({
   const [vacanteId, setVacanteId] = useState(postulacion?.vacante_id ?? '')
   const [guardando, setGuardando] = useState(false)
   const [analizando, setAnalizando] = useState<string | null>(null)
+  const [fotoUrl, setFotoUrl] = useState<string | null>(null)
 
   const tipoMap = new Map(tipos.map((t) => [t.id, t]))
 
@@ -82,9 +83,17 @@ export function CandidatoDrawer({
       if (!vivo) return
       setDocs(d.data ?? []); setConsents(c.data ?? []); setDireccion(dir.data ?? null)
       setCargando(false)
+
+      // Foto de perfil (bucket privado → URL firmada de vida corta)
+      if (candidato.foto_perfil_path) {
+        const { data: f } = await sb.storage
+          .from('registro-vacantes')
+          .createSignedUrl(candidato.foto_perfil_path, 300)
+        if (vivo && f?.signedUrl) setFotoUrl(f.signedUrl)
+      }
     })()
     return () => { vivo = false }
-  }, [candidato.id, sb])
+  }, [candidato.id, candidato.foto_perfil_path, sb])
 
   async function verDoc(doc: DocFull) {
     const { data, error } = await sb.storage.from('registro-vacantes').createSignedUrl(doc.storage_path, 120)
@@ -216,6 +225,13 @@ export function CandidatoDrawer({
           {/* Datos */}
           <section>
             <h3 className="mb-1 font-heading text-sm font-bold text-gray-700">Datos del candidato</h3>
+            {fotoUrl && (
+              <div className="mb-3 flex items-center gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={fotoUrl} alt="Foto de perfil" className="h-20 w-20 rounded-xl border border-gray-200 object-cover" />
+                <p className="text-xs text-gray-500">Foto tipo carnet<br />tomada en el registro</p>
+              </div>
+            )}
             <div className="divide-y divide-gray-100 rounded-xl border border-gray-100 px-3">
               {dato('Documento', `${candidato.tipo_documento} ${candidato.numero_documento}`)}
               {dato('Nacimiento', candidato.fecha_nacimiento)}

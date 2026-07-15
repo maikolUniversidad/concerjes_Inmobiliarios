@@ -13,17 +13,20 @@ export interface ResultadoFacial {
   ok?: boolean
   token_hash?: string
   email?: string
+  /** Solo en modo 'foto': el JPEG capturado (data-url). */
+  imagen?: string
   error?: string
 }
 
 interface Props {
-  modo: 'identificar' | 'enrolar' | 'login'
+  /** 'foto' = solo captura la imagen y la devuelve (no usa ningún motor de IA). */
+  modo: 'identificar' | 'enrolar' | 'login' | 'foto'
   candidatoId?: string
   onResultado: (r: ResultadoFacial) => void
   onCerrar: () => void
 }
 
-const ENDPOINTS: Record<Props['modo'], string> = {
+const ENDPOINTS: Record<string, string> = {
   identificar: '/api/registro/facial/identify',
   enrolar: '/api/registro/facial/enroll',
   login: '/api/registro/facial/login',
@@ -79,6 +82,13 @@ export function CapturaFacial({ modo, candidatoId, onResultado, onCerrar }: Prop
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const image = canvas.toDataURL('image/jpeg', 0.85)
 
+      // Modo 'foto': solo devolvemos la imagen; quien llama decide qué hacer.
+      if (modo === 'foto') {
+        onResultado({ ok: true, imagen: image })
+        cerrar()
+        return
+      }
+
       // El login no necesita sesión previa; identificar/enrolar sí (token del dueño).
       if (modo !== 'login') await ensureAnonSession()
       const sb = getSupabase()
@@ -109,7 +119,10 @@ export function CapturaFacial({ modo, candidatoId, onResultado, onCerrar }: Prop
         <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
           <span className="flex items-center gap-2 font-heading text-sm font-bold text-gray-900">
             <ScanFace className="h-4 w-4 text-brand-green" />
-            {modo === 'identificar' ? 'Identifícate con tu rostro' : 'Registra tu rostro'}
+            {modo === 'foto' ? 'Tu foto de perfil'
+              : modo === 'identificar' ? 'Identifícate con tu rostro'
+              : modo === 'login' ? 'Ingresa con tu rostro'
+              : 'Registra tu rostro'}
           </span>
           <button onClick={cerrar} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100"><X className="h-5 w-5" /></button>
         </div>

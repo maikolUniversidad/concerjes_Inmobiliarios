@@ -67,6 +67,36 @@ export async function subirDocumento(
   return { doc: ins.data as any }
 }
 
+/** Convierte el data-url de la cámara en un File subible. */
+export function dataUrlAFile(dataUrl: string, nombre = 'foto-perfil.jpg'): File {
+  const [cabecera, base64] = dataUrl.split(',')
+  const mime = /:(.*?);/.exec(cabecera)?.[1] ?? 'image/jpeg'
+  const bin = atob(base64)
+  const bytes = new Uint8Array(bin.length)
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+  return new File([bytes], nombre, { type: mime })
+}
+
+/**
+ * Marca un archivo ya subido como la foto de perfil / carnet del candidato.
+ * Se guarda la RUTA (no la imagen) para poder procesarla después y generar el
+ * embedding facial cuando exista el motor de comparación.
+ */
+export async function marcarFotoPerfil(candidatoId: string, storagePath: string): Promise<void> {
+  const sb = getSupabase()
+  await sb.from('candidatos').update({
+    foto_perfil_path: storagePath,
+    foto_perfil_at: new Date().toISOString(),
+  } as any).eq('id', candidatoId)
+}
+
+/** URL firmada de vida corta para mostrar la foto de perfil. */
+export async function urlFotoPerfil(path: string, segundos = 300): Promise<string | null> {
+  const sb = getSupabase()
+  const { data } = await sb.storage.from(BUCKET).createSignedUrl(path, segundos)
+  return data?.signedUrl ?? null
+}
+
 export async function listarDocumentos(candidatoId: string): Promise<DocumentoSubido[]> {
   const sb = getSupabase()
   const { data } = await sb
