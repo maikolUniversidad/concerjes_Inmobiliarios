@@ -78,7 +78,14 @@ Link libre en el Hero: "¿Buscas empleo? **Trabaja con nosotros** · Ya me regis
   - Paso 5 · Envío → estado `POSTULADO`.
 - Env: copiar `apps/web/.env.local.example` → `.env.local`.
 
-## Contrato del microservicio facial (fase siguiente)
+## Microservicio facial → `services/facial/` (implementado)
+El motor ya está escrito: FastAPI + InsightFace `buffalo_l` (ArcFace 512-d) +
+anti-spoofing MiniFASNet, con Dockerfile y README. **Falta desplegarlo en la GPU
+on-premise y exponerlo a Vercel con un túnel** (ver `services/facial/README.md`),
+y definir `FACIAL_SERVICE_URL` + `FACIAL_SERVICE_TOKEN` en Vercel. Mientras esa
+env no exista, la app responde `disponible:false` y usa la Ruta B (documento).
+
+## Contrato del microservicio facial
 
 `FACIAL_SERVICE_URL` **env-gated**: si no está, las rutas responden
 `{ disponible: false }` y la UI usa la Ruta B. FastAPI sobre GPU on-premise
