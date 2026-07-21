@@ -20,11 +20,18 @@
     "deploy:logs": "node scripts/vercel-deploy.mjs logs"
   },
   "devDependencies": {
+    "exceljs": "^4.4.0",
     "pg": "^8.22.0",
     "prettier": "^3.4.2",
     "turbo": "^2.3.3",
-    "typescript": "^5.7.2",
-    "xlsx": "^0.18.5"
+    "typescript": "^5.7.2"
+  },
+  "overrides": {
+    "dompurify": "^3.4.12",
+    "serialize-javascript": "^7.0.7",
+    "postcss": "^8.5.10",
+    "uuid": "^11.1.1",
+    "tar": "^7.5.20"
   },
   "packageManager": "npm@11.12.1",
   "engines": {

@@ -1,14 +1,16 @@
 /**
- * Carga datos reales desde CMI Reabastecimiento JUNIO V1.xlsb a Supabase
+ * Carga datos reales desde CMI Reabastecimiento JUNIO V1.xlsx a Supabase
  * node scripts/load-excel-data.mjs
+ *
+ * NOTA: usa ExcelJS (no SheetJS/xlsx). ExcelJS solo lee .xlsx / .csv,
+ * NO el formato binario .xlsb. Si tu fuente es .xlsb, ábrela en Excel
+ * y usa "Guardar como" → "Libro de Excel (*.xlsx)" antes de correr esto.
  */
-import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const XLSX = require('xlsx');
+import ExcelJS from 'exceljs';
 import pg from 'pg';
 
 const { Client } = pg;
-const EXCEL_PATH = 'C:/Users/maiko/Downloads/CMI Reabastecimiento JUNIO V1 (1).xlsb';
+const EXCEL_PATH = 'C:/Users/maiko/Downloads/CMI Reabastecimiento JUNIO V1 (1).xlsx';
 const DB_URL = 'postgresql://postgres.esehmwmtevwrqxvbzmev:S9qxOMoOZCepMyke@aws-1-us-west-2.pooler.supabase.com:5432/postgres';
 
 const client = new Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
@@ -20,6 +22,37 @@ const num = v => {
 };
 const str  = v => v ? String(v).trim().replace(/\s+/g,' ').toUpperCase() : null;
 const clean = v => v ? String(v).trim() : null;
+
+// ── ExcelJS: extraer el valor primitivo de una celda ────────────────────────
+function cellValue(cell) {
+  const v = cell ? cell.value : null;
+  if (v === null || v === undefined) return null;
+  if (v instanceof Date) return v;
+  if (typeof v === 'object') {
+    if (Array.isArray(v.richText)) return v.richText.map(t => t.text).join('');
+    if (v.text !== undefined) return v.text;       // hipervínculo
+    if (v.result !== undefined) return v.result;   // fórmula (valor calculado)
+    if (v.error !== undefined) return null;         // celda con error
+    return null;
+  }
+  return v;
+}
+
+// Replica XLSX.utils.sheet_to_json(ws, { header: 1, defval: null }):
+// matriz de filas (0-based) × columnas (0-based, col A = índice 0); null si vacía.
+function sheetToRows(ws) {
+  if (!ws) return [];
+  const maxRow = ws.rowCount || 0;
+  const maxCol = ws.columnCount || 0;
+  const rows = [];
+  for (let r = 1; r <= maxRow; r++) {
+    const row = ws.getRow(r);
+    const arr = [];
+    for (let c = 1; c <= maxCol; c++) arr.push(cellValue(row.getCell(c)));
+    rows.push(arr);
+  }
+  return rows;
+}
 
 function mapTipo(t) {
   if (!t) return 'OTROS';
@@ -59,8 +92,9 @@ function parsePresentacion(desc) {
 
 async function main() {
   console.log('📂 Leyendo Excel...');
-  const wb = XLSX.readFile(EXCEL_PATH, {});
-  console.log('   Hojas disponibles:', wb.SheetNames.join(', '));
+  const wb = new ExcelJS.Workbook();
+  await wb.xlsx.readFile(EXCEL_PATH);
+  console.log('   Hojas disponibles:', wb.worksheets.map(ws => ws.name).join(', '));
 
   await client.connect();
   console.log('✅ Conectado a Supabase\n');
@@ -130,9 +164,9 @@ async function main() {
 
   let sedesCount = 0;
   for (const cfg of sedeSheets) {
-    const ws = wb.Sheets[cfg.sheet];
+    const ws = wb.getWorksheet(cfg.sheet);
     if (!ws) continue;
-    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    const data = sheetToRows(ws);
     const headerRow = data[cfg.headerRow] || [];
     const gid = grupoMap[cfg.grupo];
 
@@ -154,8 +188,8 @@ async function main() {
 
   // ── 5. Productos — fuente primaria: Matriz Neg ─────────────────────────────
   console.log('📦 Productos desde Matriz Neg...');
-  const wsMat = wb.Sheets['Matriz Neg'];
-  const matData = XLSX.utils.sheet_to_json(wsMat, { header: 1, defval: null });
+  const wsMat = wb.getWorksheet('Matriz Neg');
+  const matData = sheetToRows(wsMat);
   // Row 0 = header, data desde row 1
   // Cols: 0=REF, 1=NOMBRE, 2=PRESENTACION, 3=TIPO, 4=STOCK_PROM, 5=CAT, 6=PROV1, 7=PRECIO1, 8=PROV2, 9=PRECIO2, 10=MONTERREY, 11=BEAUTE, 12=SUMICORP
 
@@ -199,8 +233,8 @@ async function main() {
 
   // Enriquecer con Stock (para los que no están en Matriz Neg)
   console.log('📦 Enriqueciendo con Stock...');
-  const wsStock = wb.Sheets['Stock'];
-  const stockRaw = XLSX.utils.sheet_to_json(wsStock, { header: 1, defval: null });
+  const wsStock = wb.getWorksheet('Stock');
+  const stockRaw = sheetToRows(wsStock);
   // Row 0 = header, data desde row 1
   // Cols: 0=Codigo, 1=Descripcion, 2=Cantidad real, 3=Cantidad disponible, 4=Entrante, 5=Saliente, 8=Columna3(categoria)
 
@@ -344,9 +378,9 @@ async function main() {
   const periodo = '2026-06-01';
 
   for (const cfg of distSheets) {
-    const ws = wb.Sheets[cfg.sheet];
+    const ws = wb.getWorksheet(cfg.sheet);
     if (!ws) continue;
-    const data = XLSX.utils.sheet_to_json(ws, { header: 1, defval: null });
+    const data = sheetToRows(ws);
     const gid = grupoMap[cfg.grupo];
 
     for (let row = cfg.headerRow + 1; row < data.length; row++) {
