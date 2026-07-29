@@ -3,7 +3,8 @@ import {
   FileText, Warehouse, Truck, Users,
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode, PackageCheck,
-  Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug, type LucideIcon,
+  Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
+  MapPin, Navigation, AlertTriangle, Clock, Map, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -87,6 +88,19 @@ export const navigation: NavModule[] = [
     ],
   },
   {
+    id: 'logistica',
+    title: 'Logística',
+    icon: Truck,
+    items: [
+      { label: 'Mis Rutas',         href: '/logistica/mis-rutas',  icon: Navigation,    permiso: 'ver_rutas_conductor' },
+      { label: 'Control de Rutas',  href: '/logistica/control',    icon: ClipboardList, permiso: 'gestionar_rutas' },
+      { label: 'Mapa en Vivo',      href: '/logistica/mapa',       icon: Map,           permiso: 'ver_ubicacion_conductores' },
+      { label: 'Novedades',         href: '/logistica/novedades',  icon: AlertTriangle, permiso: 'ver_novedades_entrega' },
+      { label: 'Horarios de Entrega', href: '/logistica/horarios', icon: Clock,         permiso: 'gestionar_horarios_entrega' },
+      { label: 'Conductores',       href: '/logistica/conductores', icon: MapPin,        permiso: 'gestionar_conductores' },
+    ],
+  },
+  {
     id: 'ia',
     title: 'Inteligencia Artificial',
     icon: Brain,
@@ -126,6 +140,7 @@ export const moduleShortLabel: Record<string, string> = {
   inventario: 'Inventario',
   gestion: 'Gestión',
   gestion_humana: 'RRHH',
+  logistica: 'Logística',
   ia: 'IA',
   administracion: 'Admin',
 }

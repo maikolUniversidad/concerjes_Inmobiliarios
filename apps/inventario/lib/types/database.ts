@@ -7,7 +7,7 @@ export type TipoMovimiento = 'ENTRADA' | 'SALIDA' | 'TRASLADO' | 'AJUSTE' | 'DEV
 export type EstadoOC = 'BORRADOR' | 'APROBADA' | 'ENVIADA' | 'PARCIAL' | 'COMPLETA' | 'ANULADA'
 export type RolUsuario =
   | 'SUPER_ADMIN' | 'ADMIN' | 'SUPERVISOR' | 'COORDINADOR_COMPRAS'
-  | 'BODEGUERO' | 'AUDITOR' | 'OPERADOR_SEDE'
+  | 'BODEGUERO' | 'AUDITOR' | 'OPERADOR_SEDE' | 'CONDUCTOR'
 
 export interface Producto {
   id: string
@@ -218,7 +218,11 @@ export type EstadoOrdenInsumo =
   // Flujo de aprobación (coordinador de sede ⇄ central)
   | 'BORRADOR' | 'EN_REVISION' | 'CAMBIOS_SOLICITADOS' | 'APROBADA'
   // Bodega
-  | 'PENDIENTE' | 'EN_ALISTAMIENTO' | 'ALISTADO' | 'DESPACHADO' | 'RECIBIDO' | 'ANULADA'
+  | 'PENDIENTE' | 'EN_ALISTAMIENTO' | 'ALISTADO' | 'DESPACHADO'
+  // Conductor (nuevo módulo de logística)
+  | 'EN_RUTA' | 'ENTREGADO'
+  // Cierre
+  | 'RECIBIDO' | 'ANULADA'
 
 export interface OrdenInsumo {
   id: string
@@ -236,6 +240,10 @@ export interface OrdenInsumo {
   despachado_at: string | null
   video_path: string | null
   video_mime: string | null
+  // Módulo conductor
+  conductor_id: string | null
+  tomado_ruta_at: string | null
+  ruta_parada_id: string | null
   created_at: string
   updated_at: string
   sede?: Sede
@@ -342,6 +350,13 @@ export const PERMISOS: Record<RolUsuario, string[]> = {
     'productos.read',
     'pedidos.read', 'pedidos.write',
   ],
+  CONDUCTOR: [
+    'logistica.read',
+    'rutas.read',
+    'gps.write',
+    'entregas.write',
+    'novedades.write',
+  ],
 }
 
 export function tienePermiso(rol: RolUsuario, permiso: string): boolean {
@@ -373,6 +388,7 @@ export const ROL_LABELS: Record<RolUsuario, { label: string; color: string }> = 
   BODEGUERO: { label: 'Bodeguero', color: 'bg-green-100 text-green-800' },
   AUDITOR: { label: 'Auditor', color: 'bg-gray-100 text-gray-800' },
   OPERADOR_SEDE: { label: 'Operador Sede', color: 'bg-teal-100 text-teal-800' },
+  CONDUCTOR:     { label: 'Conductor',     color: 'bg-sky-100 text-sky-800' },
 }
 
 // ── Asistente IA: chat con historial y carpetas ──────────────────────────────
@@ -536,6 +552,157 @@ export interface DocumentoPersona {
   tamano: number | null
   subido_por: string | null
   created_at: string
+}
+
+// ── Módulo Logística / Conductores ───────────────────────────────────────────
+
+export type EstadoRuta    = 'PENDIENTE' | 'EN_CURSO' | 'COMPLETADA' | 'CANCELADA'
+export type EstadoParada  = 'PENDIENTE' | 'EN_RUTA'  | 'ENTREGADO'  | 'NOVEDAD'  | 'REPROGRAMADO'
+export type TipoNovedad   = 'DEVOLUCION' | 'FALTA_MERCANCIA' | 'ACCIDENTE' | 'SEDE_CERRADA' | 'TIEMPO_EXCEDIDO' | 'OTRO'
+export type EstadoNovedad = 'ABIERTA' | 'EN_GESTION' | 'RESUELTA'
+
+export interface Conductor {
+  id: string
+  usuario_id: string
+  placa_vehiculo: string | null
+  tipo_vehiculo: string | null
+  telefono_contacto: string | null
+  zona: string | null
+  licencia_categoria: string | null
+  activo: boolean
+  created_at: string
+  updated_at: string
+  // relations
+  usuario?: Usuario
+}
+
+export interface SedeHorarioEntrega {
+  id: string
+  sede_id: string
+  ventana_am_inicio: string | null
+  ventana_am_fin: string | null
+  ventana_pm_inicio: string | null
+  ventana_pm_fin: string | null
+  supervisor_nombre: string | null
+  supervisor_contacto: string | null
+  notas: string | null
+  activo: boolean
+  updated_at: string
+  sede?: Sede
+}
+
+export interface RutaEntrega {
+  id: string
+  codigo: string
+  conductor_id: string
+  fecha: string
+  estado: EstadoRuta
+  observaciones: string | null
+  creado_por: string | null
+  iniciado_at: string | null
+  finalizado_at: string | null
+  created_at: string
+  updated_at: string
+  // relations
+  conductor?: Conductor
+  paradas?: RutaParada[]
+}
+
+export interface RutaParada {
+  id: string
+  ruta_id: string
+  orden_id: string
+  sede_id: string
+  numero_parada: number
+  estado: EstadoParada
+  hora_estimada_llegada: string | null
+  llegado_at: string | null
+  entregado_at: string | null
+  created_at: string
+  // relations
+  ruta?: RutaEntrega
+  orden?: OrdenInsumo
+  sede?: Sede
+  confirmacion?: ConfirmacionEntrega
+  novedades?: NovedadEntrega[]
+}
+
+export interface ConductorUbicacionActual {
+  conductor_id: string
+  ruta_id: string | null
+  lat: number
+  lng: number
+  precision_metros: number | null
+  velocidad_kmh: number | null
+  rumbo: number | null
+  activo: boolean
+  updated_at: string
+  conductor?: Conductor
+}
+
+export interface NovedadEntrega {
+  id: string
+  ruta_id: string
+  parada_id: string | null
+  orden_id: string | null
+  conductor_id: string
+  tipo: TipoNovedad
+  descripcion: string
+  lat: number | null
+  lng: number | null
+  foto_url: string | null
+  estado: EstadoNovedad
+  resuelto_por: string | null
+  resuelto_at: string | null
+  resolucion: string | null
+  created_at: string
+  updated_at: string
+  // relations
+  conductor?: Conductor
+  orden?: OrdenInsumo
+  parada?: RutaParada
+}
+
+export interface ConfirmacionEntrega {
+  id: string
+  ruta_id: string
+  parada_id: string
+  orden_id: string
+  conductor_id: string
+  receptor_nombre: string
+  receptor_cedula: string | null
+  receptor_cargo: string | null
+  foto_entrega_url: string | null
+  firma_url: string | null
+  lat: number | null
+  lng: number | null
+  items_recibidos: Array<{producto_id: string; nombre: string; cantidad_confirmada: number}>
+  observaciones: string | null
+  created_at: string
+}
+
+export const TIPO_NOVEDAD_LABELS: Record<TipoNovedad, { label: string; color: string }> = {
+  DEVOLUCION:      { label: 'Devolución',        color: 'bg-orange-100 text-orange-800' },
+  FALTA_MERCANCIA: { label: 'Falta mercancía',   color: 'bg-red-100 text-red-800' },
+  ACCIDENTE:       { label: 'Accidente',          color: 'bg-red-200 text-red-900' },
+  SEDE_CERRADA:    { label: 'Sede cerrada',       color: 'bg-yellow-100 text-yellow-800' },
+  TIEMPO_EXCEDIDO: { label: 'Tiempo excedido',   color: 'bg-purple-100 text-purple-800' },
+  OTRO:            { label: 'Otro',               color: 'bg-gray-100 text-gray-800' },
+}
+
+export const ESTADO_RUTA_LABELS: Record<EstadoRuta, { label: string; color: string }> = {
+  PENDIENTE:   { label: 'Pendiente',   color: 'bg-gray-100 text-gray-700' },
+  EN_CURSO:    { label: 'En curso',    color: 'bg-blue-100 text-blue-700' },
+  COMPLETADA:  { label: 'Completada',  color: 'bg-green-100 text-green-700' },
+  CANCELADA:   { label: 'Cancelada',   color: 'bg-red-100 text-red-700' },
+}
+
+export const ESTADO_PARADA_LABELS: Record<EstadoParada, { label: string; color: string }> = {
+  PENDIENTE:    { label: 'Pendiente',     color: 'bg-gray-100 text-gray-700' },
+  EN_RUTA:      { label: 'En ruta',       color: 'bg-blue-100 text-blue-700' },
+  ENTREGADO:    { label: 'Entregado',     color: 'bg-green-100 text-green-700' },
+  NOVEDAD:      { label: 'Con novedad',   color: 'bg-red-100 text-red-700' },
+  REPROGRAMADO: { label: 'Reprogramado', color: 'bg-yellow-100 text-yellow-700' },
 }
 
 export type Database = {

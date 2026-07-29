@@ -119,6 +119,22 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_ia_analisis',   label: 'Ver análisis IA' },
     ],
   },
+  {
+    grupo: 'Logística y Conductores',
+    permisos: [
+      { key: 'ver_logistica',               label: 'Ver módulo de logística' },
+      { key: 'gestionar_conductores',        label: 'Gestionar conductores (crear / editar)' },
+      { key: 'gestionar_rutas',             label: 'Crear y asignar rutas de entrega' },
+      { key: 'ver_ubicacion_conductores',   label: 'Ver mapa GPS en tiempo real' },
+      { key: 'gestionar_horarios_entrega',  label: 'Gestionar horarios de entrega por sede' },
+      { key: 'ver_novedades_entrega',       label: 'Ver novedades de entrega' },
+      { key: 'gestionar_novedades_entrega', label: 'Gestionar / resolver novedades' },
+      { key: 'ver_rutas_conductor',         label: 'Ver mis rutas asignadas (conductor)' },
+      { key: 'actualizar_gps_conductor',    label: 'Enviar ubicación GPS (conductor)' },
+      { key: 'confirmar_entrega_conductor', label: 'Confirmar entrega con foto y firma' },
+      { key: 'reportar_novedad_conductor',  label: 'Reportar novedad durante la entrega' },
+    ],
+  },
 ]
 
 export const ALL_PERMISOS: PermisoDef[] = GRUPOS_PERMISOS.flatMap((g) => g.permisos)
