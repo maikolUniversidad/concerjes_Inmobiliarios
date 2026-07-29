@@ -105,6 +105,25 @@ export async function actualizarConductor(id: string, form: {
   revalidatePath('/logistica/conductores')
 }
 
+// ─── Puntos de Entrega (sedes / clientes) ───────────────────────────────────
+
+/**
+ * Todas las sedes activas como puntos de entrega, con su cliente (grupo de
+ * contrato). Son las sedes cargadas desde el Excel. `select('*')` tolera
+ * entornos sin la migración de coordenadas aplicada.
+ */
+export async function getPuntosEntrega() {
+  await requirePermiso('ver_logistica')
+  const s = await db()
+  const { data, error } = await s
+    .from('sedes')
+    .select('*, grupo:grupos_contrato(id, codigo, nombre)')
+    .eq('activo', true)
+    .order('nombre', { ascending: true })
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
 // ─── Horarios de Entrega ────────────────────────────────────────────────────
 
 export async function getHorariosSede() {

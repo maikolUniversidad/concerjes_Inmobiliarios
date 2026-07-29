@@ -94,6 +94,7 @@ export const navigation: NavModule[] = [
     items: [
       { label: 'Mis Rutas',         href: '/logistica/mis-rutas',  icon: Navigation,    permiso: 'ver_rutas_conductor' },
       { label: 'Tablero en Vivo',   href: '/logistica/monitoreo',  icon: Radio,         permiso: 'ver_monitoreo_entregas' },
+      { label: 'Puntos de Entrega', href: '/logistica/puntos-entrega', icon: MapPin,    permiso: 'ver_logistica' },
       { label: 'Control de Rutas',  href: '/logistica/control',    icon: ClipboardList, permiso: 'gestionar_rutas' },
       { label: 'Mapa en Vivo',      href: '/logistica/mapa',       icon: Map,           permiso: 'ver_ubicacion_conductores' },
       { label: 'Novedades',         href: '/logistica/novedades',  icon: AlertTriangle, permiso: 'ver_novedades_entrega' },

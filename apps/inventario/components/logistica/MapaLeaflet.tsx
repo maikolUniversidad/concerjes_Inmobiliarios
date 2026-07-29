@@ -29,6 +29,8 @@ export interface PuntoMapa {
   /** Nº de parada (para ordenar la línea de ruta y numerar el pin) */
   orden?: number
   activo?: boolean
+  /** Color hex del pin de sede (p. ej. para colorear por cliente). */
+  color?: string
 }
 
 interface Props {
@@ -39,6 +41,8 @@ interface Props {
   className?: string
   /** Centro por defecto si no hay puntos (Bogotá). */
   centroDefecto?: [number, number]
+  /** Si se pasa, centra el mapa en estas coordenadas (con zoom cercano). */
+  centrarEn?: [number, number] | null
 }
 
 const COLOR_ESTADO: Record<string, string> = {
@@ -50,7 +54,7 @@ const COLOR_ESTADO: Record<string, string> = {
 }
 
 function iconoSede(p: PuntoMapa): L.DivIcon {
-  const color = COLOR_ESTADO[p.estado ?? 'PENDIENTE'] ?? '#9ca3af'
+  const color = p.color ?? COLOR_ESTADO[p.estado ?? 'PENDIENTE'] ?? '#9ca3af'
   const n = p.orden ?? ''
   return L.divIcon({
     className: 'mapa-pin-sede',
@@ -100,7 +104,7 @@ function iconoNovedad(): L.DivIcon {
 }
 
 export default function MapaLeaflet({
-  puntos, dibujarRuta = false, alto = 420, className = '', centroDefecto = [4.711, -74.0721],
+  puntos, dibujarRuta = false, alto = 420, className = '', centroDefecto = [4.711, -74.0721], centrarEn = null,
 }: Props) {
   const contRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<L.Map | null>(null)
@@ -168,6 +172,11 @@ export default function MapaLeaflet({
       map.fitBounds(L.latLngBounds(validos.map(p => [p.lat, p.lng] as [number, number])).pad(0.2))
     }
   }, [puntos, dibujarRuta])
+
+  // Centra en un punto concreto cuando se solicita (p. ej. al elegir una sede).
+  useEffect(() => {
+    if (mapRef.current && centrarEn) mapRef.current.setView(centrarEn, 16, { animate: true })
+  }, [centrarEn])
 
   return (
     <>
