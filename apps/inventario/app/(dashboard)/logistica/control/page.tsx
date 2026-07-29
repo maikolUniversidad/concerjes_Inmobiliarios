@@ -8,12 +8,12 @@ export const metadata = { title: 'Control de Rutas | Logística' }
 export default async function ControlRutasPage() {
   await requirePermiso('gestionar_rutas')
   const hoy = new Date().toISOString().split('T')[0]
+
   const [rutas, conductores] = await Promise.all([
-    getRutas(hoy),
-    getConductores(),
+    getRutas(hoy).catch(() => []),
+    getConductores().catch(() => []),
   ])
 
-  // Órdenes despachadas sin conductor asignado
   const supabase = await createClient()
   const { data: ordenesDisponibles } = await supabase
     .from('ordenes_insumo')

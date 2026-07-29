@@ -119,9 +119,9 @@ export async function getRutaConductor() {
     .from('conductores')
     .select('id')
     .eq('usuario_id', user.id)
-    .single()
+    .maybeSingle()
 
-  if (!conductor) throw new Error('Usuario no tiene perfil de conductor')
+  if (!conductor) return null
 
   const hoy = new Date().toISOString().split('T')[0]
   const { data, error } = await s
