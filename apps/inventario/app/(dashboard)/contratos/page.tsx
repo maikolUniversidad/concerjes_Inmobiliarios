@@ -11,6 +11,7 @@ interface Grupo { id: string; codigo: GrupoContrato; nombre: string; descripcion
 interface SedeRaw {
   id: string; nombre: string; zona: string | null; ciudad: string; codigo_interno: string | null
   grupo_id: string; grupo: { codigo: GrupoContrato } | null
+  direccion?: string | null; lat?: number | null; lng?: number | null
 }
 
 export default async function ContratosPage() {
@@ -18,7 +19,8 @@ export default async function ContratosPage() {
   const supabase = await createClient()
   const [{ data: gruposData }, { data: sedesData }] = await Promise.all([
     supabase.from('grupos_contrato').select('id, codigo, nombre, descripcion').eq('activo', true).order('codigo'),
-    supabase.from('sedes').select('id, nombre, zona, ciudad, codigo_interno, grupo_id, grupo:grupos_contrato ( codigo )').eq('activo', true).order('nombre'),
+    // `*` para tolerar entornos donde aún no se aplicó la migración de coordenadas.
+    supabase.from('sedes').select('*, grupo:grupos_contrato ( codigo )').eq('activo', true).order('nombre'),
   ])
 
   const grupos = (gruposData as Grupo[]) ?? []
@@ -26,6 +28,7 @@ export default async function ContratosPage() {
   const sedes: SedeRow[] = sedesRaw.map(s => ({
     id: s.id, nombre: s.nombre, zona: s.zona, ciudad: s.ciudad,
     codigo_interno: s.codigo_interno, grupo_id: s.grupo_id, grupo_codigo: s.grupo?.codigo ?? null,
+    direccion: s.direccion ?? null, lat: s.lat ?? null, lng: s.lng ?? null,
   }))
   const gruposOpt: GrupoOpt[] = grupos.map(g => ({ id: g.id, codigo: g.codigo, nombre: g.nombre }))
   const countByGrupo = (codigo: GrupoContrato) => sedes.filter(s => s.grupo_codigo === codigo).length

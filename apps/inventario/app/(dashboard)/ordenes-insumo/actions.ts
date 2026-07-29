@@ -358,7 +358,10 @@ export async function confirmarRecepcion(ordenId: string, observacion?: string):
 
   const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (orden.estado !== 'DESPACHADO') return { error: 'Solo se recibe una orden ya enviada.' }
+  // Se puede recibir tanto una orden despachada como una ya entregada por el
+  // conductor (flujo con ruta: DESPACHADO → EN_RUTA → ENTREGADO → RECIBIDO).
+  const estadosRecibibles = ['DESPACHADO', 'EN_RUTA', 'ENTREGADO']
+  if (!estadosRecibibles.includes(orden.estado)) return { error: 'Solo se recibe una orden ya enviada o entregada.' }
 
   // Solo el supervisor de ESE contrato puede recibir.
   const { data: delGrupo } = await sb.rpc('oi_es_del_grupo', { p_orden: ordenId })
@@ -375,7 +378,7 @@ export async function confirmarRecepcion(ordenId: string, observacion?: string):
   await sb.rpc('oi_evento', {
     p_orden: ordenId, p_tipo: 'RECEPCION',
     p_mensaje: observacion?.trim() || 'Recibido en sede. Proceso finalizado.',
-    p_ant: 'DESPACHADO', p_nue: 'RECIBIDO',
+    p_ant: orden.estado, p_nue: 'RECIBIDO',
   })
   revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
   return { ok: true }

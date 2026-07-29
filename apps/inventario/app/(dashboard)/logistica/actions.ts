@@ -2,6 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { revalidatePath } from 'next/cache'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 
@@ -36,6 +37,57 @@ export async function crearConductor(form: {
   const { error } = await s.from('conductores').insert(form)
   if (error) throw new Error(error.message)
   revalidatePath('/logistica/conductores')
+}
+
+/**
+ * Usuarios de la plataforma con rol CONDUCTOR (candidatos a tener perfil de
+ * conductor). Marca `ya_conductor` los que ya están enlazados a un perfil.
+ */
+export async function getUsuariosConductor() {
+  await requirePermiso('gestionar_conductores')
+  const s = await db()
+  const { data: usuarios, error } = await s
+    .from('usuarios')
+    .select('id, nombre, email, rol, activo')
+    .eq('rol', 'CONDUCTOR')
+    .order('nombre', { ascending: true })
+  if (error) throw new Error(error.message)
+
+  const { data: perfiles } = await s.from('conductores').select('usuario_id')
+  const ligados = new Set((perfiles ?? []).map((c: any) => c.usuario_id))
+  return (usuarios ?? []).map((u: any) => ({ ...u, ya_conductor: ligados.has(u.id) }))
+}
+
+/**
+ * Crea un usuario de la plataforma con rol CONDUCTOR (auth + fila en usuarios).
+ * Devuelve el id para enlazarlo a un perfil de conductor a continuación.
+ */
+export async function crearUsuarioConductor(form: { nombre: string; email: string; password: string }) {
+  await requirePermiso('gestionar_conductores')
+  const email = form.email.trim().toLowerCase()
+  const nombre = form.nombre.trim()
+  if (!email.includes('@')) throw new Error('Email inválido')
+  if (nombre.length < 3) throw new Error('El nombre es obligatorio')
+  if (form.password.length < 8) throw new Error('La contraseña debe tener al menos 8 caracteres')
+
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) throw new Error('Falta configurar SUPABASE_SERVICE_ROLE_KEY en el servidor')
+
+  const admin = createAdminClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey)
+  const { data: created, error } = await admin.auth.admin.createUser({
+    email, password: form.password, email_confirm: true, user_metadata: { nombre },
+  })
+  if (error) {
+    if (error.message.toLowerCase().includes('already')) throw new Error('Ya existe un usuario con ese email')
+    throw new Error('No se pudo crear el usuario: ' + error.message)
+  }
+
+  const id = created.user?.id
+  // El trigger handle_new_user creó la fila; fijamos rol CONDUCTOR y nombre.
+  if (id) await (admin as any).from('usuarios').update({ rol: 'CONDUCTOR', nombre }).eq('id', id)
+
+  revalidatePath('/logistica/conductores')
+  return { id: id as string, nombre, email }
 }
 
 export async function actualizarConductor(id: string, form: {
@@ -95,10 +147,10 @@ export async function getRutas(fecha?: string) {
       conductor:conductores(*, usuario:usuarios(id, nombre, email)),
       paradas:ruta_paradas(
         *,
-        sede:sedes(id, nombre, ciudad, zona),
+        sede:sedes(*),
         orden:ordenes_insumo(id, numero, estado),
         confirmacion:confirmaciones_entrega(id, receptor_nombre, created_at),
-        novedades:novedades_entrega(id, tipo, estado)
+        novedades:novedades_entrega(id, tipo, estado, lat, lng, descripcion)
       )
     `)
     .order('created_at', { ascending: false })
@@ -131,7 +183,7 @@ export async function getMonitoreoEntregas(fecha?: string) {
       ),
       paradas:ruta_paradas(
         *,
-        sede:sedes(id, nombre, ciudad, zona),
+        sede:sedes(*),
         orden:ordenes_insumo(
           id, numero, estado,
           items:orden_insumo_items(
@@ -140,7 +192,7 @@ export async function getMonitoreoEntregas(fecha?: string) {
           )
         ),
         confirmacion:confirmaciones_entrega(id, receptor_nombre, created_at),
-        novedades:novedades_entrega(id, tipo, estado)
+        novedades:novedades_entrega(id, tipo, estado, lat, lng, descripcion)
       )
     `)
     .eq('fecha', dia)
@@ -170,7 +222,7 @@ export async function getRutaConductor() {
       *,
       paradas:ruta_paradas(
         *,
-        sede:sedes(id, nombre, ciudad, zona, codigo_interno),
+        sede:sedes(*),
         orden:ordenes_insumo(id, numero, estado, observacion),
         confirmacion:confirmaciones_entrega(*),
         novedades:novedades_entrega(*),

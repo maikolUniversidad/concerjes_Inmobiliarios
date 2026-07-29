@@ -1,8 +1,9 @@
 'use client'
 import { useActionState, useEffect, useState } from 'react'
 import { useFormStatus } from 'react-dom'
-import { Plus, X, Loader2, Building2, MapPin, Pencil, Trash2 } from 'lucide-react'
-import { crearSede, actualizarSede, eliminarSede, type ActionResult } from './actions'
+import { Plus, X, Loader2, Building2, MapPin, Pencil, Trash2, Navigation, Crosshair, Check } from 'lucide-react'
+import { toast } from 'sonner'
+import { crearSede, actualizarSede, eliminarSede, geocodificarSede, type ActionResult } from './actions'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { GRUPO_LABELS, type GrupoContrato } from '@/lib/types/database'
 
@@ -10,6 +11,7 @@ export interface GrupoOpt { id: string; codigo: GrupoContrato; nombre: string }
 export interface SedeRow {
   id: string; nombre: string; zona: string | null; ciudad: string; codigo_interno: string | null
   grupo_id: string; grupo_codigo: GrupoContrato | null
+  direccion?: string | null; lat?: number | null; lng?: number | null
 }
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green'
@@ -31,7 +33,48 @@ export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: Sede
   const action = editing ? actualizarSede : crearSede
   const [state, formAction] = useActionState<ActionResult, FormData>(action, {})
 
+  // Coordenadas del punto de entrega (controladas para geocodificar / geolocalizar).
+  const [direccion, setDireccion] = useState('')
+  const [lat, setLat] = useState('')
+  const [lng, setLng] = useState('')
+  const [geocodificando, setGeocodificando] = useState(false)
+
+  // Sincroniza los campos de ubicación al abrir/cambiar la sede en edición.
+  useEffect(() => {
+    setDireccion(editing?.direccion ?? '')
+    setLat(editing?.lat != null ? String(editing.lat) : '')
+    setLng(editing?.lng != null ? String(editing.lng) : '')
+  }, [editing])
+
   useEffect(() => { if (state.ok) { setShowForm(false); setEditing(null) } }, [state.ok])
+
+  async function geocodificar() {
+    const ciudad = (document.querySelector('input[name="ciudad"]') as HTMLInputElement | null)?.value ?? ''
+    const q = [direccion, ciudad].filter(Boolean).join(', ')
+    if (q.trim().length < 4) { toast.error('Escribe la dirección primero'); return }
+    setGeocodificando(true)
+    try {
+      const r = await geocodificarSede(q)
+      if (r) {
+        setLat(r.lat.toFixed(6)); setLng(r.lng.toFixed(6))
+        toast.success('Ubicación encontrada: ' + r.label.split(',').slice(0, 3).join(', '))
+      } else {
+        toast.error('No se encontró la dirección. Ajusta el texto o usa tu ubicación.')
+      }
+    } finally { setGeocodificando(false) }
+  }
+
+  function usarMiUbicacion() {
+    if (!navigator.geolocation) { toast.error('Geolocalización no disponible'); return }
+    navigator.geolocation.getCurrentPosition(
+      pos => {
+        setLat(pos.coords.latitude.toFixed(6)); setLng(pos.coords.longitude.toFixed(6))
+        toast.success('Ubicación tomada de tu dispositivo')
+      },
+      () => toast.error('No se pudo obtener tu ubicación'),
+      { enableHighAccuracy: true, timeout: 10000 },
+    )
+  }
 
   return (
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
@@ -76,6 +119,47 @@ export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: Sede
               <input name="ciudad" defaultValue={editing?.ciudad ?? 'BOGOTÁ D.C.'} className={inputCls + ' mt-1'} />
             </div>
           </div>
+
+          {/* Ubicación / punto de entrega */}
+          <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
+            <div className="flex items-center gap-1.5">
+              <MapPin className="w-3.5 h-3.5 text-brand-green" />
+              <span className="font-body font-semibold text-xs text-gray-600">Punto de entrega (para el mapa de logística)</span>
+            </div>
+            <div>
+              <label className="font-body font-semibold text-xs text-gray-600">Dirección</label>
+              <input name="direccion" value={direccion} onChange={e => setDireccion(e.target.value)}
+                className={inputCls + ' mt-1'} placeholder="Ej: Calle 100 # 15-20, Bogotá" />
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
+              <div className="flex-1 min-w-[110px]">
+                <label className="font-body font-semibold text-xs text-gray-600">Latitud</label>
+                <input name="lat" value={lat} onChange={e => setLat(e.target.value)}
+                  className={inputCls + ' mt-1'} placeholder="4.7110" inputMode="decimal" />
+              </div>
+              <div className="flex-1 min-w-[110px]">
+                <label className="font-body font-semibold text-xs text-gray-600">Longitud</label>
+                <input name="lng" value={lng} onChange={e => setLng(e.target.value)}
+                  className={inputCls + ' mt-1'} placeholder="-74.0721" inputMode="decimal" />
+              </div>
+              <button type="button" onClick={geocodificar} disabled={geocodificando}
+                className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 text-xs font-body font-semibold text-gray-700 hover:bg-gray-50 disabled:opacity-60">
+                {geocodificando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Crosshair className="w-3.5 h-3.5" />}
+                Geocodificar
+              </button>
+              <button type="button" onClick={usarMiUbicacion}
+                className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 text-xs font-body font-semibold text-gray-700 hover:bg-gray-50">
+                <Navigation className="w-3.5 h-3.5" /> Mi ubicación
+              </button>
+            </div>
+            {lat && lng && (
+              <a href={`https://www.openstreetmap.org/?mlat=${lat}&mlon=${lng}#map=17/${lat}/${lng}`} target="_blank" rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-body text-xs text-brand-green hover:underline">
+                <Check className="w-3.5 h-3.5" /> Ver punto en OpenStreetMap
+              </a>
+            )}
+          </div>
+
           <SubmitBtn editando={!!editing} />
         </form>
       )}
@@ -103,7 +187,12 @@ export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: Sede
                 return (
                   <tr key={s.id} className="hover:bg-gray-50/50 group">
                     <td className="px-4 py-3">
-                      <p className="font-body font-medium text-sm text-gray-900">{s.nombre}</p>
+                      <div className="flex items-center gap-1.5">
+                        <p className="font-body font-medium text-sm text-gray-900">{s.nombre}</p>
+                        {s.lat != null && s.lng != null
+                          ? <MapPin className="w-3.5 h-3.5 text-brand-green" aria-label="Con ubicación" />
+                          : <MapPin className="w-3.5 h-3.5 text-gray-300" aria-label="Sin ubicación" />}
+                      </div>
                       {s.codigo_interno && <p className="font-body text-xs text-gray-400">N° {s.codigo_interno}</p>}
                     </td>
                     <td className="px-4 py-3">{meta && <span className={`font-body text-xs px-2 py-0.5 rounded-full ${meta.color}`}>{meta.nombre}</span>}</td>

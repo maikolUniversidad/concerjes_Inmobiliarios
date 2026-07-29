@@ -1,15 +1,26 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { toast } from 'sonner'
 import {
   Navigation, MapPin, Phone, Clock, CheckCircle2, AlertTriangle,
   Camera, PenTool, User, CreditCard, ChevronDown, ChevronUp,
-  Wifi, WifiOff, Play, Package, FileText
+  Wifi, WifiOff, Play, Package, FileText, Map as MapIcon
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { iniciarRuta, llegarParada, confirmarEntrega, reportarNovedad } from '../actions'
 import FirmaDigital from '@/components/logistica/FirmaDigital'
+import type { PuntoMapa } from '@/components/logistica/MapaLeaflet'
+
+const MapaLeaflet = dynamic(() => import('@/components/logistica/MapaLeaflet'), {
+  ssr: false,
+  loading: () => (
+    <div style={{ height: 300 }} className="flex items-center justify-center text-gray-400 bg-gray-50 dark:bg-gray-800 rounded-xl">
+      Cargando mapa…
+    </div>
+  ),
+})
 
 type EstadoParada = 'PENDIENTE' | 'EN_RUTA' | 'ENTREGADO' | 'NOVEDAD' | 'REPROGRAMADO'
 type TipoNovedad  = 'DEVOLUCION' | 'FALTA_MERCANCIA' | 'ACCIDENTE' | 'SEDE_CERRADA' | 'TIEMPO_EXCEDIDO' | 'OTRO'
@@ -23,7 +34,7 @@ interface Parada {
   estado: EstadoParada
   llegado_at: string | null
   entregado_at: string | null
-  sede: { id: string; nombre: string; ciudad: string; zona: string | null; codigo_interno: string | null } | null
+  sede: { id: string; nombre: string; ciudad: string; zona: string | null; codigo_interno: string | null; direccion: string | null; lat: number | null; lng: number | null } | null
   orden: { id: string; numero: string; estado: string; observacion: string | null } | null
   confirmacion: {receptor_nombre: string; created_at: string} | null
   novedades: {id: string; tipo: string; estado: string}[] | null
@@ -236,6 +247,27 @@ export default function MisRutasClient({ rutaInicial }: Props) {
   const completadas = ruta?.paradas.filter(p => p.estado === 'ENTREGADO').length ?? 0
   const total = ruta?.paradas.length ?? 0
 
+  // Puntos del mapa: mis paradas (con coordenadas) + mi posición actual.
+  const puntosMapa = useMemo<PuntoMapa[]>(() => {
+    const out: PuntoMapa[] = []
+    for (const p of ruta?.paradas ?? []) {
+      if (p.sede?.lat != null && p.sede?.lng != null) {
+        out.push({
+          id: 's-' + p.id, lat: p.sede.lat, lng: p.sede.lng, tipo: 'sede',
+          titulo: `${p.numero_parada}. ${p.sede.nombre}`,
+          detalle: `${p.sede.ciudad}${p.orden?.numero ? ` · OI ${p.orden.numero}` : ''}`,
+          estado: p.estado, orden: p.numero_parada,
+        })
+      }
+    }
+    if (posicion) {
+      out.push({ id: 'yo', lat: posicion.lat, lng: posicion.lng, tipo: 'conductor', titulo: 'Mi ubicación', activo: true })
+    }
+    return out
+  }, [ruta, posicion])
+
+  const paradasSinCoords = (ruta?.paradas ?? []).filter(p => p.sede?.lat == null).length
+
   if (!ruta) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-center space-y-3">
@@ -320,6 +352,25 @@ export default function MisRutasClient({ rutaInicial }: Props) {
           </div>
         )}
       </div>
+
+      {/* Mapa de mis puntos de entrega */}
+      {puntosMapa.some(p => p.tipo === 'sede') && (
+        <div className="bg-white dark:bg-gray-900 rounded-xl border overflow-hidden">
+          <div className="flex items-center gap-2 px-4 py-2.5 border-b dark:border-gray-800">
+            <MapIcon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+            <span className="text-sm font-semibold text-gray-900 dark:text-white">Mis puntos de entrega</span>
+            <span className="text-xs text-gray-500">({puntosMapa.filter(p => p.tipo === 'sede').length})</span>
+          </div>
+          <div className="p-1">
+            <MapaLeaflet puntos={puntosMapa} dibujarRuta alto={300} />
+          </div>
+          {paradasSinCoords > 0 && (
+            <p className="px-4 py-2 text-xs text-amber-600 dark:text-amber-400">
+              {paradasSinCoords} parada{paradasSinCoords !== 1 ? 's' : ''} sin ubicación en el mapa (falta coordenada de la sede).
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Paradas */}
       {ruta.paradas.map((parada, idx) => {

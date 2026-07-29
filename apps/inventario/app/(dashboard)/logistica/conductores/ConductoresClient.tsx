@@ -2,8 +2,8 @@
 
 import { useState } from 'react'
 import { toast } from 'sonner'
-import { Users, Plus, Truck, Phone, MapPin, Edit2, CheckCircle, XCircle } from 'lucide-react'
-import { crearConductor, actualizarConductor } from '../actions'
+import { Users, Plus, Truck, Phone, MapPin, Edit2, CheckCircle, XCircle, UserPlus, Link2, AlertCircle } from 'lucide-react'
+import { crearConductor, actualizarConductor, crearUsuarioConductor } from '../actions'
 
 interface ConductorRow {
   id: string
@@ -16,18 +16,29 @@ interface ConductorRow {
   usuario: { id: string; nombre: string; email: string; rol: string } | null
 }
 
-interface Props {
-  conductoresIniciales: ConductorRow[]
+interface UsuarioConductor {
+  id: string; nombre: string; email: string; rol: string; activo: boolean; ya_conductor: boolean
 }
 
-export default function ConductoresClient({ conductoresIniciales }: Props) {
+interface Props {
+  conductoresIniciales: ConductorRow[]
+  usuariosIniciales: UsuarioConductor[]
+}
+
+export default function ConductoresClient({ conductoresIniciales, usuariosIniciales }: Props) {
   const [conductores, setConductores] = useState(conductoresIniciales)
+  const [usuarios] = useState(usuariosIniciales)
   const [modalAbierto, setModalAbierto] = useState(false)
   const [editando, setEditando] = useState<ConductorRow | null>(null)
   const [cargando, setCargando] = useState(false)
+  // 'existente' = enlazar usuario con rol CONDUCTOR; 'nuevo' = crear usuario + perfil
+  const [modo, setModo] = useState<'existente' | 'nuevo'>('existente')
 
   const [form, setForm] = useState({
     usuario_id: '',
+    nombre: '',
+    email: '',
+    password: '',
     placa_vehiculo: '',
     tipo_vehiculo: 'CAMION',
     telefono_contacto: '',
@@ -35,9 +46,13 @@ export default function ConductoresClient({ conductoresIniciales }: Props) {
     licencia_categoria: 'C2',
   })
 
+  // Usuarios CONDUCTOR que aún no tienen perfil de conductor.
+  const disponibles = usuarios.filter(u => !u.ya_conductor)
+
   function abrirNuevo() {
     setEditando(null)
-    setForm({ usuario_id: '', placa_vehiculo: '', tipo_vehiculo: 'CAMION', telefono_contacto: '', zona: '', licencia_categoria: 'C2' })
+    setModo(disponibles.length > 0 ? 'existente' : 'nuevo')
+    setForm({ usuario_id: '', nombre: '', email: '', password: '', placa_vehiculo: '', tipo_vehiculo: 'CAMION', telefono_contacto: '', zona: '', licencia_categoria: 'C2' })
     setModalAbierto(true)
   }
 
@@ -45,6 +60,9 @@ export default function ConductoresClient({ conductoresIniciales }: Props) {
     setEditando(c)
     setForm({
       usuario_id: c.usuario?.id ?? '',
+      nombre: c.usuario?.nombre ?? '',
+      email: c.usuario?.email ?? '',
+      password: '',
       placa_vehiculo: c.placa_vehiculo ?? '',
       tipo_vehiculo: c.tipo_vehiculo ?? 'CAMION',
       telefono_contacto: c.telefono_contacto ?? '',
@@ -67,15 +85,31 @@ export default function ConductoresClient({ conductoresIniciales }: Props) {
         })
         toast.success('Conductor actualizado')
       } else {
+        // Resolver el usuario: enlazar uno existente o crear uno nuevo con rol CONDUCTOR.
+        let usuarioId = form.usuario_id
+        if (modo === 'nuevo') {
+          if (!form.nombre || !form.email || form.password.length < 8) {
+            toast.error('Completa nombre, email y contraseña (mín. 8) del nuevo conductor')
+            setCargando(false)
+            return
+          }
+          const nuevo = await crearUsuarioConductor({ nombre: form.nombre, email: form.email, password: form.password })
+          usuarioId = nuevo.id
+        }
+        if (!usuarioId) {
+          toast.error('Selecciona un usuario o crea uno nuevo')
+          setCargando(false)
+          return
+        }
         await crearConductor({
-          usuario_id: form.usuario_id,
+          usuario_id: usuarioId,
           placa_vehiculo: form.placa_vehiculo || undefined,
           tipo_vehiculo: form.tipo_vehiculo || undefined,
           telefono_contacto: form.telefono_contacto || undefined,
           zona: form.zona || undefined,
           licencia_categoria: form.licencia_categoria || undefined,
         })
-        toast.success('Conductor creado')
+        toast.success('Conductor creado y enlazado a su usuario')
       }
       setModalAbierto(false)
       window.location.reload()
@@ -176,17 +210,71 @@ export default function ConductoresClient({ conductoresIniciales }: Props) {
           <div className="bg-white dark:bg-gray-900 rounded-xl w-full max-w-md p-6 space-y-4">
             <h2 className="text-lg font-bold">{editando ? 'Editar conductor' : 'Nuevo conductor'}</h2>
 
-            {!editando && (
-              <div>
-                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">ID de usuario *</label>
-                <input
-                  type="text"
-                  placeholder="UUID del usuario con rol CONDUCTOR"
-                  value={form.usuario_id}
-                  onChange={e => setForm(p => ({ ...p, usuario_id: e.target.value }))}
-                  className="mt-1 w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
-                />
-                <p className="text-xs text-gray-400 mt-1">El usuario debe existir en el sistema y tener rol CONDUCTOR</p>
+            {editando ? (
+              <div className="text-sm bg-gray-50 dark:bg-gray-800 rounded-lg px-3 py-2">
+                <p className="font-medium text-gray-900 dark:text-white">{editando.usuario?.nombre}</p>
+                <p className="text-xs text-gray-500">{editando.usuario?.email} · rol {editando.usuario?.rol}</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {/* Selector de modo */}
+                <div className="flex rounded-lg border p-0.5 dark:border-gray-700 text-sm">
+                  <button type="button" onClick={() => setModo('existente')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md ${modo === 'existente' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}>
+                    <Link2 className="h-4 w-4" /> Usuario existente
+                  </button>
+                  <button type="button" onClick={() => setModo('nuevo')}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md ${modo === 'nuevo' ? 'bg-sky-600 text-white' : 'text-gray-600 dark:text-gray-300'}`}>
+                    <UserPlus className="h-4 w-4" /> Crear usuario
+                  </button>
+                </div>
+
+                {modo === 'existente' ? (
+                  <div>
+                    <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Usuario con rol CONDUCTOR *</label>
+                    {disponibles.length > 0 ? (
+                      <select
+                        value={form.usuario_id}
+                        onChange={e => setForm(p => ({ ...p, usuario_id: e.target.value }))}
+                        className="mt-1 w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700"
+                      >
+                        <option value="">Seleccionar usuario...</option>
+                        {disponibles.map(u => (
+                          <option key={u.id} value={u.id}>{u.nombre} · {u.email}</option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="mt-1 flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                        <AlertCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                        <span>No hay usuarios con rol CONDUCTOR sin perfil. Crea uno nuevo en la pestaña de al lado.</span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Nombre completo *</label>
+                      <input type="text" placeholder="Nombre del conductor" value={form.nombre}
+                        onChange={e => setForm(p => ({ ...p, nombre: e.target.value }))}
+                        className="mt-1 w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Email *</label>
+                        <input type="email" placeholder="correo@empresa.com" value={form.email}
+                          onChange={e => setForm(p => ({ ...p, email: e.target.value }))}
+                          className="mt-1 w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700" />
+                      </div>
+                      <div>
+                        <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Contraseña *</label>
+                        <input type="text" placeholder="mín. 8 caracteres" value={form.password}
+                          onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                          className="mt-1 w-full border rounded-lg px-3 py-2 text-sm dark:bg-gray-800 dark:border-gray-700" />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-400">Se crea con rol CONDUCTOR y podrá entrar a &quot;Mis Rutas&quot; con estas credenciales.</p>
+                  </div>
+                )}
               </div>
             )}
 
@@ -218,7 +306,7 @@ export default function ConductoresClient({ conductoresIniciales }: Props) {
               </button>
               <button
                 onClick={guardar}
-                disabled={cargando || (!editando && !form.usuario_id)}
+                disabled={cargando || (!editando && modo === 'existente' && !form.usuario_id) || (!editando && modo === 'nuevo' && (!form.nombre || !form.email || form.password.length < 8))}
                 className="flex-1 px-4 py-2 bg-sky-600 text-white rounded-lg text-sm font-medium hover:bg-sky-700 disabled:opacity-50"
               >
                 {cargando ? 'Guardando...' : 'Guardar'}

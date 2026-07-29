@@ -100,6 +100,18 @@ export default function MonitoreoClient({ rutasIniciales, ubicacionesIniciales, 
     return () => { supabase.removeChannel(canal) }
   }, [supabase])
 
+  // Avance de entregas en tiempo real: cualquier cambio en paradas / rutas /
+  // novedades refresca el tablero al instante (además del sondeo de respaldo).
+  useEffect(() => {
+    const canal = supabase
+      .channel('monitoreo-entregas')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'ruta_paradas' }, () => refrescar(fecha))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'rutas_entrega' }, () => refrescar(fecha))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'novedades_entrega' }, () => refrescar(fecha))
+      .subscribe()
+    return () => { supabase.removeChannel(canal) }
+  }, [supabase, fecha, refrescar])
+
   const ubicDe = (conductorId?: string | null) =>
     conductorId ? ubicaciones.find(u => u.conductor_id === conductorId) : undefined
 
