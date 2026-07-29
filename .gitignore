@@ -41,6 +41,9 @@ prisma/generated
 .idea/
 *.swp
 
+# Claude Code (config local)
+.claude/
+
 # Testing
 coverage/
 playwright-report/
