@@ -123,6 +123,7 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     grupo: 'Logística y Conductores',
     permisos: [
       { key: 'ver_logistica',               label: 'Ver módulo de logística' },
+      { key: 'ver_monitoreo_entregas',      label: 'Ver tablero de entregas en vivo (administrativo)' },
       { key: 'gestionar_conductores',        label: 'Gestionar conductores (crear / editar)' },
       { key: 'gestionar_rutas',             label: 'Crear y asignar rutas de entrega' },
       { key: 'ver_ubicacion_conductores',   label: 'Ver mapa GPS en tiempo real' },

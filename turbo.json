@@ -5,7 +5,26 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", ".env*"],
-      "outputs": [".next/**", "!.next/cache/**"]
+      "outputs": [".next/**", "!.next/cache/**"],
+      "env": [
+        "NEXT_PUBLIC_SUPABASE_URL",
+        "NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        "SUPABASE_SERVICE_ROLE_KEY",
+        "APP_BASE_URL",
+        "CRON_SECRET",
+        "FACIAL_SERVICE_URL",
+        "FACIAL_SERVICE_TOKEN",
+        "FACIAL_UMBRAL_MATCH",
+        "FACIAL_UMBRAL_DUDA",
+        "FACIAL_LIVENESS_MIN",
+        "OPENAI_API_KEY",
+        "OPENAI_MODEL_CHAT",
+        "OPENAI_MODEL_VISION",
+        "OPENAI_MODEL_TRANSCRIBE",
+        "DEEPSEEK_API_KEY",
+        "DEEPSEEK_BASE_URL",
+        "DEEPSEEK_MODEL_CHAT"
+      ]
     },
     "dev": {
       "cache": false,

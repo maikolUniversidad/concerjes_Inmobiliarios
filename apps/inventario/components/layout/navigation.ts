@@ -4,7 +4,7 @@ import {
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode, PackageCheck,
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
-  MapPin, Navigation, AlertTriangle, Clock, Map, type LucideIcon,
+  MapPin, Navigation, AlertTriangle, Clock, Map, Radio, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -93,6 +93,7 @@ export const navigation: NavModule[] = [
     icon: Truck,
     items: [
       { label: 'Mis Rutas',         href: '/logistica/mis-rutas',  icon: Navigation,    permiso: 'ver_rutas_conductor' },
+      { label: 'Tablero en Vivo',   href: '/logistica/monitoreo',  icon: Radio,         permiso: 'ver_monitoreo_entregas' },
       { label: 'Control de Rutas',  href: '/logistica/control',    icon: ClipboardList, permiso: 'gestionar_rutas' },
       { label: 'Mapa en Vivo',      href: '/logistica/mapa',       icon: Map,           permiso: 'ver_ubicacion_conductores' },
       { label: 'Novedades',         href: '/logistica/novedades',  icon: AlertTriangle, permiso: 'ver_novedades_entrega' },

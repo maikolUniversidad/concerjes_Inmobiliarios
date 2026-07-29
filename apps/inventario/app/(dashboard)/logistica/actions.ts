@@ -110,6 +110,46 @@ export async function getRutas(fecha?: string) {
   return data ?? []
 }
 
+/**
+ * Tablero administrativo en vivo: todas las rutas del día con su conductor,
+ * las paradas (sedes a visitar) y el detalle de "qué deben entregar" (ítems de
+ * cada orden). Pensado para que el personal administrativo monitoree la
+ * operación de entregas en tiempo real. El GPS se recibe aparte vía Realtime.
+ */
+export async function getMonitoreoEntregas(fecha?: string) {
+  await requirePermiso('ver_monitoreo_entregas')
+  const s = await db()
+  const dia = fecha ?? new Date().toISOString().split('T')[0]
+
+  const { data, error } = await s
+    .from('rutas_entrega')
+    .select(`
+      *,
+      conductor:conductores(
+        id, placa_vehiculo, tipo_vehiculo, zona, telefono_contacto, activo,
+        usuario:usuarios(id, nombre, email)
+      ),
+      paradas:ruta_paradas(
+        *,
+        sede:sedes(id, nombre, ciudad, zona),
+        orden:ordenes_insumo(
+          id, numero, estado,
+          items:orden_insumo_items(
+            id, cantidad_solicitada,
+            producto:productos(nombre_estandar, presentacion)
+          )
+        ),
+        confirmacion:confirmaciones_entrega(id, receptor_nombre, created_at),
+        novedades:novedades_entrega(id, tipo, estado)
+      )
+    `)
+    .eq('fecha', dia)
+    .order('created_at', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
 export async function getRutaConductor() {
   const s = await db()
   const { data: { user } } = await s.auth.getUser()
