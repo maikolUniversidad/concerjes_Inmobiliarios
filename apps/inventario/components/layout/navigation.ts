@@ -4,7 +4,8 @@ import {
   Settings, Brain, FolderOpen, ClipboardList, Bell, Shield,
   UploadCloud, History, ClipboardCheck, Barcode, PackageCheck,
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
-  MapPin, Navigation, AlertTriangle, Clock, Map, Radio, type LucideIcon,
+  MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
+  Home, CalendarDays, Star, DollarSign, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -103,6 +104,18 @@ export const navigation: NavModule[] = [
     ],
   },
   {
+    id: 'servicios_hogar',
+    title: 'Servicios del Hogar',
+    icon: Home,
+    items: [
+      { label: 'Resumen',         href: '/servicios-hogar',            icon: Home,         permiso: 'ver_servicios_hogar' },
+      { label: 'Solicitudes',     href: '/servicios-hogar/solicitudes', icon: ClipboardList, permiso: 'gestionar_solicitudes_hogar' },
+      { label: 'Agenda',          href: '/servicios-hogar/agenda',      icon: CalendarDays,  permiso: 'gestionar_agenda_hogar' },
+      { label: 'Tipos de Servicio', href: '/servicios-hogar/tipos',    icon: Star,          permiso: 'gestionar_tipos_servicio' },
+      { label: 'Precios',         href: '/servicios-hogar/precios',     icon: DollarSign,    permiso: 'gestionar_precios_servicio' },
+    ],
+  },
+  {
     id: 'ia',
     title: 'Inteligencia Artificial',
     icon: Brain,
@@ -143,6 +156,7 @@ export const moduleShortLabel: Record<string, string> = {
   gestion: 'Gestión',
   gestion_humana: 'RRHH',
   logistica: 'Logística',
+  servicios_hogar: 'Hogar',
   ia: 'IA',
   administracion: 'Admin',
 }

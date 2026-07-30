@@ -112,6 +112,16 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    grupo: 'Servicios del Hogar',
+    permisos: [
+      { key: 'ver_servicios_hogar',          label: 'Ver módulo Servicios del Hogar' },
+      { key: 'gestionar_solicitudes_hogar',  label: 'Ver y gestionar solicitudes de servicio' },
+      { key: 'gestionar_agenda_hogar',       label: 'Ver y gestionar agenda de servicios' },
+      { key: 'gestionar_tipos_servicio',     label: 'Crear / editar tipos de servicio' },
+      { key: 'gestionar_precios_servicio',   label: 'Crear / editar tarifas y precios' },
+    ],
+  },
+  {
     grupo: 'Inteligencia Artificial',
     permisos: [
       { key: 'usar_ia_vision',    label: 'Usar visión IA' },

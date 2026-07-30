@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 const navLinks = [
   { label: 'Inicio', href: '/' },
   { label: 'Servicios', href: '/servicios' },
+  { label: 'Servicios del Hogar', href: '/servicios-hogar' },
   { label: 'Nosotros', href: '/nosotros' },
   { label: 'Seguridad y Salud', href: '/seguridad-salud' },
   { label: 'Trabaja con nosotros', href: '/registro-vacantes' },
