@@ -15,6 +15,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "clean": "turbo run clean",
     "deploy": "node scripts/vercel-deploy.mjs deploy --prod --yes",
+    "deploy:web": "node scripts/vercel-deploy.mjs deploy --prod --yes --cwd apps/web",
+    "deploy:web:preview": "node scripts/vercel-deploy.mjs deploy --yes --cwd apps/web",
     "deploy:preview": "node scripts/vercel-deploy.mjs deploy --yes",
     "deploy:status": "node scripts/vercel-deploy.mjs ls",
     "deploy:logs": "node scripts/vercel-deploy.mjs logs"
