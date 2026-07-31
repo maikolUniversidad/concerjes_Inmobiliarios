@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import Image from 'next/image'
 import { IngresarClient } from './IngresarClient'
 
 export const metadata: Metadata = { title: 'Ingresar', robots: { index: false, follow: false } }
@@ -9,11 +10,8 @@ export default function IngresarPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-brand-green-bg/40 px-4 py-10">
       <div className="w-full max-w-sm">
-        <Link href="/" className="mb-6 flex items-center justify-center gap-2">
-          <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-green">
-            <span className="font-heading text-lg font-bold text-white">CI</span>
-          </div>
-          <span className="font-heading text-base font-bold text-brand-green">Conserjes Inmobiliarios</span>
+        <Link href="/" className="mb-6 flex items-center justify-center">
+          <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={240} height={60} priority className="h-11 w-auto" />
         </Link>
         <div className="rounded-2xl bg-white p-6 shadow-sm ring-1 ring-gray-100">
           <IngresarClient />

@@ -38,28 +38,15 @@ export function Header() {
       <div className="container-max px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-3 group">
-            <div className="w-10 h-10 bg-brand-green rounded-lg flex items-center justify-center group-hover:bg-brand-green-mid transition-colors">
-              <span className="text-white font-heading font-bold text-lg">CI</span>
-            </div>
-            <div>
-              <span
-                className={cn(
-                  'font-heading font-bold text-lg leading-tight transition-colors',
-                  scrolled ? 'text-brand-green' : 'text-white'
-                )}
-              >
-                Conserjes
-              </span>
-              <span
-                className={cn(
-                  'font-heading font-bold text-lg leading-tight transition-colors ml-1',
-                  scrolled ? 'text-brand-green-light' : 'text-green-300'
-                )}
-              >
-                Inmobiliarios
-              </span>
-            </div>
+          <Link href="/" className="flex items-center group" aria-label="Conserjes Inmobiliarios — Inicio">
+            <Image
+              src={scrolled ? '/logo-horizontal.png' : '/logo-blanco.png'}
+              alt="Conserjes Inmobiliarios"
+              width={220}
+              height={55}
+              priority
+              className="h-9 w-auto sm:h-10"
+            />
           </Link>
 
           {/* Desktop Nav */}

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Session } from '@supabase/supabase-js'
 import {
   Loader2, LayoutDashboard, CalendarPlus, ClipboardList, CalendarDays, UserRound,
@@ -69,11 +70,9 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
       <div className="flex min-h-screen">
         {/* Sidebar desktop */}
         <aside className="hidden w-64 shrink-0 flex-col border-r border-gray-200 bg-white lg:flex">
-          <Link href="/portal" className="flex items-center gap-2 px-6 py-5">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-green">
-              <span className="font-heading text-base font-bold text-white">CI</span>
-            </div>
-            <span className="font-heading text-sm font-bold text-brand-green leading-tight">Portal<br />Clientes</span>
+          <Link href="/portal" className="block px-5 py-5">
+            <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={200} height={50} priority className="h-8 w-auto" />
+            <span className="mt-1.5 block text-xs font-semibold text-brand-green/70">Portal de clientes</span>
           </Link>
           <nav className="flex-1 space-y-1 px-3 py-4">
             {NAV.map((n) => (
@@ -90,10 +89,8 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
           {/* Topbar móvil */}
           <header className="flex items-center justify-between border-b border-gray-200 bg-white px-4 py-3 lg:hidden">
             <Link href="/portal" className="flex items-center gap-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-green">
-                <span className="font-heading text-sm font-bold text-white">CI</span>
-              </div>
-              <span className="font-heading text-sm font-bold text-brand-green">Portal Clientes</span>
+              <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={180} height={45} className="h-7 w-auto" />
+              <span className="text-xs font-semibold text-brand-green/70">· Portal</span>
             </Link>
             <button onClick={() => setMenuAbierto((v) => !v)} className="p-1.5 text-gray-600">
               {menuAbierto ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import { MapPin, Phone, Mail, Instagram, Facebook, ExternalLink } from 'lucide-react'
 
 const services = [
@@ -27,14 +28,14 @@ export function Footer() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-10">
           {/* Brand */}
           <div className="lg:col-span-1">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="w-10 h-10 bg-white/20 rounded-lg flex items-center justify-center">
-                <span className="text-white font-heading font-bold text-lg">CI</span>
-              </div>
-              <div>
-                <p className="font-heading font-bold text-xl leading-tight">Conserjes</p>
-                <p className="font-heading font-semibold text-green-300 leading-tight">Inmobiliarios</p>
-              </div>
+            <div className="mb-5">
+              <Image
+                src="/logo-blanco.png"
+                alt="Conserjes Inmobiliarios"
+                width={260}
+                height={65}
+                className="h-12 w-auto"
+              />
             </div>
             <p className="text-green-100 font-body text-sm leading-relaxed mb-5">
               Empresa colombiana líder en servicios de aseo, cafetería y mantenimiento. Fundada en 1990,

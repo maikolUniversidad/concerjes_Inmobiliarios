@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Session } from '@supabase/supabase-js'
 import { Loader2, Lock, Mail, LogIn, ImageIcon, Star, LogOut, ShieldAlert, Users } from 'lucide-react'
 import { getGestionSupabase } from '@/lib/supabase/gestion'
@@ -69,9 +70,7 @@ export default function GestionHogarPage() {
       <div className="flex min-h-screen items-center justify-center px-4">
         <div className="w-full max-w-sm">
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-lg bg-brand-green">
-              <span className="font-heading text-lg font-bold text-white">CI</span>
-            </div>
+            <Image src="/logo-horizontal.png" alt="Conserjes Inmobiliarios" width={220} height={55} priority className="mx-auto mb-3 h-10 w-auto" />
             <h1 className="font-heading text-xl font-bold text-gray-900">Gestión · Servicios del Hogar</h1>
             <p className="mt-1 text-sm text-gray-500">Acceso para personal autorizado.</p>
           </div>
