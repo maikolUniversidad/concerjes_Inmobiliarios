@@ -1,6 +1,8 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { CheckCircle2, Star, Phone, Clock, Shield, Award, ChevronRight, Users } from 'lucide-react'
+import { CheckCircle2, Star, Phone, Clock, Shield, Award, ChevronRight, Users, UserRound, CalendarCheck, Bell, MapPin } from 'lucide-react'
+import { GaleriaServicios } from '@/components/servicios-hogar/GaleriaServicios'
+import { ResenasClientes } from '@/components/servicios-hogar/ResenasClientes'
 
 export const metadata: Metadata = {
   title: 'Servicios del Hogar | Conserjes Inmobiliarios',
@@ -133,12 +135,12 @@ export default function ServiciosHogarPage() {
             >
               Solicitar servicio <ChevronRight className="w-5 h-5" />
             </Link>
-            <a
-              href="tel:+573208081399"
+            <Link
+              href="/portal"
               className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/30 text-white font-body font-semibold text-base px-8 py-4 rounded-xl transition-all"
             >
-              <Phone className="w-5 h-5" /> Llamar ahora
-            </a>
+              <UserRound className="w-5 h-5" /> Ingresar a mi portal
+            </Link>
           </div>
           <div className="mt-12 flex flex-wrap justify-center gap-8 text-white/80 font-body text-sm">
             <div className="flex items-center gap-2"><Users className="w-4 h-4" /> +1.069 concerjes</div>
@@ -237,6 +239,12 @@ export default function ServiciosHogarPage() {
         </div>
       </section>
 
+      {/* Galería de fotos */}
+      <GaleriaServicios />
+
+      {/* Reseñas de clientes */}
+      <ResenasClientes />
+
       {/* Garantías */}
       <section className="py-20 px-4 bg-gray-50">
         <div className="container-max">
@@ -255,6 +263,48 @@ export default function ServiciosHogarPage() {
                 <p className="text-gray-500 font-body text-sm leading-relaxed">{g.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Portal de clientes */}
+      <section className="py-20 px-4">
+        <div className="container-max">
+          <div className="grid lg:grid-cols-2 gap-10 items-center bg-gradient-to-br from-brand-green to-brand-green-mid rounded-3xl p-8 sm:p-12 text-white overflow-hidden relative">
+            <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '40px 40px' }} />
+            <div className="relative">
+              <span className="inline-block bg-white/15 text-white text-sm font-body font-semibold px-4 py-1.5 rounded-full mb-5">
+                👤 Portal de clientes
+              </span>
+              <h2 className="font-heading font-bold text-3xl sm:text-4xl mb-4 leading-tight">
+                Crea tu cuenta y controla todo desde un solo lugar
+              </h2>
+              <p className="text-white/80 font-body text-lg mb-8">
+                Agenda servicios, haz seguimiento en tiempo real, consulta la disponibilidad y guarda tus direcciones favoritas. Ingresa con Google, Apple, tu correo o WhatsApp.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Link href="/portal/ingresar" className="inline-flex items-center justify-center gap-2 bg-white text-brand-green font-body font-bold px-7 py-3.5 rounded-xl shadow-lg hover:bg-green-50 transition-colors">
+                  <UserRound className="w-5 h-5" /> Crear cuenta gratis
+                </Link>
+                <Link href="/portal" className="inline-flex items-center justify-center gap-2 border-2 border-white/40 hover:border-white text-white font-body font-semibold px-7 py-3.5 rounded-xl transition-colors">
+                  Ya tengo cuenta
+                </Link>
+              </div>
+            </div>
+            <div className="relative grid grid-cols-2 gap-4">
+              {[
+                { icono: <CalendarCheck className="w-6 h-6" />, titulo: 'Agenda en línea', desc: 'Reserva el horario que prefieras' },
+                { icono: <Bell className="w-6 h-6" />, titulo: 'Seguimiento', desc: 'Sigue el estado de cada servicio' },
+                { icono: <Clock className="w-6 h-6" />, titulo: 'Disponibilidad', desc: 'Consulta cupos libres en tiempo real' },
+                { icono: <MapPin className="w-6 h-6" />, titulo: 'Tus direcciones', desc: 'Guárdalas para agendar más rápido' },
+              ].map((f) => (
+                <div key={f.titulo} className="bg-white/10 backdrop-blur-sm border border-white/15 rounded-2xl p-5">
+                  <div className="w-11 h-11 bg-white/15 rounded-xl flex items-center justify-center mb-3">{f.icono}</div>
+                  <p className="font-heading font-bold mb-1">{f.titulo}</p>
+                  <p className="text-white/70 text-sm font-body leading-snug">{f.desc}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </section>

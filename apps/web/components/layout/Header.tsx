@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import Image from 'next/image'
-import { Menu, X, ChevronDown, Phone } from 'lucide-react'
+import { Menu, X, ChevronDown, Phone, UserRound } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 const navLinks = [
@@ -94,6 +94,16 @@ export function Header() {
             </a>
 
             <Link
+              href="/portal"
+              className={cn(
+                'hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-2 font-body text-sm font-semibold transition-colors',
+                scrolled ? 'text-brand-green hover:bg-brand-green/5' : 'text-white hover:bg-white/10'
+              )}
+            >
+              <UserRound className="w-4 h-4" /> Mi portal
+            </Link>
+
+            <Link
               href="/contacto"
               className="hidden md:inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white px-5 py-2.5 rounded-lg font-body font-semibold text-sm transition-all duration-200 shadow-md hover:shadow-lg"
             >
@@ -135,8 +145,15 @@ export function Header() {
               </Link>
             ))}
             <Link
+              href="/portal"
+              className="mt-2 flex items-center justify-center gap-2 rounded-lg border border-brand-green px-5 py-3 font-body font-semibold text-brand-green transition-colors hover:bg-brand-green/5"
+              onClick={() => setIsOpen(false)}
+            >
+              <UserRound className="w-4 h-4" /> Mi portal de cliente
+            </Link>
+            <Link
               href="/contacto"
-              className="mt-2 text-center bg-brand-green text-white px-5 py-3 rounded-lg font-body font-semibold transition-colors hover:bg-brand-green-dark"
+              className="text-center bg-brand-green text-white px-5 py-3 rounded-lg font-body font-semibold transition-colors hover:bg-brand-green-dark"
               onClick={() => setIsOpen(false)}
             >
               Cotizar ahora

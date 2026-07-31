@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
@@ -13,13 +14,15 @@ export default function RegistroLayout({ children }: { children: React.ReactNode
     <div className="min-h-screen bg-brand-green-bg/40">
       <header className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
         <div className="mx-auto flex max-w-2xl items-center justify-between px-4 py-3">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-green">
-              <span className="font-heading text-base font-bold text-white">CI</span>
-            </div>
-            <span className="font-heading text-sm font-bold leading-tight text-brand-green">
-              Conserjes<br />Inmobiliarios
-            </span>
+          <Link href="/" className="flex items-center">
+            <Image
+              src="/logo-horizontal.png"
+              alt="Conserjes Inmobiliarios"
+              width={160}
+              height={45}
+              className="h-9 w-auto sm:h-10"
+              priority
+            />
           </Link>
           <Link href="/" className="text-sm font-medium text-gray-500 hover:text-brand-green">
             Volver al sitio

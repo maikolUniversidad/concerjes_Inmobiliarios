@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { ArrowRight, CheckCircle, ChevronDown, Briefcase } from 'lucide-react'
+import { ArrowRight, CheckCircle, ChevronDown, Briefcase, Home } from 'lucide-react'
 
 const highlights = [
   '36 años de experiencia comprobada',
@@ -75,6 +75,19 @@ export function HeroSection() {
               className="inline-flex items-center justify-center gap-2 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white font-body font-semibold text-base px-8 py-4 rounded-xl hover:bg-white/20 hover:border-white/50 transition-all duration-200"
             >
               Ver servicios
+            </Link>
+          </div>
+
+          {/* Acceso B2C — Servicios del Hogar */}
+          <div className="mt-6 inline-flex flex-wrap items-center gap-2 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 px-4 py-3">
+            <Home className="h-5 w-5 text-green-300" />
+            <span className="font-body text-white/90">¿Es para tu hogar?</span>
+            <Link href="/servicios-hogar" className="font-body font-bold text-white underline underline-offset-4 hover:text-green-200">
+              Servicios del Hogar
+            </Link>
+            <span className="text-white/40">·</span>
+            <Link href="/portal" className="font-body font-semibold text-green-200 underline underline-offset-4 hover:text-white">
+              Mi portal
             </Link>
           </div>
 
