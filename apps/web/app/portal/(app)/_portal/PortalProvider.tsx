@@ -12,6 +12,8 @@ export interface ClientePerfil {
   documento: string | null
   foto_url: string | null
   proveedor: string | null
+  calificacion_prom?: number
+  calificaciones_count?: number
 }
 
 interface PortalCtx {

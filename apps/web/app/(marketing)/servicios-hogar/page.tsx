@@ -130,16 +130,16 @@ export default function ServiciosHogarPage() {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link
-              href="/servicios-hogar/solicitar"
+              href="/servicios-hogar/tienda"
               className="inline-flex items-center justify-center gap-2 bg-white text-brand-green font-body font-bold text-base px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-green-50 transition-all"
             >
-              Solicitar servicio <ChevronRight className="w-5 h-5" />
+              🛒 Explorar la tienda <ChevronRight className="w-5 h-5" />
             </Link>
             <Link
-              href="/portal"
+              href="/servicios-hogar/solicitar"
               className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/30 text-white font-body font-semibold text-base px-8 py-4 rounded-xl transition-all"
             >
-              <UserRound className="w-5 h-5" /> Ingresar a mi portal
+              Solicitar servicio
             </Link>
           </div>
           <div className="mt-12 flex flex-wrap justify-center gap-8 text-white/80 font-body text-sm">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import {
-  Loader2, User, Phone, IdCard, Mail, Save, MapPin, Plus, Trash2, Star, Home, X,
+  Loader2, User, Phone, IdCard, Mail, Save, MapPin, Plus, Trash2, Star, Home, X, BadgeCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getPortalSupabase } from '@/lib/supabase/portal'
@@ -85,6 +85,16 @@ export default function PerfilPage() {
           <div>
             <p className="font-heading font-bold text-gray-900">{nombre || 'Cliente'}</p>
             <p className="flex items-center gap-1 text-sm text-gray-400"><Mail className="h-3.5 w-3.5" /> {cliente?.email ?? 'Sin correo'}</p>
+            {(cliente?.calificaciones_count ?? 0) > 0 ? (
+              <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-amber-600">
+                <Star className="h-4 w-4 fill-amber-400 text-amber-400" /> {Number(cliente?.calificacion_prom).toFixed(1)}
+                <span className="font-normal text-gray-400">· como cliente ({cliente?.calificaciones_count})</span>
+              </p>
+            ) : (
+              <p className="mt-1 flex items-center gap-1 text-xs text-gray-400">
+                <BadgeCheck className="h-3.5 w-3.5 text-brand-green" /> Cliente nuevo
+              </p>
+            )}
           </div>
         </div>
 

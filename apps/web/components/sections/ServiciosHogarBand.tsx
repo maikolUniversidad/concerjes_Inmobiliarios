@@ -42,7 +42,7 @@ export function ServiciosHogarBand() {
               {CHIPS.map((c) => (
                 <Link
                   key={c.nombre}
-                  href={`/portal/solicitar?servicio=${encodeURIComponent(c.nombre)}`}
+                  href={`/servicios-hogar/solicitar?servicio=${encodeURIComponent(c.nombre)}`}
                   className="inline-flex items-center gap-1.5 rounded-full border border-gray-200 bg-white px-3.5 py-1.5 text-sm font-body font-medium text-gray-700 transition-colors hover:border-brand-green hover:text-brand-green"
                 >
                   <span>{c.icono}</span> {c.nombre}
@@ -53,11 +53,11 @@ export function ServiciosHogarBand() {
             {/* CTAs */}
             <div className="flex flex-col gap-3 sm:flex-row">
               <Link
-                href="/portal/solicitar"
+                href="/servicios-hogar/tienda"
                 className="group inline-flex items-center justify-center gap-2.5 rounded-xl bg-brand-green px-8 py-4 font-body text-base font-bold text-white shadow-lg transition-all hover:-translate-y-0.5 hover:bg-brand-green-dark hover:shadow-xl"
               >
                 <CalendarPlus className="h-5 w-5" />
-                Agendar mi servicio
+                Explorar la tienda
                 <ArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-1" />
               </Link>
               <Link
@@ -70,9 +70,9 @@ export function ServiciosHogarBand() {
 
             <p className="mt-4 font-body text-sm text-gray-500">
               <UserRound className="mr-1.5 inline h-4 w-4 align-[-3px] text-brand-green" />
-              Al agendar podrás <strong className="text-gray-700">crear tu cuenta o iniciar sesión</strong> con Google, Apple, correo o WhatsApp.{' '}
+              Explora y agenda sin registrarte. Crea tu cuenta solo si quieres <strong className="text-gray-700">seguimiento y direcciones guardadas</strong>.{' '}
               <Link href="/portal" className="font-semibold text-brand-green underline underline-offset-4">
-                Ya tengo cuenta
+                Mi portal
               </Link>
             </p>
           </div>

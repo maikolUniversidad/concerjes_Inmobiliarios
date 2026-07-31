@@ -10,7 +10,7 @@ const BUCKET = 'servicios-hogar'
 
 interface Foto {
   id: string; titulo: string | null; url: string; storage_path: string | null
-  activo: boolean; tipo_id: string | null
+  activo: boolean; tipo_id: string | null; media_tipo: string; poster_url: string | null
   tipos_servicio_hogar: { nombre: string } | null
 }
 interface Tipo { id: string; nombre: string }
@@ -27,7 +27,7 @@ export function GaleriaAdmin({ session }: { session: Session }) {
   async function cargar() {
     const sb = getGestionSupabase()
     const [{ data: fs }, { data: ts }] = await Promise.all([
-      sb.from('galeria_servicio_hogar').select('id, titulo, url, storage_path, activo, tipo_id, tipos_servicio_hogar(nombre)').order('orden').order('created_at', { ascending: false }),
+      sb.from('galeria_servicio_hogar').select('id, titulo, url, storage_path, activo, tipo_id, media_tipo, poster_url, tipos_servicio_hogar(nombre)').order('orden').order('created_at', { ascending: false }),
       sb.from('tipos_servicio_hogar').select('id, nombre').eq('activo', true).order('orden'),
     ])
     setFotos((fs as unknown as Foto[]) ?? [])
@@ -42,26 +42,30 @@ export function GaleriaAdmin({ session }: { session: Session }) {
     const sb = getGestionSupabase()
     let ok = 0
     for (const file of Array.from(files)) {
-      if (!file.type.startsWith('image/')) { toast.error(`"${file.name}" no es una imagen.`); continue }
-      if (file.size > 8 * 1024 * 1024) { toast.error(`"${file.name}" supera 8 MB.`); continue }
-      const ext = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+      const esVideo = file.type.startsWith('video/')
+      const esImagen = file.type.startsWith('image/')
+      if (!esVideo && !esImagen) { toast.error(`"${file.name}" no es imagen ni video.`); continue }
+      const limite = esVideo ? 50 : 8
+      if (file.size > limite * 1024 * 1024) { toast.error(`"${file.name}" supera ${limite} MB.`); continue }
+      const ext = file.name.split('.').pop()?.toLowerCase() || (esVideo ? 'mp4' : 'jpg')
       const path = `galeria/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`
-      const { error: upErr } = await sb.storage.from(BUCKET).upload(path, file, { cacheControl: '3600', upsert: false })
+      const { error: upErr } = await sb.storage.from(BUCKET).upload(path, file, { cacheControl: '3600', upsert: false, contentType: file.type })
       if (upErr) { toast.error(`No se pudo subir "${file.name}".`); continue }
       const { data: pub } = sb.storage.from(BUCKET).getPublicUrl(path)
       const { error: insErr } = await sb.from('galeria_servicio_hogar').insert({
         titulo: titulo.trim() || null,
         tipo_id: tipoId || null,
+        media_tipo: esVideo ? 'video' : 'imagen',
         storage_path: path,
         url: pub.publicUrl,
         created_by: session.user.id,
       })
-      if (insErr) { await sb.storage.from(BUCKET).remove([path]); toast.error('No se pudo registrar la imagen.'); continue }
+      if (insErr) { await sb.storage.from(BUCKET).remove([path]); toast.error('No se pudo registrar el archivo.'); continue }
       ok++
     }
     setSubiendo(false)
     if (fileRef.current) fileRef.current.value = ''
-    if (ok > 0) { toast.success(`${ok} imagen${ok === 1 ? '' : 'es'} subida${ok === 1 ? '' : 's'}.`); setTitulo(''); cargar() }
+    if (ok > 0) { toast.success(`${ok} archivo${ok === 1 ? '' : 's'} subido${ok === 1 ? '' : 's'}.`); setTitulo(''); cargar() }
   }
 
   async function toggle(f: Foto) {
@@ -83,7 +87,7 @@ export function GaleriaAdmin({ session }: { session: Session }) {
     <div className="space-y-6">
       {/* Subida */}
       <div className="rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 className="mb-3 font-heading font-bold text-gray-900">Subir imágenes</h2>
+        <h2 className="mb-3 font-heading font-bold text-gray-900">Subir imágenes y videos</h2>
         <div className="grid gap-3 sm:grid-cols-2">
           <input value={titulo} onChange={(e) => setTitulo(e.target.value)} placeholder="Título (opcional, p.ej. Antes / Después)"
             className="rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm outline-none focus:border-brand-green" />
@@ -93,12 +97,12 @@ export function GaleriaAdmin({ session }: { session: Session }) {
             {tipos.map((t) => <option key={t.id} value={t.id}>{t.nombre}</option>)}
           </select>
         </div>
-        <input ref={fileRef} type="file" accept="image/*" multiple onChange={(e) => onArchivos(e.target.files)} className="hidden" />
+        <input ref={fileRef} type="file" accept="image/*,video/*" multiple onChange={(e) => onArchivos(e.target.files)} className="hidden" />
         <button onClick={() => fileRef.current?.click()} disabled={subiendo}
           className="mt-3 inline-flex items-center gap-2 rounded-xl bg-brand-green px-5 py-2.5 text-sm font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
-          {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Seleccionar imágenes
+          {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Seleccionar archivos
         </button>
-        <p className="mt-2 text-xs text-gray-400">JPG/PNG/WebP hasta 8 MB. Puedes seleccionar varias a la vez.</p>
+        <p className="mt-2 text-xs text-gray-400">Imágenes (JPG/PNG/WebP, 8 MB) o videos (MP4/WebM, 50 MB). Puedes seleccionar varios a la vez.</p>
       </div>
 
       {/* Listado */}
@@ -113,9 +117,14 @@ export function GaleriaAdmin({ session }: { session: Session }) {
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           {fotos.map((f) => (
             <div key={f.id} className={`group relative overflow-hidden rounded-xl border bg-white ${f.activo ? 'border-gray-200' : 'border-amber-300'}`}>
-              <div className="relative aspect-square">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={f.url} alt={f.titulo ?? ''} className={`h-full w-full object-cover ${f.activo ? '' : 'opacity-50'}`} />
+              <div className="relative aspect-square bg-gray-100">
+                {f.media_tipo === 'video' ? (
+                  <video src={f.url} poster={f.poster_url ?? undefined} className={`h-full w-full object-cover ${f.activo ? '' : 'opacity-50'}`} muted />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={f.url} alt={f.titulo ?? ''} className={`h-full w-full object-cover ${f.activo ? '' : 'opacity-50'}`} />
+                )}
+                {f.media_tipo === 'video' && <span className="absolute right-2 top-2 rounded-full bg-black/60 px-2 py-0.5 text-xs font-semibold text-white">▶ Video</span>}
                 {!f.activo && <span className="absolute left-2 top-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs font-semibold text-white">Oculta</span>}
               </div>
               <div className="p-2">

@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import type { Session } from '@supabase/supabase-js'
-import { Loader2, Lock, Mail, LogIn, ImageIcon, Star, LogOut, ShieldAlert } from 'lucide-react'
+import { Loader2, Lock, Mail, LogIn, ImageIcon, Star, LogOut, ShieldAlert, Users } from 'lucide-react'
 import { getGestionSupabase } from '@/lib/supabase/gestion'
 import { GaleriaAdmin } from './GaleriaAdmin'
 import { ResenasAdmin } from './ResenasAdmin'
+import { ConcerjesAdmin } from './ConcerjesAdmin'
 
 type Estado = 'cargando' | 'login' | 'verificando' | 'no-staff' | 'ok'
 
@@ -14,7 +15,7 @@ export default function GestionHogarPage() {
   const [estado, setEstado] = useState<Estado>('cargando')
   const [session, setSession] = useState<Session | null>(null)
   const [nombre, setNombre] = useState<string | null>(null)
-  const [tab, setTab] = useState<'galeria' | 'resenas'>('galeria')
+  const [tab, setTab] = useState<'galeria' | 'concerjes' | 'resenas'>('galeria')
 
   // login form
   const [email, setEmail] = useState('')
@@ -128,12 +129,17 @@ export default function GestionHogarPage() {
         <button onClick={() => setTab('galeria')} className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-colors ${tab === 'galeria' ? 'bg-white text-brand-green shadow-sm' : 'text-gray-500'}`}>
           <ImageIcon className="h-4 w-4" /> Galería
         </button>
+        <button onClick={() => setTab('concerjes')} className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-colors ${tab === 'concerjes' ? 'bg-white text-brand-green shadow-sm' : 'text-gray-500'}`}>
+          <Users className="h-4 w-4" /> Concerjes
+        </button>
         <button onClick={() => setTab('resenas')} className={`flex flex-1 items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-semibold transition-colors ${tab === 'resenas' ? 'bg-white text-brand-green shadow-sm' : 'text-gray-500'}`}>
           <Star className="h-4 w-4" /> Reseñas
         </button>
       </div>
 
-      {session && (tab === 'galeria' ? <GaleriaAdmin session={session} /> : <ResenasAdmin />)}
+      {session && tab === 'galeria' && <GaleriaAdmin session={session} />}
+      {session && tab === 'concerjes' && <ConcerjesAdmin />}
+      {session && tab === 'resenas' && <ResenasAdmin />}
     </div>
   )
 }
