@@ -5,7 +5,7 @@ import {
   UploadCloud, History, ClipboardCheck, Barcode, PackageCheck, Split,
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
-  Home, CalendarDays, Star, DollarSign, type LucideIcon,
+  Home, CalendarDays, Star, DollarSign, Wrench, type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -59,6 +59,7 @@ export const navigation: NavModule[] = [
       { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight, permiso: 'ver_movimientos' },
       { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck, permiso: 'ver_arqueo' },
       { label: 'Bodegas',            href: '/bodegas',   icon: Warehouse, permiso: 'ver_bodegas' },
+      { label: 'Maquinaria',         href: '/maquinaria', icon: Wrench, permiso: 'ver_maquinaria' },
       { label: 'Reembasado',         href: '/reembasado', icon: Split, permiso: 'ver_reembasado' },
       { label: 'Generador Códigos',  href: '/codigos',   icon: Barcode, permiso: 'generar_codigos' },
     ],

@@ -32,6 +32,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'generar_codigos',     label: 'Generar códigos de barras' },
       { key: 'ver_reembasado',      label: 'Ver reembasado / decantado' },
       { key: 'gestionar_reembasado', label: 'Definir y ejecutar reembasado' },
+      { key: 'ver_maquinaria',      label: 'Ver maquinaria' },
+      { key: 'gestionar_maquinaria', label: 'Gestionar maquinaria (crear/editar/estado)' },
     ],
   },
   {

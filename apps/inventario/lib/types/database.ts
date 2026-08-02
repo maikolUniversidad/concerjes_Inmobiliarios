@@ -730,9 +730,53 @@ export const ESTADO_PARADA_LABELS: Record<EstadoParada, { label: string; color: 
   REPROGRAMADO: { label: 'Reprogramado', color: 'bg-yellow-100 text-yellow-700' },
 }
 
+// ── Control de Maquinaria ─────────────────────────────────────────────────────
+export type EstadoMaquinaria = 'OPERATIVA' | 'EN_USO' | 'MANTENIMIENTO' | 'DANADA' | 'BAJA'
+
+export interface Maquinaria {
+  id: string
+  codigo: string
+  nombre: string
+  tipo: string | null
+  marca: string | null
+  modelo: string | null
+  serial: string | null
+  estado: EstadoMaquinaria
+  ubicacion_sede_id: string | null
+  ubicacion_texto: string | null
+  responsable: string | null
+  imagen_url: string | null
+  fecha_adquisicion: string | null
+  valor: number | null
+  observaciones: string | null
+  activo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+  sedes?: { id: string; nombre: string } | null
+}
+
+export interface MaquinariaEvento {
+  id: string
+  maquinaria_id: string
+  tipo: string
+  estado_anterior: EstadoMaquinaria | null
+  estado_nuevo: EstadoMaquinaria | null
+  ubicacion: string | null
+  descripcion: string
+  foto_path: string | null
+  detalle: Record<string, unknown> | null
+  usuario_id: string | null
+  usuario_email: string | null
+  usuario_nombre: string | null
+  created_at: string
+}
+
 export type Database = {
   public: {
     Tables: {
+      maquinaria: { Row: Maquinaria; Insert: Partial<Maquinaria>; Update: Partial<Maquinaria> }
+      maquinaria_eventos: { Row: MaquinariaEvento; Insert: Partial<MaquinariaEvento>; Update: Partial<MaquinariaEvento> }
       empresas_usuarias: { Row: EmpresaUsuaria; Insert: Partial<EmpresaUsuaria>; Update: Partial<EmpresaUsuaria> }
       personas: { Row: Persona; Insert: Partial<Persona>; Update: Partial<Persona> }
       tipos_documentales: { Row: TipoDocumental; Insert: Partial<TipoDocumental>; Update: Partial<TipoDocumental> }
