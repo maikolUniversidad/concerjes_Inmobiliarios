@@ -270,6 +270,31 @@ export interface OrdenInsumoResponsable {
   created_at: string
 }
 
+export interface EmpresaEmisora {
+  id: string
+  razon_social: string
+  nombre_comercial: string | null
+  nit: string | null
+  telefono: string | null
+  email: string | null
+  direccion: string | null
+  ciudad: string | null
+  sitio_web: string | null
+  logo_path: string | null
+  es_predeterminada: boolean
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface Presentacion {
+  id: string
+  nombre: string
+  activo: boolean
+  orden: number | null
+  created_at: string
+}
+
 export interface PrecioProveedor {
   id: string
   producto_id: string
@@ -725,6 +750,8 @@ export type Database = {
       sedes: { Row: Sede; Insert: Partial<Sede>; Update: Partial<Sede> }
       pedidos_sede: { Row: PedidoSede; Insert: Partial<PedidoSede>; Update: Partial<PedidoSede> }
       sede_productos: { Row: SedeProducto; Insert: Partial<SedeProducto>; Update: Partial<SedeProducto> }
+      empresas_emisoras: { Row: EmpresaEmisora; Insert: Partial<EmpresaEmisora>; Update: Partial<EmpresaEmisora> }
+      presentaciones: { Row: Presentacion; Insert: Partial<Presentacion>; Update: Partial<Presentacion> }
       ordenes_insumo: { Row: OrdenInsumo; Insert: Partial<OrdenInsumo>; Update: Partial<OrdenInsumo> }
       orden_insumo_items: { Row: OrdenInsumoItem; Insert: Partial<OrdenInsumoItem>; Update: Partial<OrdenInsumoItem> }
       orden_insumo_responsables: { Row: OrdenInsumoResponsable; Insert: Partial<OrdenInsumoResponsable>; Update: Partial<OrdenInsumoResponsable> }

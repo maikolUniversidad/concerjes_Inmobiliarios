@@ -1,8 +1,9 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { FileDown, Loader2, Truck, ClipboardList } from 'lucide-react'
 import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 
 export interface DatosDoc {
   numero: string
@@ -25,7 +26,18 @@ export interface DatosDoc {
 
 type Tipo = 'ORDEN' | 'REMISION'
 
-const EMPRESA = { nombre: 'CONSERJES INMOBILIARIOS LTDA', nit: 'NIT 800093388-2', tel: '+57 320 808 1399' }
+interface Emisor { nombre: string; nit: string; tel: string; direccion: string | null; logoDataUrl: string | null }
+
+// Respaldo si aún no hay empresa emisora configurada.
+const EMPRESA_FALLBACK: Emisor = { nombre: 'CONSERJES INMOBILIARIOS LTDA', nit: 'NIT 800093388-2', tel: '+57 320 808 1399', direccion: null, logoDataUrl: null }
+
+async function comoDataUrl(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(url); if (!r.ok) return null
+    const b = await r.blob()
+    return await new Promise((res) => { const fr = new FileReader(); fr.onload = () => res(fr.result as string); fr.onerror = () => res(null); fr.readAsDataURL(b) })
+  } catch { return null }
+}
 
 function fecha(iso?: string | null) {
   if (!iso) return '—'
@@ -39,11 +51,36 @@ function fecha(iso?: string | null) {
  */
 export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
   const [generando, setGenerando] = useState<Tipo | null>(null)
+  const [emisor, setEmisor] = useState<Emisor>(EMPRESA_FALLBACK)
+
+  // Empresa emisora predeterminada (datos + logo) para los documentos.
+  useEffect(() => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createClient() as any
+    sb.from('empresas_emisoras')
+      .select('razon_social, nit, telefono, direccion, logo_path')
+      .eq('es_predeterminada', true).eq('activo', true).maybeSingle()
+      .then(async ({ data }: { data: { razon_social: string; nit: string | null; telefono: string | null; direccion: string | null; logo_path: string | null } | null }) => {
+        if (!data) return
+        let logoDataUrl: string | null = null
+        if (data.logo_path) {
+          const url = sb.storage.from('empresas').getPublicUrl(data.logo_path).data.publicUrl
+          logoDataUrl = await comoDataUrl(url)
+        }
+        setEmisor({
+          nombre: data.razon_social,
+          nit: data.nit ? `NIT ${data.nit}` : '',
+          tel: data.telefono ?? '',
+          direccion: data.direccion ?? null,
+          logoDataUrl,
+        })
+      })
+  }, [])
 
   async function generar(tipo: Tipo) {
     setGenerando(tipo)
     try {
-      const { pdf, Document, Page, Text, View, StyleSheet } = await import('@react-pdf/renderer')
+      const { pdf, Document, Page, Text, View, Image, StyleSheet } = await import('@react-pdf/renderer')
       const React = (await import('react')).default
       const h = React.createElement
 
@@ -75,9 +112,13 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
         h(Page, { size: 'LETTER', style: s.page },
           // Encabezado
           h(View, { style: s.head },
-            h(View, null,
-              h(Text, { style: s.empresa }, EMPRESA.nombre),
-              h(Text, { style: s.sub }, `${EMPRESA.nit} · ${EMPRESA.tel}`),
+            h(View, { style: { flexDirection: 'row', alignItems: 'center' } },
+              emisor.logoDataUrl ? h(Image, { src: emisor.logoDataUrl, style: { width: 46, height: 46, objectFit: 'contain', marginRight: 8 } }) : null,
+              h(View, null,
+                h(Text, { style: s.empresa }, emisor.nombre),
+                h(Text, { style: s.sub }, [emisor.nit, emisor.tel].filter(Boolean).join(' · ')),
+                emisor.direccion ? h(Text, { style: s.sub }, emisor.direccion) : null,
+              ),
             ),
             h(View, null,
               h(Text, { style: s.titulo }, esRemision ? 'REMISIÓN DE DESPACHO' : 'ORDEN DE INSUMO'),
@@ -125,7 +166,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             h(Text, { style: s.firmaBox }, esRemision ? 'Entregado por (bodega)' : 'Solicitado por (coordinador)'),
             h(Text, { style: s.firmaBox }, esRemision ? 'Recibido por (sede) — nombre, C.C. y fecha' : 'Aprobado por (central)'),
           ),
-          h(Text, { style: s.pie }, `${EMPRESA.nombre} · Documento generado por la plataforma · ${new Date().toLocaleString('es-CO')}`),
+          h(Text, { style: s.pie }, `${emisor.nombre} · Documento generado por la plataforma · ${new Date().toLocaleString('es-CO')}`),
         ),
       )
 

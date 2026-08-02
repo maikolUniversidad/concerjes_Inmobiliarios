@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { Building2, User, Shield, Mail, Bell, ChevronRight } from 'lucide-react'
+import { Building2, User, Shield, Mail, Bell, ChevronRight, Package2 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import { ROL_LABELS, type RolUsuario } from '@/lib/types/database'
@@ -58,6 +58,38 @@ export default async function ConfiguracionPage() {
       </div>
 
       {/* Módulos de configuración */}
+      <Link
+        href="/configuracion/empresas"
+        className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group"
+      >
+        <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+          <Building2 className="w-5 h-5 text-brand-green" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-heading font-semibold text-base text-gray-900">Empresas emisoras</h2>
+          <p className="font-body text-sm text-gray-500 mt-0.5">
+            Registra varias empresas con su logo y datos para generar documentos con su información.
+          </p>
+        </div>
+        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-brand-green transition-colors" />
+      </Link>
+
+      <Link
+        href="/configuracion/presentaciones"
+        className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group"
+      >
+        <div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center shrink-0">
+          <Package2 className="w-5 h-5 text-brand-green" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-heading font-semibold text-base text-gray-900">Presentaciones de insumo</h2>
+          <p className="font-body text-sm text-gray-500 mt-0.5">
+            Catálogo de presentaciones (Galón, Litro, Caja…) para elegir al crear productos.
+          </p>
+        </div>
+        <ChevronRight className="w-5 h-5 text-gray-300 group-hover:text-brand-green transition-colors" />
+      </Link>
+
       <Link
         href="/configuracion/alertas"
         className="flex items-center gap-3 bg-white border border-gray-100 rounded-2xl p-6 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group"

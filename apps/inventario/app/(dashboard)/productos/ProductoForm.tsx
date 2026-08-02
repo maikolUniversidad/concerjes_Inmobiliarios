@@ -121,6 +121,15 @@ export function ProductoForm({ action, proveedores, ubicaciones = [], defaults =
 
   const supabase = createClient()
 
+  // ── Catálogo de presentaciones (para elegir en vez de texto libre) ──
+  const [presentaciones, setPresentaciones] = useState<string[]>([])
+  useEffect(() => {
+    supabase.from('presentaciones').select('nombre').eq('activo', true).order('nombre')
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: { data: any[] | null }) => setPresentaciones((data ?? []).map((p) => p.nombre as string)))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
   // Al abrir el generador: usa valor existente o auto-genera uno nuevo
   function openGenerator() {
     const val = codigoValue || refValue || generarCodigoNumerico()
@@ -250,7 +259,10 @@ export function ProductoForm({ action, proveedores, ubicaciones = [], defaults =
         <div className="grid sm:grid-cols-2 gap-4">
           <div>
             <label className={labelCls}>Presentación</label>
-            <input name="presentacion" defaultValue={defaults.presentacion ?? ''} className={inputCls + ' mt-1'} placeholder="Ej: GALON / TARRO X 500 ML" />
+            <input name="presentacion" defaultValue={defaults.presentacion ?? ''} list="presentaciones-cat" className={inputCls + ' mt-1'} placeholder="Ej: GALON / TARRO X 500 ML" autoComplete="off" />
+            <datalist id="presentaciones-cat">
+              {presentaciones.map((p) => <option key={p} value={p} />)}
+            </datalist>
           </div>
           <div>
             <label className={labelCls}>Tipo de insumo</label>
