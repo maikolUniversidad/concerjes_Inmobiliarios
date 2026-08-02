@@ -11,6 +11,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { ESTADOS_MAQ, ESTADO_MAQ_META, subirFotoMaq } from '../estados'
+import { MaquinariaQR } from './MaquinariaQR'
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
@@ -122,6 +123,9 @@ export function MaquinariaDetalleClient({ maquina, eventos, sedes, puedeGestiona
           </div>
         </div>
       </div>
+
+      {/* Código QR */}
+      <MaquinariaQR id={maquina.id} codigo={maquina.codigo} nombre={maquina.nombre} />
 
       {/* Acciones rápidas */}
       {puedeGestionar && (
