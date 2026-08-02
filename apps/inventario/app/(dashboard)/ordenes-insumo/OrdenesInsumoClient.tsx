@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter } from 'lucide-react'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 
 export interface OrdenRow {
@@ -42,43 +42,89 @@ function fmt(iso: string | null) {
   return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
-type Tab = 'pendientes' | 'todas'
+type Tab = 'proceso' | 'todas'
+
+const ESTADOS_PROCESO: EstadoOrdenInsumo[] = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO']
+
+const FILTROS_ESTADO: { value: EstadoOrdenInsumo | 'todos'; label: string }[] = [
+  { value: 'todos',            label: 'Todos'            },
+  { value: 'BORRADOR',         label: 'Borrador'         },
+  { value: 'EN_REVISION',      label: 'En revisión'      },
+  { value: 'APROBADA',         label: 'Aprobada'         },
+  { value: 'PENDIENTE',        label: 'Pendiente'        },
+  { value: 'EN_ALISTAMIENTO',  label: 'En alistamiento'  },
+  { value: 'ALISTADO',         label: 'Alistado'         },
+  { value: 'DESPACHADO',       label: 'Enviado'          },
+  { value: 'EN_RUTA',          label: 'En ruta'          },
+  { value: 'ENTREGADO',        label: 'Entregado'        },
+  { value: 'RECIBIDO',         label: 'Recibido'         },
+  { value: 'ANULADA',          label: 'Anulada'          },
+]
 
 export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow[]; puedeCrear: boolean }) {
-  const [tab, setTab] = useState<Tab>('pendientes')
+  const [tab, setTab] = useState<Tab>('todas')
+  const [filtroEstado, setFiltroEstado] = useState<EstadoOrdenInsumo | 'todos'>('todos')
+  const [showFiltro, setShowFiltro] = useState(false)
 
-  const pendientes = useMemo(
-    () => ordenes.filter((o) => ['PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO'].includes(o.estado)),
+  const proceso = useMemo(
+    () => ordenes.filter((o) => (ESTADOS_PROCESO as string[]).includes(o.estado)),
     [ordenes],
   )
-  const lista = tab === 'pendientes' ? pendientes : ordenes
+
+  const lista = useMemo(() => {
+    const base = tab === 'proceso' ? proceso : ordenes
+    if (filtroEstado === 'todos') return base
+    return base.filter((o) => o.estado === filtroEstado)
+  }, [tab, proceso, ordenes, filtroEstado])
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-2">
-          <button onClick={() => setTab('pendientes')}
-            className={`font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'pendientes' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-            Pendientes ({pendientes.length})
-          </button>
           <button onClick={() => setTab('todas')}
             className={`font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'todas' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
             Todas ({ordenes.length})
           </button>
+          <button onClick={() => setTab('proceso')}
+            className={`font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'proceso' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+            Por procesar ({proceso.length})
+          </button>
         </div>
-        {puedeCrear && (
-          <Link href="/ordenes-insumo/nuevo"
-            className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-4 py-2 rounded-xl shadow-sm transition-colors">
-            <Plus className="w-4 h-4" /> Nueva orden
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Filtro por estado */}
+          <div className="relative">
+            <button
+              onClick={() => setShowFiltro(v => !v)}
+              className={`inline-flex items-center gap-2 font-body font-semibold text-sm px-3 py-2 rounded-xl border transition-colors ${filtroEstado !== 'todos' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+              <Filter className="w-3.5 h-3.5" />
+              {filtroEstado === 'todos' ? 'Estado' : (FILTROS_ESTADO.find(f => f.value === filtroEstado)?.label ?? filtroEstado)}
+            </button>
+            {showFiltro && (
+              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[160px]">
+                {FILTROS_ESTADO.map(f => (
+                  <button key={f.value}
+                    onClick={() => { setFiltroEstado(f.value); setShowFiltro(false) }}
+                    className={`w-full text-left font-body text-sm px-4 py-2 hover:bg-gray-50 transition-colors ${filtroEstado === f.value ? 'text-brand-green font-semibold' : 'text-gray-700'}`}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {puedeCrear && (
+            <Link href="/ordenes-insumo/nuevo"
+              className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-4 py-2 rounded-xl shadow-sm transition-colors">
+              <Plus className="w-4 h-4" /> Nueva orden
+            </Link>
+          )}
+        </div>
       </div>
 
       {lista.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-16 text-center shadow-sm">
           <ClipboardList className="w-12 h-12 text-gray-200 mx-auto mb-3" />
           <p className="font-body text-sm text-gray-400">
-            {tab === 'pendientes' ? 'No hay órdenes pendientes.' : 'Aún no hay órdenes de insumo.'}
+            {tab === 'proceso' ? 'No hay órdenes por procesar.' : filtroEstado !== 'todos' ? 'No hay órdenes con ese estado.' : 'Aún no hay órdenes de insumo.'}
           </p>
         </div>
       ) : (
