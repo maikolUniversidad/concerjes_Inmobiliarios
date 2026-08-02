@@ -470,7 +470,17 @@ export async function quitarResponsable(ordenId: string, usuarioId: string): Pro
 }
 
 // ── Despacho: registra SALIDA de stock por ítem + guarda video + estado ───────
-export async function despacharOrden(ordenId: string, videoPath: string, videoMime: string | null): Promise<ActionResult> {
+export interface DespachoInfo {
+  /** CONDUCTOR_PROPIO = flota propia; TRANSPORTADORA = tercero. */
+  tipo: 'CONDUCTOR_PROPIO' | 'TRANSPORTADORA'
+  conductorId?: string | null
+  transportadoraNombre?: string | null
+  transportadoraGuia?: string | null
+}
+
+export async function despacharOrden(
+  ordenId: string, videoPath: string, videoMime: string | null, despacho?: DespachoInfo,
+): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const perm = await getPermisosUsuario()
@@ -478,6 +488,18 @@ export async function despacharOrden(ordenId: string, videoPath: string, videoMi
   const sb = supabase as DB
 
   if (!videoPath) return { error: 'Falta el video del despacho.' }
+
+  // Validar el tipo de despacho (conductor propio vs transportadora tercera).
+  const tipo = despacho?.tipo
+  if (tipo !== 'CONDUCTOR_PROPIO' && tipo !== 'TRANSPORTADORA') {
+    return { error: 'Indica si el despacho va con conductor propio o con transportadora.' }
+  }
+  if (tipo === 'CONDUCTOR_PROPIO' && !despacho?.conductorId) {
+    return { error: 'Selecciona el conductor propio que lleva el pedido.' }
+  }
+  if (tipo === 'TRANSPORTADORA' && !despacho?.transportadoraNombre?.trim()) {
+    return { error: 'Escribe el nombre de la transportadora.' }
+  }
 
   const { data: orden } = await sb.from('ordenes_insumo').select('id, estado, sede_id, bodega_id').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
@@ -508,11 +530,35 @@ export async function despacharOrden(ordenId: string, videoPath: string, videoMi
     return { error: 'No se pudo registrar la salida de stock (permisos o stock). No se despachó.' }
   }
 
+  const esPropio = tipo === 'CONDUCTOR_PROPIO'
   const { error: updErr } = await sb.from('ordenes_insumo').update({
     estado: 'DESPACHADO' as const, despachado_por: user.id, despachado_at: new Date().toISOString(),
     video_path: videoPath, video_mime: videoMime,
+    tipo_despacho: tipo,
+    conductor_id: esPropio ? despacho?.conductorId ?? null : null,
+    transportadora_nombre: esPropio ? null : despacho?.transportadoraNombre?.trim() ?? null,
+    transportadora_guia: esPropio ? null : despacho?.transportadoraGuia?.trim() || null,
   }).eq('id', ordenId)
   if (updErr) return { error: 'Salida registrada pero no se pudo cerrar la orden: ' + updErr.message }
+
+  // Deja en la trazabilidad cómo salió el despacho.
+  let detalleDespacho: string
+  if (esPropio) {
+    const { data: cond } = await sb.from('usuarios').select('nombre').eq('id', despacho?.conductorId).single()
+    detalleDespacho = `Despachada con conductor propio: ${cond?.nombre ?? 'conductor'}.`
+  } else {
+    const guia = despacho?.transportadoraGuia?.trim()
+    detalleDespacho = `Despachada con transportadora ${despacho?.transportadoraNombre?.trim()}${guia ? ` · guía ${guia}` : ''}.`
+  }
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'DESPACHO', p_mensaje: detalleDespacho,
+    p_nue: 'DESPACHADO',
+    p_detalle: {
+      tipo_despacho: tipo, conductor_id: esPropio ? despacho?.conductorId : null,
+      transportadora: esPropio ? null : despacho?.transportadoraNombre?.trim(),
+      guia: esPropio ? null : despacho?.transportadoraGuia?.trim() || null,
+    },
+  })
 
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   revalidatePath('/ordenes-insumo')

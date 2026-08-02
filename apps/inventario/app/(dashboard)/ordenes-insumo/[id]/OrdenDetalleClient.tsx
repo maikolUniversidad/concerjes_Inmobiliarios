@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, MapPin, Package, Truck, Loader2, Check,
-  Ban, Video, CheckCircle2,
+  Ban, Video, CheckCircle2, User2, Building2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -32,10 +32,16 @@ interface Orden {
   created_at: string
   despachado_at: string | null
   video_path: string | null
+  tipo_despacho: string | null
+  transportadora_nombre: string | null
+  transportadora_guia: string | null
+  conductor: { nombre: string } | null
   sede: { nombre: string; grupo: { nombre: string } | null } | null
   bodega: { nombre: string } | null
   items: Item[]
 }
+interface ConductorOpt { usuario_id: string; nombre: string; placa: string | null }
+type TipoDespacho = 'CONDUCTOR_PROPIO' | 'TRANSPORTADORA'
 
 function fmt(iso: string | null) {
   if (!iso) return '—'
@@ -55,6 +61,13 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [despachando, setDespachando] = useState(false)
 
+  // Tipo de despacho: conductor propio (flota) vs transportadora tercera.
+  const [tipoDespacho, setTipoDespacho] = useState<TipoDespacho | ''>('')
+  const [conductores, setConductores] = useState<ConductorOpt[]>([])
+  const [conductorId, setConductorId] = useState('')
+  const [transpNombre, setTranspNombre] = useState('')
+  const [transpGuia, setTranspGuia] = useState('')
+
   const meta = metaEstado(orden.estado)
   const despachado = orden.estado === 'DESPACHADO'
   const anulada = orden.estado === 'ANULADA'
@@ -71,6 +84,20 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
       if (data?.signedUrl) setVideoUrl(data.signedUrl)
     })
   }, [sb, orden.video_path])
+
+  // Conductores propios activos (para el despacho con flota propia).
+  useEffect(() => {
+    if (despachado || anulada) return
+    sb.from('conductores')
+      .select('usuario_id, placa_vehiculo, usuario:usuarios ( nombre )')
+      .eq('activo', true)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: { data: any[] | null }) => {
+        setConductores((data ?? [])
+          .filter((c) => c.usuario)
+          .map((c) => ({ usuario_id: c.usuario_id, nombre: c.usuario.nombre, placa: c.placa_vehiculo ?? null })))
+      })
+  }, [sb, despachado, anulada])
 
   async function toggleAlistado(it: Item) {
     if (!editable) return
@@ -93,10 +120,21 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     if (res.error) toast.error(res.error)
   }
 
+  // Validación del tipo de despacho antes de abrir la grabación del video.
+  const despachoValido =
+    tipoDespacho === 'CONDUCTOR_PROPIO' ? Boolean(conductorId)
+    : tipoDespacho === 'TRANSPORTADORA' ? Boolean(transpNombre.trim())
+    : false
+
   async function onVideoListo(path: string, mime: string | null) {
     setShowVideo(false)
     setDespachando(true)
-    const res = await despacharOrden(orden.id, path, mime)
+    const res = await despacharOrden(orden.id, path, mime, {
+      tipo: tipoDespacho as TipoDespacho,
+      conductorId: tipoDespacho === 'CONDUCTOR_PROPIO' ? conductorId : null,
+      transportadoraNombre: tipoDespacho === 'TRANSPORTADORA' ? transpNombre : null,
+      transportadoraGuia: tipoDespacho === 'TRANSPORTADORA' ? transpGuia : null,
+    })
     setDespachando(false)
     if (res.error && !res.ok) { toast.error(res.error); return }
     if (res.error) toast.warning(res.error)
@@ -218,6 +256,24 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
             <div className="flex items-center gap-2 text-green-700 font-body text-sm font-semibold">
               <CheckCircle2 className="w-4 h-4" /> Despachada el {fmt(orden.despachado_at)}
             </div>
+            {/* Cómo salió el pedido */}
+            <div className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2">
+              {orden.tipo_despacho === 'TRANSPORTADORA'
+                ? <Building2 className="w-4 h-4 text-brand-green mt-0.5 shrink-0" />
+                : <User2 className="w-4 h-4 text-brand-green mt-0.5 shrink-0" />}
+              <div className="font-body text-sm text-gray-700">
+                {orden.tipo_despacho === 'TRANSPORTADORA' ? (
+                  <>
+                    <span className="font-semibold">Transportadora tercera:</span> {orden.transportadora_nombre ?? '—'}
+                    {orden.transportadora_guia && <span className="text-gray-500"> · Guía {orden.transportadora_guia}</span>}
+                  </>
+                ) : orden.tipo_despacho === 'CONDUCTOR_PROPIO' ? (
+                  <><span className="font-semibold">Conductor propio:</span> {orden.conductor?.nombre ?? '—'}</>
+                ) : (
+                  <span className="text-gray-400">Tipo de despacho no registrado.</span>
+                )}
+              </div>
+            </div>
             {videoUrl ? (
               <video src={videoUrl} controls playsInline className="w-full rounded-xl bg-black aspect-video" />
             ) : orden.video_path ? (
@@ -229,18 +285,65 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
         ) : anulada ? (
           <p className="font-body text-sm text-gray-400">Orden anulada.</p>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-4">
             <p className="font-body text-sm text-gray-500">
               Al despachar se graba/sube un video que queda ligado a la orden y se registra la salida de stock de los ítems alistados hacia la sede.
             </p>
+
+            {/* ¿Cómo sale el pedido? */}
+            <div>
+              <p className="font-body text-sm font-semibold text-gray-800 mb-2">¿Cómo sale el pedido?</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" onClick={() => setTipoDespacho('CONDUCTOR_PROPIO')} disabled={!editable}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
+                    tipoDespacho === 'CONDUCTOR_PROPIO' ? 'border-brand-green bg-brand-green/5 ring-1 ring-brand-green/30' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  <User2 className={`w-4 h-4 ${tipoDespacho === 'CONDUCTOR_PROPIO' ? 'text-brand-green' : 'text-gray-400'}`} />
+                  <span className="font-body text-sm text-gray-800">Conductor propio</span>
+                </button>
+                <button type="button" onClick={() => setTipoDespacho('TRANSPORTADORA')} disabled={!editable}
+                  className={`flex items-center gap-2 rounded-xl border px-3 py-2.5 text-left transition-colors disabled:opacity-50 ${
+                    tipoDespacho === 'TRANSPORTADORA' ? 'border-brand-green bg-brand-green/5 ring-1 ring-brand-green/30' : 'border-gray-200 hover:bg-gray-50'}`}>
+                  <Building2 className={`w-4 h-4 ${tipoDespacho === 'TRANSPORTADORA' ? 'text-brand-green' : 'text-gray-400'}`} />
+                  <span className="font-body text-sm text-gray-800">Transportadora (tercero)</span>
+                </button>
+              </div>
+
+              {/* Datos según el tipo elegido */}
+              {tipoDespacho === 'CONDUCTOR_PROPIO' && (
+                <div className="mt-2">
+                  <select value={conductorId} onChange={(e) => setConductorId(e.target.value)} disabled={!editable}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green bg-white">
+                    <option value="">Selecciona el conductor…</option>
+                    {conductores.map((c) => (
+                      <option key={c.usuario_id} value={c.usuario_id}>{c.nombre}{c.placa ? ` · ${c.placa}` : ''}</option>
+                    ))}
+                  </select>
+                  {conductores.length === 0 && (
+                    <p className="font-body text-xs text-gray-400 mt-1">No hay conductores registrados. Regístralos en Logística › Conductores.</p>
+                  )}
+                </div>
+              )}
+              {tipoDespacho === 'TRANSPORTADORA' && (
+                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <input value={transpNombre} onChange={(e) => setTranspNombre(e.target.value)} disabled={!editable}
+                    placeholder="Nombre de la transportadora *"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green" />
+                  <input value={transpGuia} onChange={(e) => setTranspGuia(e.target.value)} disabled={!editable}
+                    placeholder="N.º de guía (opcional)"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green" />
+                </div>
+              )}
+            </div>
+
             <button
               onClick={() => setShowVideo(true)}
-              disabled={!puedeAlistar || !hayAlistados || despachando}
+              disabled={!puedeAlistar || !hayAlistados || despachando || !despachoValido}
               className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50">
               {despachando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
               Grabar video y despachar
             </button>
             {!hayAlistados && <p className="font-body text-xs text-gray-400">Marca al menos un ítem como alistado (con cantidad) para poder despachar.</p>}
+            {hayAlistados && !despachoValido && <p className="font-body text-xs text-gray-400">Indica si el pedido sale con conductor propio o con transportadora.</p>}
           </div>
         )}
       </div>

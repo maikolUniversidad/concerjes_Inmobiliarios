@@ -18,6 +18,7 @@ export default async function ProductosPage() {
     .select(`
       id, ref, codigo, nombre_estandar, presentacion,
       tipo_insumo, cat_rotacion, stock_minimo_def, imagen_url, activo,
+      sku, codigo_barras,
       stock ( cantidad_real, cantidad_disp )
     `)
     .eq('activo', true)

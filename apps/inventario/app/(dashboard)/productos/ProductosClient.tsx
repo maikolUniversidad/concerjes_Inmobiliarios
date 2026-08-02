@@ -17,6 +17,8 @@ interface Producto {
   stock_minimo_def: number
   imagen_url: string | null
   activo: boolean
+  sku: string | null
+  codigo_barras: string | null
   stock: { cantidad_real: number; cantidad_disp: number } | null
 }
 
@@ -36,10 +38,11 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [scannerOpen, setScannerOpen] = useState(false)
 
   const filtered = useMemo(() => {
-    return productos.filter(p => {
-      const q = search.toLowerCase()
-      const matchSearch = !q || p.nombre_estandar.toLowerCase().includes(q)
-        || String(p.ref).includes(q) || String(p.codigo).includes(q)
+    const q = search.trim().toLowerCase()
+    const qDigits = q.replace(/\D/g, '')
+    const tokens = q.split(/\s+/).filter(Boolean)
+
+    const matchOtros = (p: Producto) => {
       const matchCat  = !catFilter  || p.cat_rotacion === catFilter
       const matchTipo = !tipoFilter || p.tipo_insumo === tipoFilter
       const real    = p.stock?.cantidad_real ?? 0
@@ -49,8 +52,32 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         stockFilter === 'critico' ? real > 0 && real <= minimo :
         stockFilter === 'normal'  ? real > minimo * 1.5 : true
       )
-      return matchSearch && matchCat && matchTipo && matchStock
+      return matchCat && matchTipo && matchStock
+    }
+
+    const evaluados = productos.map(p => {
+      // Códigos de insumo del producto (código, REF, SKU, código de barras)
+      const codigos = [p.codigo, p.ref, p.sku, p.codigo_barras]
+        .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
+        .map(v => String(v).toLowerCase())
+      const codigosDigits = codigos.map(c => c.replace(/\D/g, '')).filter(Boolean)
+      const texto = `${p.nombre_estandar.toLowerCase()} ${codigos.join(' ')}`
+
+      let score = 0
+      if (q) {
+        const exacto = codigos.includes(q) || (!!qDigits && codigosDigits.includes(qDigits))
+        const empieza = codigos.some(c => c.startsWith(q)) || (!!qDigits && codigosDigits.some(c => c.startsWith(qDigits)))
+        const contieneCod = codigos.some(c => c.includes(q)) || (!!qDigits && codigosDigits.some(c => c.includes(qDigits)))
+        const contieneTexto = tokens.every(t => texto.includes(t))
+        score = exacto ? 4 : empieza ? 3 : contieneCod ? 2 : contieneTexto ? 1 : 0
+      }
+      return { p, score }
     })
+
+    const res = evaluados.filter(x => (!q || x.score > 0) && matchOtros(x.p))
+    // Con búsqueda, ordena por relevancia (coincidencia exacta de código primero)
+    if (q) res.sort((a, b) => b.score - a.score)
+    return res.map(x => x.p)
   }, [productos, search, catFilter, tipoFilter, stockFilter])
 
   // Stats
@@ -88,7 +115,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Buscar por nombre, REF o código..."
+            placeholder="Buscar por nombre, código de insumo, REF, SKU o código de barras..."
             className="font-body text-sm flex-1 outline-none placeholder:text-gray-400"
           />
           <button
