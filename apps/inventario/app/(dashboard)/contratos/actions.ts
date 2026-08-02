@@ -13,6 +13,11 @@ function numeroOpc(v: FormDataEntryValue | null): number | null {
   return Number.isFinite(n) ? n : null
 }
 
+function tipoOpc(v: FormDataEntryValue | null): 'DIRECTO' | 'PRIVADO' | null {
+  const s = String(v ?? '').trim().toUpperCase()
+  return s === 'DIRECTO' || s === 'PRIVADO' ? s : null
+}
+
 function campos(formData: FormData) {
   return {
     grupo_id: String(formData.get('grupo_id') ?? ''),
@@ -23,7 +28,16 @@ function campos(formData: FormData) {
     direccion: String(formData.get('direccion') ?? '').trim() || null,
     lat: numeroOpc(formData.get('lat')),
     lng: numeroOpc(formData.get('lng')),
+    tipo_contrato: tipoOpc(formData.get('tipo_contrato')),
   }
+}
+
+/** Reemplaza las etiquetas asignadas a una sede con la lista dada. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function syncSedeEtiquetas(sb: any, sedeId: string, ids: string[]) {
+  await sb.from('sede_etiquetas').delete().eq('sede_id', sedeId)
+  const limpias = [...new Set(ids.filter(Boolean))]
+  if (limpias.length) await sb.from('sede_etiquetas').insert(limpias.map((etiqueta_id) => ({ sede_id: sedeId, etiqueta_id })))
 }
 
 /**
@@ -63,8 +77,10 @@ export async function crearSede(_prev: ActionResult, formData: FormData): Promis
   if (data.nombre.length < 3) return { error: 'El nombre de la sede es obligatorio.' }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any).from('sedes').insert(data)
+  const sb = supabase as any
+  const { data: nueva, error } = await sb.from('sedes').insert(data).select('id').single()
   if (error) return { error: traducir(error.message) }
+  await syncSedeEtiquetas(sb, nueva.id, formData.getAll('etiqueta_id').map(String))
   revalidatePath('/contratos')
   return { ok: true }
 }
@@ -81,8 +97,10 @@ export async function actualizarSede(_prev: ActionResult, formData: FormData): P
   if (data.nombre.length < 3) return { error: 'El nombre de la sede es obligatorio.' }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any).from('sedes').update(data).eq('id', id)
+  const sb = supabase as any
+  const { error } = await sb.from('sedes').update(data).eq('id', id)
   if (error) return { error: traducir(error.message) }
+  await syncSedeEtiquetas(sb, id, formData.getAll('etiqueta_id').map(String))
   revalidatePath('/contratos')
   return { ok: true }
 }

@@ -6,12 +6,15 @@ import { toast } from 'sonner'
 import { crearSede, actualizarSede, eliminarSede, geocodificarSede, type ActionResult } from './actions'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { GRUPO_LABELS, type GrupoContrato } from '@/lib/types/database'
+import { TIPO_CONTRATO_META, TIPO_CONTRATO_OPCIONES, type Categoria, type Etiqueta, type TipoContrato } from '@/lib/clasificacion'
+import { EtiquetaPicker, TipoBadge, EtiquetaChip } from './Clasificacion'
 
 export interface GrupoOpt { id: string; codigo: GrupoContrato; nombre: string }
 export interface SedeRow {
   id: string; nombre: string; zona: string | null; ciudad: string; codigo_interno: string | null
   grupo_id: string; grupo_codigo: GrupoContrato | null
   direccion?: string | null; lat?: number | null; lng?: number | null
+  tipo_contrato?: TipoContrato | null; etiquetaIds?: string[]
 }
 
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green'
@@ -27,7 +30,7 @@ function SubmitBtn({ editando }: { editando: boolean }) {
   )
 }
 
-export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: SedeRow[] }) {
+export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: { grupos: GrupoOpt[]; sedes: SedeRow[]; categorias?: Categoria[]; etiquetas?: Etiqueta[] }) {
   const [showForm, setShowForm] = useState(false)
   const [editing, setEditing] = useState<SedeRow | null>(null)
   const action = editing ? actualizarSede : crearSede
@@ -38,12 +41,16 @@ export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: Sede
   const [lat, setLat] = useState('')
   const [lng, setLng] = useState('')
   const [geocodificando, setGeocodificando] = useState(false)
+  const [tipoContrato, setTipoContrato] = useState<TipoContrato | ''>('')
+  const [etiquetaIds, setEtiquetaIds] = useState<string[]>([])
 
   // Sincroniza los campos de ubicación al abrir/cambiar la sede en edición.
   useEffect(() => {
     setDireccion(editing?.direccion ?? '')
     setLat(editing?.lat != null ? String(editing.lat) : '')
     setLng(editing?.lng != null ? String(editing.lng) : '')
+    setTipoContrato(editing?.tipo_contrato ?? '')
+    setEtiquetaIds(editing?.etiquetaIds ?? [])
   }, [editing])
 
   useEffect(() => { if (state.ok) { setShowForm(false); setEditing(null) } }, [state.ok])
@@ -160,6 +167,25 @@ export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: Sede
             )}
           </div>
 
+          {/* Clasificación del contrato */}
+          <div className="rounded-lg border border-gray-200 bg-white p-3 space-y-3">
+            <span className="font-body font-semibold text-xs text-gray-600">Clasificación del contrato</span>
+            <input type="hidden" name="tipo_contrato" value={tipoContrato} />
+            <div>
+              <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Tipo de contrato</label>
+              <div className="flex gap-1.5">
+                {TIPO_CONTRATO_OPCIONES.map(o => (
+                  <button key={o.value} type="button" onClick={() => setTipoContrato(t => t === o.value ? '' : o.value)}
+                    className={`rounded-lg border px-3 py-1.5 font-body text-xs font-semibold transition-all ${
+                      tipoContrato === o.value ? `${TIPO_CONTRATO_META[o.value].badge} border-transparent` : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                    }`}>{o.label}</button>
+                ))}
+                <span className="font-body text-[11px] text-gray-400 self-center ml-1">Si lo dejas vacío, hereda del grupo.</span>
+              </div>
+            </div>
+            <EtiquetaPicker categorias={categorias} etiquetas={etiquetas} value={etiquetaIds} onChange={setEtiquetaIds} name="etiqueta_id" />
+          </div>
+
           <SubmitBtn editando={!!editing} />
         </form>
       )}
@@ -194,6 +220,13 @@ export function SedesClient({ grupos, sedes }: { grupos: GrupoOpt[]; sedes: Sede
                           : <MapPin className="w-3.5 h-3.5 text-gray-300" aria-label="Sin ubicación" />}
                       </div>
                       {s.codigo_interno && <p className="font-body text-xs text-gray-400">N° {s.codigo_interno}</p>}
+                      <div className="mt-1 flex flex-wrap items-center gap-1">
+                        {s.tipo_contrato && <TipoBadge tipo={s.tipo_contrato} />}
+                        {(s.etiquetaIds ?? []).map(id => {
+                          const et = etiquetas.find(e => e.id === id)
+                          return et ? <EtiquetaChip key={id} et={et} /> : null
+                        })}
+                      </div>
                     </td>
                     <td className="px-4 py-3">{meta && <span className={`font-body text-xs px-2 py-0.5 rounded-full ${meta.color}`}>{meta.nombre}</span>}</td>
                     <td className="px-4 py-3 font-body text-sm text-gray-500">{s.zona ?? '—'}</td>
