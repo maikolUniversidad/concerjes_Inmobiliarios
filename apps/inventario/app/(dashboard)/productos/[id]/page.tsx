@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ProductoDetalle } from './ProductoDetalle'
+import { ReembasadoProducto } from './ReembasadoProducto'
 import type { Producto, Stock, Proveedor, Movimiento } from '@/lib/types/database'
 
 interface Props { params: Promise<{ id: string }> }
@@ -86,6 +87,8 @@ export default async function ProductoPage({ params }: Props) {
       </div>
 
       <ProductoDetalle producto={producto} movimientos={movimientos} fotos={fotos} />
+
+      <ReembasadoProducto productoId={producto.id} />
     </div>
   )
 }

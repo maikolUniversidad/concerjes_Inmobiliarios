@@ -30,6 +30,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_bodegas',   label: 'Gestionar bodegas y ubicaciones' },
       { key: 'usar_scanner',        label: 'Usar buscador / escáner' },
       { key: 'generar_codigos',     label: 'Generar códigos de barras' },
+      { key: 'ver_reembasado',      label: 'Ver reembasado / decantado' },
+      { key: 'gestionar_reembasado', label: 'Definir y ejecutar reembasado' },
     ],
   },
   {
