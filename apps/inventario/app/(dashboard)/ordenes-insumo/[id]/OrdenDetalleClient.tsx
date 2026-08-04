@@ -86,16 +86,18 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
   }, [sb, orden.video_path])
 
   // Conductores propios activos (para el despacho con flota propia).
+  // Se lee de la vista `conductores_opciones` (no de `conductores` con join a
+  // usuarios) para que el nombre sea visible también al BODEGUERO: la RLS de
+  // `usuarios` bloquea leer nombres de otros usuarios, y la vista lo evita.
   useEffect(() => {
     if (despachado || anulada) return
-    sb.from('conductores')
-      .select('usuario_id, placa_vehiculo, usuario:usuarios ( nombre )')
+    sb.from('conductores_opciones')
+      .select('usuario_id, nombre, placa')
       .eq('activo', true)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       .then(({ data }: { data: any[] | null }) => {
         setConductores((data ?? [])
-          .filter((c) => c.usuario)
-          .map((c) => ({ usuario_id: c.usuario_id, nombre: c.usuario.nombre, placa: c.placa_vehiculo ?? null })))
+          .map((c) => ({ usuario_id: c.usuario_id, nombre: c.nombre, placa: c.placa ?? null })))
       })
   }, [sb, despachado, anulada])
 

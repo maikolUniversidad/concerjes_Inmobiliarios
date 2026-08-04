@@ -565,7 +565,9 @@ export async function despacharOrden(
   // Deja en la trazabilidad cómo salió el despacho.
   let detalleDespacho: string
   if (esPropio) {
-    const { data: cond } = await sb.from('usuarios').select('nombre').eq('id', despacho?.conductorId).single()
+    // Vía la vista (no `usuarios`) para que el nombre sea legible también al
+    // bodeguero, cuya RLS le impide leer otras filas de usuarios.
+    const { data: cond } = await sb.from('conductores_opciones').select('nombre').eq('usuario_id', despacho?.conductorId).maybeSingle()
     detalleDespacho = `Despachada con conductor propio: ${cond?.nombre ?? 'conductor'}.`
   } else {
     const guia = despacho?.transportadoraGuia?.trim()
