@@ -217,9 +217,15 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                       {p.nombre_estandar}
                     </p>
                     <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
-                    <div className="flex items-center justify-between">
-                      <span className="font-heading font-bold text-sm text-gray-900">{real}</span>
-                      <span className={`font-body text-xs px-1.5 py-0.5 rounded-full ${status.cls}`}>
+                    <div className="flex items-center justify-between gap-1">
+                      {real > 0 ? (
+                        <span className="font-body text-xs text-gray-500">
+                          <b className="font-heading text-sm text-gray-900">{real}</b> en stock
+                        </span>
+                      ) : (
+                        <span className="font-body text-xs font-bold text-red-600">No hay</span>
+                      )}
+                      <span className={`font-body text-xs px-1.5 py-0.5 rounded-full shrink-0 ${status.cls}`}>
                         {status.label}
                       </span>
                     </div>
@@ -301,9 +307,15 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                           {p.cat_rotacion}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-right">
-                        <span className="font-heading font-bold text-base text-gray-900">{real}</span>
-                        <span className="font-body text-xs text-gray-400 ml-1">/ {p.stock_minimo_def}</span>
+                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                        {real > 0 ? (
+                          <>
+                            <span className="font-heading font-bold text-base text-gray-900">{real}</span>
+                            <span className="font-body text-xs text-gray-400 ml-1">en stock / mín {p.stock_minimo_def}</span>
+                          </>
+                        ) : (
+                          <span className="font-body text-sm font-bold text-red-600">No hay</span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${status.cls}`}>

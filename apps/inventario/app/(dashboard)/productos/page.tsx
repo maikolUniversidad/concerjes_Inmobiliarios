@@ -13,20 +13,30 @@ export default async function ProductosPage() {
   await requirePermiso('ver_productos')
   const supabase = await createClient()
 
-  const { data: productos, error } = await supabase
-    .from('productos')
-    .select(`
-      id, ref, codigo, nombre_estandar, presentacion,
-      tipo_insumo, cat_rotacion, stock_minimo_def, imagen_url, activo,
-      sku, codigo_barras,
-      stock ( cantidad_real, cantidad_disp )
-    `)
-    .eq('activo', true)
-    .order('ref', { ascending: false })
-
-  const { count: total } = await supabase
-    .from('productos')
-    .select('*', { count: 'exact', head: true })
+  const SELECT = `
+    id, ref, codigo, nombre_estandar, presentacion,
+    tipo_insumo, cat_rotacion, stock_minimo_def, imagen_url, activo,
+    sku, codigo_barras,
+    stock ( cantidad_real, cantidad_disp )
+  `
+  // Paginar para traer TODOS los productos activos (Supabase limita a 1000 por request)
+  const PAGE = 1000
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let productos: any[] = []
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let error: any = null
+  for (let from = 0; ; from += PAGE) {
+    const { data, error: e } = await supabase
+      .from('productos')
+      .select(SELECT)
+      .eq('activo', true)
+      .order('ref', { ascending: false })
+      .range(from, from + PAGE - 1)
+    if (e) { error = e; break }
+    productos = productos.concat(data ?? [])
+    if (!data || data.length < PAGE) break
+  }
+  const total = productos.length
 
   if (error) {
     return (
@@ -45,7 +55,7 @@ export default async function ProductosPage() {
         <div>
           <h1 className="font-heading font-bold text-2xl text-gray-900">Catálogo de Productos</h1>
           <p className="font-body text-sm text-gray-500 mt-0.5">
-            {total ?? productos?.length ?? 0} productos · base de datos en tiempo real
+            {total} productos activos · base de datos en tiempo real
           </p>
         </div>
         <div className="flex gap-2">
@@ -63,7 +73,7 @@ export default async function ProductosPage() {
         </div>
       </div>
 
-      <ProductosClient productos={productos ?? []} total={total ?? 0} />
+      <ProductosClient productos={productos} total={total} />
     </div>
   )
 }
