@@ -6,6 +6,7 @@ import { OrdenDetalleClient } from './OrdenDetalleClient'
 import { SolicitudItems } from './SolicitudItems'
 import { FlujoOrden, type EventoOrden } from './FlujoOrden'
 import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
+import { BorrarOrdenBtn } from './BorrarOrdenBtn'
 
 export const metadata: Metadata = { title: 'Orden de insumo' }
 export const dynamic = 'force-dynamic'
@@ -51,6 +52,12 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     && ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION'].includes(estado)
 
   const { data: { user } } = await supabase.auth.getUser()
+
+  // Borrar solo se ofrece mientras la orden no haya movido inventario ni salido
+  // a ruta (para esas se usa Anular, que conserva el histórico).
+  const puedeBorrar =
+    (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo'))
+    && !['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
 
   // Datos planos para los PDF (orden / remisión que viaja con el pedido).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -103,6 +110,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         />
       )}
       <DocumentosPDF datos={datosDoc} />
+      {puedeBorrar && <BorrarOrdenBtn ordenId={id} numero={o.numero} />}
     </div>
   )
 }

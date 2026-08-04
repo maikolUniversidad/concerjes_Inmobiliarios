@@ -605,3 +605,34 @@ export async function anularOrden(ordenId: string): Promise<ActionResult> {
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }
+
+/**
+ * Borra la orden por completo (ítems, eventos y responsables se borran en
+ * cascada). No se permite borrar una orden que ya movió inventario o salió a
+ * ruta: para esas se usa Anular, que conserva el histórico y el stock.
+ */
+export async function borrarOrden(ordenId: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para borrar órdenes.' }
+  }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  const bloqueados = ['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO']
+  if (bloqueados.includes(orden.estado)) {
+    return { error: 'Esta orden ya movió inventario o salió a ruta. No se puede borrar; anúlala en su lugar.' }
+  }
+
+  // Dependencias sin ON DELETE CASCADE (por si tuviera ruta asignada).
+  await sb.from('ruta_paradas').delete().eq('orden_id', ordenId)
+  // orden_insumo_items / eventos / responsables se borran en cascada.
+  const { error } = await sb.from('ordenes_insumo').delete().eq('id', ordenId)
+  if (error) return { error: error.message }
+
+  revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return { ok: true }
+}
