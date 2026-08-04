@@ -1,10 +1,17 @@
 import type { Metadata } from 'next'
-import { RefreshCw, FileText, AlertTriangle, Download, ChevronRight } from 'lucide-react'
+import Link from 'next/link'
+import { RefreshCw, FileText, AlertTriangle, Download, ChevronRight, Sparkles, ShoppingCart, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Aprovisionamiento' }
-export const revalidate = 0
+export const dynamic = 'force-dynamic'
+
+interface RecRow {
+  producto_id: string; codigo: number | null; nombre_estandar: string; presentacion: string | null
+  cat_rotacion: string; precio_lista: number | null
+  stock_real: number; comprometido: number; oc_pendiente: number; recomendado: number
+}
 
 function getCatColor(cat: string) {
   return (
@@ -54,6 +61,19 @@ export default async function AprovisionamientoPage() {
       `)
       .eq('periodo', '2026-06-01'),
   ])
+
+  // Recomendación de compra EN VIVO (no depende de la tabla CMI): qué comprar
+  // para cubrir la demanda comprometida en órdenes de insumo que el stock actual
+  // más lo ya pedido en OC no alcanzan a cubrir.
+  const { data: recData } = await supabase
+    .from('v_recomendacion_compra')
+    .select('producto_id, codigo, nombre_estandar, presentacion, cat_rotacion, precio_lista, stock_real, comprometido, oc_pendiente, recomendado')
+    .gt('recomendado', 0)
+    .order('recomendado', { ascending: false })
+    .limit(300)
+  const recs = (recData as unknown as RecRow[]) ?? []
+  const recUnidades = recs.reduce((s, r) => s + Number(r.recomendado), 0)
+  const recValor = recs.reduce((s, r) => s + Number(r.recomendado) * Number(r.precio_lista ?? 0), 0)
 
   // Agrupar pedidos por producto_id + grupo
   type PedidosPorProducto = Record<string, Record<string, number>>
@@ -128,7 +148,77 @@ export default async function AprovisionamientoPage() {
         </div>
       </div>
 
-      {/* KPIs */}
+      {/* ── Recomendación de compra EN VIVO ── */}
+      <div className="bg-white border border-brand-green/20 rounded-2xl shadow-sm overflow-hidden">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 bg-brand-green/5 flex-wrap">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-brand-green" />
+            <h2 className="font-heading font-semibold text-sm text-gray-900">Recomendación de compra (en vivo)</h2>
+          </div>
+          <div className="flex items-center gap-4 font-body text-xs">
+            <span className="text-gray-500"><span className="font-bold text-gray-900">{recs.length}</span> productos</span>
+            <span className="text-gray-500">Unidades <span className="font-bold text-gray-900">{recUnidades.toLocaleString('es-CO')}</span></span>
+            <span className="inline-flex items-center gap-1 text-gray-500"><TrendingUp className="w-3.5 h-3.5 text-brand-green" /> <span className="font-bold text-gray-900">{formatCOP(recValor)}</span></span>
+          </div>
+        </div>
+        <p className="px-4 pt-2 font-body text-xs text-gray-400">
+          Qué comprar para cubrir la demanda de las órdenes de insumo en cola que el stock actual y lo ya pedido en OC no alcanzan a cubrir.
+        </p>
+        {recs.length === 0 ? (
+          <p className="py-10 text-center font-body text-sm text-gray-400">
+            No hay recomendaciones: el stock (más lo ya pedido) cubre la demanda comprometida. 👍
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="bg-gray-50 border-b border-gray-100">
+                  <th className="text-left font-body font-semibold text-gray-500 uppercase px-3 py-2.5 min-w-[200px]">Producto</th>
+                  <th className="text-center font-body font-semibold text-gray-500 uppercase px-3 py-2.5">Cat.</th>
+                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5">Stock</th>
+                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5" title="Demanda comprometida en órdenes de insumo en cola">Demanda</th>
+                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5" title="Ya pedido en órdenes de compra sin recibir">OC pend.</th>
+                  <th className="text-right font-body font-semibold text-brand-green uppercase px-3 py-2.5 bg-green-50">Recomendado</th>
+                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5">Valor est.</th>
+                  <th className="px-3 py-2.5 w-24" />
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {recs.map(r => (
+                  <tr key={r.producto_id} className="hover:bg-gray-50/50">
+                    <td className="px-3 py-2.5">
+                      <p className="font-medium text-gray-900 max-w-[220px] truncate">{r.nombre_estandar}</p>
+                      {r.presentacion && <p className="text-gray-400">{r.presentacion}</p>}
+                    </td>
+                    <td className="px-3 py-2.5 text-center"><span className={`font-bold px-1.5 py-0.5 rounded ${getCatColor(r.cat_rotacion)}`}>{r.cat_rotacion}</span></td>
+                    <td className="px-3 py-2.5 text-right text-gray-700">{Number(r.stock_real).toLocaleString('es-CO')}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-500">{Number(r.comprometido).toLocaleString('es-CO')}</td>
+                    <td className="px-3 py-2.5 text-right text-amber-600">{Number(r.oc_pendiente) > 0 ? Number(r.oc_pendiente).toLocaleString('es-CO') : '—'}</td>
+                    <td className="px-3 py-2.5 text-right font-bold text-brand-green bg-green-50/60">{Number(r.recomendado).toLocaleString('es-CO')}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-600">{r.precio_lista ? formatCOP(Number(r.recomendado) * Number(r.precio_lista)) : '—'}</td>
+                    <td className="px-3 py-2.5 text-right">
+                      <Link href={`/ordenes-compra/nuevo?producto=${r.producto_id}`}
+                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 font-body font-semibold text-[11px] text-gray-600 hover:border-brand-green hover:text-brand-green hover:bg-green-50 transition-colors">
+                        <ShoppingCart className="w-3 h-3" /> Crear OC
+                      </Link>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
+                  <td colSpan={5} className="px-3 py-2.5 text-right text-sm text-gray-700">TOTAL RECOMENDADO →</td>
+                  <td className="px-3 py-2.5 text-right text-brand-green font-bold text-sm bg-green-100">{recUnidades.toLocaleString('es-CO')}</td>
+                  <td className="px-3 py-2.5 text-right text-gray-700 text-sm">{formatCOP(recValor)}</td>
+                  <td />
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* KPIs (plan CMI importado) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
           { label: 'Productos a comprar', value: conPedido.toString(),   sub: `de ${rows.length} en plan`,  color: 'border-blue-200 bg-blue-50 text-blue-700' },
