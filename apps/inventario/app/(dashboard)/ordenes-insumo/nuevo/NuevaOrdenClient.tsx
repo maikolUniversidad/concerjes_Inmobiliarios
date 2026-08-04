@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Package, MapPin, AlertCircle } from 'lucide-react'
 import { toast } from 'sonner'
@@ -41,6 +41,21 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
   // Catálogo completo para agregar productos fuera de la parametrización.
   const [catalogo, setCatalogo] = useState<ProdOpt[]>([])
   const [buscar, setBuscar] = useState('')
+  // Stock proyectado por producto (real − comprometido en otras órdenes en cola).
+  const [stock, setStock] = useState<Map<string, { real: number; comprometido: number; disponible: number }>>(new Map())
+
+  useEffect(() => {
+    let vivo = true
+    sb.from('v_stock_proyectado').select('producto_id, stock_real, comprometido, disponible').limit(10000)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: { data: any[] | null }) => {
+        if (!vivo) return
+        const m = new Map<string, { real: number; comprometido: number; disponible: number }>()
+        for (const r of data ?? []) m.set(r.producto_id, { real: Number(r.stock_real), comprometido: Number(r.comprometido), disponible: Number(r.disponible) })
+        setStock(m)
+      })
+    return () => { vivo = false }
+  }, [sb])
 
   /** Búsqueda inteligente: filtra mientras se escribe (sin tildes, multi-palabra). */
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
@@ -193,8 +208,9 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Producto</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-32">Origen</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-24">Máximo</th>
+                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Origen</th>
+                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-32">Inventario</th>
+                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-20">Máximo</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Cantidad</th>
                   <th className="px-3 py-2.5 w-10" />
                 </tr>
@@ -216,6 +232,24 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
                           Parametrizado
                         </span>
                       )}
+                    </td>
+                    <td className="px-3 py-2 text-center">
+                      {(() => {
+                        const st = stock.get(it.producto_id)
+                        if (!st) return <span className="font-body text-xs text-gray-300">—</span>
+                        const neg = st.disponible < 0
+                        return (
+                          <div className="leading-tight">
+                            <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
+                            <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
+                            {neg && (
+                              <span className="inline-flex items-center gap-0.5 font-body text-[10px] text-red-500" title={`Comprometido en otras órdenes: ${st.comprometido}`}>
+                                <AlertCircle className="w-2.5 h-2.5" /> sobre-pedido
+                              </span>
+                            )}
+                          </div>
+                        )
+                      })()}
                     </td>
                     <td className="px-3 py-2 text-center font-body text-sm text-gray-500">
                       {it.es_adicional ? <span className="text-gray-300">sin tope</span> : it.maximo}

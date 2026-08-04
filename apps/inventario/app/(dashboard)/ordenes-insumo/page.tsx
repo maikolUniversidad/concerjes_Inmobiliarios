@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { OrdenesInsumoClient, type OrdenRow } from './OrdenesInsumoClient'
 import { PlantillaDownload, type SedeItem } from './PlantillaDownload'
+import { SobrePedidos, type ProductoSobrePedido } from './SobrePedidos'
 
 export const metadata: Metadata = { title: 'Órdenes de Insumo' }
 export const dynamic = 'force-dynamic'
@@ -67,6 +68,48 @@ export default async function OrdenesInsumoPage() {
     ((misSedes ?? []) as any[]).map((r) => r.orden?.sede_id).filter(Boolean) as string[]
   )]
 
+  // Productos sobre-pedidos: disponible proyectado < 0 (se pidió de más en la cola)
+  const { data: deficitRows } = await supabase
+    .from('v_stock_proyectado')
+    .select('producto_id, stock_real, comprometido, disponible')
+    .lt('disponible', 0)
+    .order('disponible', { ascending: true })
+    .limit(200)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const deficitIds = ((deficitRows ?? []) as any[]).map((r) => r.producto_id)
+  let sobrePedidos: ProductoSobrePedido[] = []
+  if (deficitIds.length > 0) {
+    const [{ data: prods }, { data: demanda }] = await Promise.all([
+      supabase.from('productos').select('id, nombre_estandar, presentacion').in('id', deficitIds),
+      supabase.from('v_demanda_ordenes_insumo').select('producto_id, orden_id, orden_numero, estado, sede_nombre, cantidad_solicitada').in('producto_id', deficitIds).order('created_at', { ascending: false }),
+    ])
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const prodMap = new Map(((prods ?? []) as any[]).map((p) => [p.id, p]))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const demMap = new Map<string, any[]>()
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const d of (demanda ?? []) as any[]) {
+      if (!demMap.has(d.producto_id)) demMap.set(d.producto_id, [])
+      demMap.get(d.producto_id)!.push(d)
+    }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    sobrePedidos = ((deficitRows ?? []) as any[]).map((r) => {
+      const p = prodMap.get(r.producto_id)
+      return {
+        producto_id: r.producto_id,
+        nombre: p?.nombre_estandar ?? 'Producto',
+        presentacion: p?.presentacion ?? null,
+        stock_real: Number(r.stock_real),
+        comprometido: Number(r.comprometido),
+        disponible: Number(r.disponible),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        ordenes: (demMap.get(r.producto_id) ?? []).map((d: any) => ({
+          orden_id: d.orden_id, numero: d.orden_numero, estado: d.estado, sede: d.sede_nombre, cantidad: Number(d.cantidad_solicitada),
+        })),
+      }
+    })
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -78,6 +121,7 @@ export default async function OrdenesInsumoPage() {
         </div>
         <PlantillaDownload sedes={sedes} misSedes={miSedesIds} />
       </div>
+      <SobrePedidos items={sobrePedidos} />
       <OrdenesInsumoClient ordenes={ordenes} puedeCrear={perm.puede('crear_ordenes_insumo')} />
     </div>
   )
