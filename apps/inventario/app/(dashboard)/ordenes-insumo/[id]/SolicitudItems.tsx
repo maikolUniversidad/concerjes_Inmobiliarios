@@ -47,6 +47,21 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: 
   const [buscar, setBuscar] = useState('')
   const [pending, start] = useTransition()
   const [busy, setBusy] = useState<string | null>(null)
+  // Stock proyectado (real − comprometido en otras órdenes en cola).
+  const [stock, setStock] = useState<Map<string, { real: number; disponible: number }>>(new Map())
+
+  useEffect(() => {
+    let vivo = true
+    sb.from('v_stock_proyectado').select('producto_id, stock_real, disponible').limit(10000)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .then(({ data }: { data: any[] | null }) => {
+        if (!vivo) return
+        const m = new Map<string, { real: number; disponible: number }>()
+        for (const r of data ?? []) m.set(r.producto_id, { real: Number(r.stock_real), disponible: Number(r.disponible) })
+        setStock(m)
+      })
+    return () => { vivo = false }
+  }, [sb])
 
   useEffect(() => {
     setItems(itemsIniciales ?? [])
@@ -126,7 +141,8 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: 
           <thead>
             <tr className="bg-gray-50 border-b border-gray-100">
               <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Producto</th>
-              <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-32">Tipo</th>
+              <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Tipo</th>
+              <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Inventario</th>
               <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Cantidad</th>
               <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-44">Modificado por</th>
               {puedeEditar && <th className="w-12 px-2" />}
@@ -145,6 +161,19 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: 
                   ) : (
                     <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
                   )}
+                </td>
+                <td className="px-3 py-2.5 text-center">
+                  {(() => {
+                    const st = stock.get(it.producto_id)
+                    if (!st) return <span className="font-body text-xs text-gray-300">—</span>
+                    const neg = st.disponible < 0
+                    return (
+                      <div className="leading-tight">
+                        <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
+                        <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
+                      </div>
+                    )
+                  })()}
                 </td>
                 <td className="px-3 py-2.5 text-center">
                   {puedeEditar ? (
@@ -182,7 +211,7 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: 
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={puedeEditar ? 5 : 4} className="py-10 text-center font-body text-sm text-gray-400">La orden no tiene productos.</td></tr>
+              <tr><td colSpan={puedeEditar ? 6 : 5} className="py-10 text-center font-body text-sm text-gray-400">La orden no tiene productos.</td></tr>
             )}
           </tbody>
         </table>
