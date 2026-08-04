@@ -120,7 +120,10 @@ export async function registrarRecepcionOC(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any
 
-  const { data: items } = await sb.from('oc_items').select('id, cantidad_ped, cantidad_rec').eq('oc_id', id)
+  const { data: oc } = await sb.from('ordenes_compra').select('numero_oc').eq('id', id).single()
+  const numeroOC = oc?.numero_oc ?? ''
+
+  const { data: items } = await sb.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec').eq('oc_id', id)
   if (!items || items.length === 0) return { error: 'La orden no tiene ítems.' }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -129,7 +132,24 @@ export async function registrarRecepcionOC(
     const it = mapItems.get(r.itemId)
     if (!it) continue
     const nuevo = Math.max(0, Math.min(Number(it.cantidad_ped), Number(r.cantidad)))
-    if (nuevo === Number(it.cantidad_rec)) continue
+    const anterior = Number(it.cantidad_rec)
+    if (nuevo === anterior) continue
+    const delta = nuevo - anterior
+    // Lo recibido entra al inventario como ENTRADA (actualiza stock vía RPC).
+    // Se registra ANTES de marcar la recepción para que stock y cantidad_rec no
+    // se desincronicen si el movimiento falla (p. ej. por permisos). Sólo deltas
+    // positivos: una corrección a la baja no retira stock automáticamente.
+    if (delta > 0) {
+      const { error: movErr } = await sb.rpc('registrar_movimiento', {
+        p_producto: it.producto_id, p_tipo: 'ENTRADA', p_cantidad: delta,
+        p_observacion: `Recepción OC ${numeroOC}`,
+      })
+      if (movErr) {
+        return { error: movErr.message.includes('row-level security')
+          ? 'No tienes permiso para ingresar mercancía al inventario (se requiere un rol que registre movimientos).'
+          : 'No se pudo actualizar el inventario: ' + movErr.message }
+      }
+    }
     const { error } = await sb.from('oc_items').update({ cantidad_rec: nuevo }).eq('id', r.itemId)
     if (error) return { error: error.message }
     it.cantidad_rec = nuevo

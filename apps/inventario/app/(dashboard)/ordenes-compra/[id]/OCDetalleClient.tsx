@@ -395,7 +395,8 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
         </div>
         )}
         {puedeRecibir && (
-          <div className="flex justify-end px-5 py-3 border-t border-gray-100">
+          <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 flex-wrap">
+            <p className="font-body text-xs text-gray-400">Lo recibido ingresa al inventario (movimiento de ENTRADA) y actualiza el stock.</p>
             <button onClick={registrar} disabled={pending}
               className="flex items-center gap-2 bg-emerald-600 text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
               <PackageCheck className="w-4 h-4" /> Registrar recepción
