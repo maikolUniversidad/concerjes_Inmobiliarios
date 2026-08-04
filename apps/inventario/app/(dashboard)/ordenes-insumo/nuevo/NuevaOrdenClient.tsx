@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Loader2, Package, MapPin, AlertCircle } from 'lucide-react'
+import { Loader2, Package, MapPin, AlertCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { crearOrdenInsumo } from '../actions'
@@ -21,7 +21,7 @@ interface ItemForm {
   es_adicional: boolean
 }
 
-interface ProdOpt { id: string; nombre: string; presentacion: string | null }
+interface ProdOpt { id: string; nombre: string; presentacion: string | null; codigo: number | null }
 
 const inputCls =
   'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white transition-colors'
@@ -38,6 +38,9 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Buscador inteligente de sede.
+  const [sedeBuscar, setSedeBuscar] = useState('')
+  const [sedeOpen, setSedeOpen] = useState(false)
   // Catálogo completo para agregar productos fuera de la parametrización.
   const [catalogo, setCatalogo] = useState<ProdOpt[]>([])
   const [buscar, setBuscar] = useState('')
@@ -66,10 +69,22 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
     const tokens = q.split(/\s+/)
     return libres
       .filter((p) => {
-        const hay = norm(`${p.nombre} ${p.presentacion ?? ''}`)
+        const hay = norm(`${p.nombre} ${p.presentacion ?? ''} ${p.codigo ?? ''}`)
         return tokens.every((t) => hay.includes(t))
       })
       .slice(0, 8)
+  })()
+
+  // Sede seleccionada + búsqueda inteligente de sedes (sin tildes, multi-palabra).
+  const sedeSel = sedes.find((s) => s.id === sedeId) ?? null
+  const sedesFiltradas = (() => {
+    const q = norm(sedeBuscar.trim())
+    if (!q) return sedes.slice(0, 15)
+    const tokens = q.split(/\s+/)
+    return sedes.filter((s) => {
+      const hay = norm(`${s.nombre} ${s.grupo ?? ''}`)
+      return tokens.every((t) => hay.includes(t))
+    }).slice(0, 15)
   })()
 
   /** Agrega un producto que NO está parametrizado: sin tope, marcado como adicional. */
@@ -98,7 +113,7 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
           .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion )')
           .eq('sede_id', id).eq('activo', true),
         // limit alto: PostgREST corta en 1000 filas por defecto y el catálogo puede ser mayor.
-        sb.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar').limit(5000),
+        sb.from('productos').select('id, nombre_estandar, presentacion, codigo').eq('activo', true).order('nombre_estandar').limit(5000),
       ])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = ((data ?? []) as any[])
@@ -114,7 +129,7 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
         .sort((a, b) => a.nombre.localeCompare(b.nombre))
       setItems(rows)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setCatalogo(((prods ?? []) as any[]).map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null })))
+      setCatalogo(((prods ?? []) as any[]).map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null, codigo: p.codigo ?? null })))
       // No es bloqueante: siempre se pueden agregar productos adicionales.
       if (rows.length === 0) setError('Esta sede no tiene productos parametrizados. Puedes agregar los que necesites como adicionales.')
     } finally {
@@ -176,10 +191,45 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
           <label className="font-body font-semibold text-xs text-gray-600 block mb-1 flex items-center gap-1">
             <MapPin className="w-3.5 h-3.5 text-brand-green" /> Sede (cliente) <span className="text-red-500">*</span>
           </label>
-          <select value={sedeId} onChange={(e) => onSede(e.target.value)} className={inputCls}>
-            <option value="">— Selecciona una sede —</option>
-            {sedes.map((s) => <option key={s.id} value={s.id}>{s.nombre}{s.grupo ? ` · ${s.grupo}` : ''}</option>)}
-          </select>
+          <div className="relative">
+            <button type="button" onClick={() => setSedeOpen((o) => !o)}
+              className={`${inputCls} flex items-center justify-between gap-2 text-left`}>
+              <span className={`truncate ${sedeSel ? 'text-gray-800' : 'text-gray-400'}`}>
+                {sedeSel ? `${sedeSel.nombre}${sedeSel.grupo ? ` · ${sedeSel.grupo}` : ''}` : '— Selecciona una sede —'}
+              </span>
+              <Search className="w-4 h-4 text-gray-400 shrink-0" />
+            </button>
+            {sedeOpen && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => { setSedeOpen(false); setSedeBuscar('') }} />
+                <div className="absolute z-30 mt-1 w-full rounded-xl border border-gray-200 bg-white shadow-lg">
+                  <div className="flex items-center gap-2 border-b border-gray-100 px-3 py-2">
+                    <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                    <input autoFocus value={sedeBuscar} onChange={(e) => setSedeBuscar(e.target.value)}
+                      placeholder="Escribe el nombre de la sede…"
+                      className="flex-1 bg-transparent font-body text-sm outline-none placeholder:text-gray-400" />
+                  </div>
+                  <div className="max-h-64 overflow-y-auto py-1">
+                    {sedesFiltradas.length === 0 ? (
+                      <p className="px-3 py-3 font-body text-sm text-gray-400">Sin sedes que coincidan con «{sedeBuscar.trim()}».</p>
+                    ) : (
+                      sedesFiltradas.map((s) => (
+                        <button key={s.id} type="button"
+                          onClick={() => { onSede(s.id); setSedeOpen(false); setSedeBuscar('') }}
+                          className={`flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-green-50 ${s.id === sedeId ? 'bg-green-50/60' : ''}`}>
+                          <MapPin className="w-3.5 h-3.5 text-gray-300 shrink-0" />
+                          <span className="min-w-0">
+                            <span className="block font-body text-sm text-gray-800 truncate">{s.nombre}</span>
+                            {s.grupo && <span className="block font-body text-xs text-gray-400">{s.grupo}</span>}
+                          </span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
         <div>
           <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Bodega de origen</label>
@@ -296,15 +346,33 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
                       No existe ningún producto en el inventario para “<strong>{buscar}</strong>”.
                     </p>
                   ) : (
-                    sugerencias.map((p) => (
-                      <button
-                        key={p.id} type="button" onClick={() => agregarAdicional(p)}
-                        className="w-full text-left px-3 py-2 hover:bg-green-50 border-b border-gray-50 last:border-0"
-                      >
-                        <span className="font-body text-sm text-gray-800">{p.nombre}</span>
-                        {p.presentacion && <span className="font-body text-xs text-gray-400"> · {p.presentacion}</span>}
-                      </button>
-                    ))
+                    sugerencias.map((p) => {
+                      const st = stock.get(p.id)
+                      const real = st ? st.real : null
+                      return (
+                        <button
+                          key={p.id} type="button" onClick={() => agregarAdicional(p)}
+                          className="w-full flex items-center gap-3 text-left px-3 py-2 hover:bg-green-50 border-b border-gray-50 last:border-0"
+                        >
+                          <div className="min-w-0 flex-1">
+                            <span className="font-body text-sm text-gray-800">{p.nombre}</span>
+                            {p.presentacion && <span className="font-body text-xs text-gray-400"> · {p.presentacion}</span>}
+                            {p.codigo != null && (
+                              <span className="ml-2 inline-block font-mono text-[11px] text-gray-400">#{p.codigo}</span>
+                            )}
+                          </div>
+                          <span className="shrink-0 font-body text-[11px] whitespace-nowrap">
+                            {real == null ? (
+                              <span className="text-gray-300">—</span>
+                            ) : real > 0 ? (
+                              <span className="text-gray-500">Stock <b className="text-gray-700">{real}</b></span>
+                            ) : (
+                              <span className="rounded bg-red-50 px-1.5 py-0.5 font-semibold text-red-600">No hay</span>
+                            )}
+                          </span>
+                        </button>
+                      )
+                    })
                   )}
                 </div>
               )}
