@@ -38,10 +38,18 @@ function fmt(iso: string) {
   return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
+/**
+ * Autorización por supervisor DESACTIVADA de momento: las órdenes nacen
+ * aprobadas y pasan directo a alistamiento. Poner en true para volver a exigir
+ * el doble visto bueno (solicitante + coordinador). Debe ir a la par con
+ * crearOrdenInsumo en actions.ts.
+ */
+const AUTORIZACION_ACTIVA = false
+
 /** Línea de estado del proceso: quién hace cada etapa. */
 const PASOS = [
   { key: 'BORRADOR',     label: 'Borrador',     quien: 'Supervisor de sede' },
-  { key: 'APROBADA',     label: 'Aprobado',     quien: 'Solicitante + Coordinador' },
+  { key: 'APROBADA',     label: 'Aprobado',     quien: AUTORIZACION_ACTIVA ? 'Solicitante + Coordinador' : 'Automático al crear' },
   { key: 'ALISTAMIENTO', label: 'Alistamiento', quien: 'Bodega' },
   { key: 'ENVIADO',      label: 'Enviado',      quien: 'Despacho' },
   { key: 'RECIBIDO',     label: 'Recibido',     quien: 'Supervisor del contrato' },
@@ -132,7 +140,9 @@ export function FlujoOrden({
     estado === 'BORRADOR' ? 'Propuesta en borrador. Ajusta las cantidades y agrega o quita productos; envíala a la central cuando esté lista.'
     : estado === 'EN_REVISION' ? 'En revisión. Deben aprobarla el solicitante y el coordinador de conserjes. Aún puedes ajustar el pedido: si lo cambias, se retiran las aprobaciones y ambos deben aprobar de nuevo.'
     : estado === 'CAMBIOS_SOLICITADOS' ? 'La central solicitó cambios. Se retiraron las aprobaciones: ajusta la propuesta, reenvíala y ambos deben aprobar de nuevo.'
-    : estado === 'APROBADA' ? 'Aprobada por ambas partes ✅ — ya está disponible en Alistamiento de bodega.'
+    : estado === 'APROBADA' ? (AUTORIZACION_ACTIVA
+        ? 'Aprobada por ambas partes ✅ — ya está disponible en Alistamiento de bodega.'
+        : 'Aprobada ✅ — disponible en Alistamiento de bodega.')
     : ['EN_ALISTAMIENTO', 'ALISTADO'].includes(estado) ? 'Aprobada. El proceso continúa en Alistamiento.'
     : estado === 'DESPACHADO' ? 'Enviada. Falta el recibido del supervisor del contrato.'
     : estado === 'RECIBIDO' ? 'Recibida en sede. Proceso finalizado.'
@@ -148,14 +158,16 @@ export function FlujoOrden({
 
       <div className="flex items-center gap-2">
         <PenLine className="w-4 h-4 text-brand-green" />
-        <h2 className="font-heading font-semibold text-base text-gray-900">Solicitud y aprobación</h2>
+        <h2 className="font-heading font-semibold text-base text-gray-900">
+          {AUTORIZACION_ACTIVA ? 'Solicitud y aprobación' : 'Seguimiento de la orden'}
+        </h2>
       </div>
 
       {/* Línea de estado del proceso completo */}
       <LineaEstado estado={estado} />
 
       {/* Doble visto bueno: la orden solo avanza cuando firman los dos */}
-      {!['BORRADOR', 'ANULADA'].includes(estado) && (
+      {AUTORIZACION_ACTIVA && !['BORRADOR', 'ANULADA'].includes(estado) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           {([
             { rol: 'Quien solicitó', firma: firmaSolicitante },
@@ -180,24 +192,24 @@ export function FlujoOrden({
         <div className="space-y-2">
           <textarea
             value={msg} onChange={(e) => setMsg(e.target.value)} rows={2}
-            placeholder={enRevision && puedeAprobar ? 'Motivo de los cambios o nota de aprobación…' : 'Mensaje para la central (opcional)…'}
+            placeholder={AUTORIZACION_ACTIVA && enRevision && puedeAprobar ? 'Motivo de los cambios o nota de aprobación…' : 'Escribe un comentario o nota…'}
             className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green resize-none"
           />
           <div className="flex flex-wrap gap-2">
-            {puedeProponer && editable && (
+            {AUTORIZACION_ACTIVA && puedeProponer && editable && (
               <button onClick={() => run(() => enviarARevision(ordenId, msg), 'Enviada a la central')} disabled={pending}
                 className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">
                 {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />} Enviar a revisión
               </button>
             )}
-            {puedeFirmar && (
+            {AUTORIZACION_ACTIVA && puedeFirmar && (
               <button onClick={() => run(() => aprobarOrden(ordenId, msg), 'Tu visto bueno quedó registrado')} disabled={pending}
                 className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">
                 {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
                 Dar mi aprobación {esSolicitante ? '(solicitante)' : '(coordinador)'}
               </button>
             )}
-            {puedeAprobar && enRevision && (
+            {AUTORIZACION_ACTIVA && puedeAprobar && enRevision && (
               <button onClick={() => run(() => solicitarCambios(ordenId, msg), 'Cambios solicitados')} disabled={pending || !msg.trim()}
                 className="flex items-center gap-1.5 border border-amber-300 text-amber-800 font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-amber-50 disabled:opacity-50">
                 <ArrowRight className="w-4 h-4" /> Solicitar cambios

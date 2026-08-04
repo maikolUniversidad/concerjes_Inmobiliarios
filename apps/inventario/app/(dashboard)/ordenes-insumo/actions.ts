@@ -42,14 +42,19 @@ export async function crearOrdenInsumo(input: {
 
   const sb = supabase as DB
   const now = new Date()
+  const nowIso = now.toISOString()
   const periodo = now.toISOString().slice(0, 8) + '01'
   const { count } = await sb.from('ordenes_insumo').select('*', { count: 'exact', head: true })
   const numero = `OI-${now.toISOString().slice(0, 7).replace('-', '')}-${String((count ?? 0) + 1).padStart(3, '0')}`
 
-  // Nace como PROPUESTA del coordinador de sede: BORRADOR hasta enviarla a revisión.
+  // Autorización por supervisor DESACTIVADA de momento: la orden nace APROBADA y
+  // pasa directo a Alistamiento (antes: BORRADOR → revisión → doble aprobación).
   const { data: orden, error } = await sb.from('ordenes_insumo').insert({
     numero, sede_id: input.sede_id, bodega_id: input.bodega_id || null,
-    observacion: input.observacion?.trim() || null, periodo, estado: 'BORRADOR', creado_por: user.id,
+    observacion: input.observacion?.trim() || null, periodo, estado: 'APROBADA', creado_por: user.id,
+    aprobado_por: user.id, aprobado_at: nowIso,
+    aprobado_solicitante_por: user.id, aprobado_solicitante_at: nowIso,
+    aprobado_coordinador_por: user.id, aprobado_coordinador_at: nowIso,
   }).select('id').single()
 
   if (error || !orden) {
@@ -76,11 +81,11 @@ export async function crearOrdenInsumo(input: {
 
   await sb.rpc('oi_evento', {
     p_orden: orden.id, p_tipo: 'CREACION',
-    p_mensaje: `Propuesta creada con ${items.length} producto(s).`,
-    p_nue: 'BORRADOR',
+    p_mensaje: `Orden creada y aprobada con ${items.length} producto(s). Pasa directo a alistamiento.`,
+    p_nue: 'APROBADA',
   })
 
-  revalidatePath('/ordenes-insumo')
+  revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
   redirect(`/ordenes-insumo/${orden.id}`)
 }
 
