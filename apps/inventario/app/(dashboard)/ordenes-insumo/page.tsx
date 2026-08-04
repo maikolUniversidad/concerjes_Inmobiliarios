@@ -1,6 +1,10 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
+import type { Categoria, Etiqueta } from '@/lib/clasificacion'
+import { sedesPorClasificacion, leerFiltroClasif, cargarEtiquetas } from '@/lib/clasificacion-server'
+import { FiltroClasificacion } from '@/components/clasificacion/FiltroClasificacion'
 import { OrdenesInsumoClient, type OrdenRow } from './OrdenesInsumoClient'
 import { PlantillaDownload, type SedeItem } from './PlantillaDownload'
 import { SobrePedidos, type ProductoSobrePedido } from './SobrePedidos'
@@ -8,23 +12,34 @@ import { SobrePedidos, type ProductoSobrePedido } from './SobrePedidos'
 export const metadata: Metadata = { title: 'Órdenes de Insumo' }
 export const dynamic = 'force-dynamic'
 
-export default async function OrdenesInsumoPage() {
+export default async function OrdenesInsumoPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   await requirePermiso('ver_ordenes_insumo')
   const supabase = await createClient()
   const perm = await getPermisosUsuario()
+  const sp = await searchParams
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  const [{ data }, { data: sedesData }, { data: misSedes }] = await Promise.all([
-    supabase
-      .from('ordenes_insumo')
-      .select(`
-        id, numero, estado, periodo, created_at, despachado_at, observacion,
-        sede:sedes ( nombre ),
-        items:orden_insumo_items ( id, alistado ),
-        responsables:orden_insumo_responsables ( usuario_id )
-      `)
-      .order('created_at', { ascending: false }),
+  const filtro = leerFiltroClasif(sp)
+  const sedeIds = await sedesPorClasificacion(supabase, filtro)
+
+  let ordQuery = supabase
+    .from('ordenes_insumo')
+    .select(`
+      id, numero, estado, periodo, created_at, despachado_at, observacion,
+      sede:sedes ( nombre ),
+      items:orden_insumo_items ( id, alistado ),
+      responsables:orden_insumo_responsables ( usuario_id )
+    `)
+    .order('created_at', { ascending: false })
+  if (sedeIds !== null) ordQuery = ordQuery.in('sede_id', sedeIds)
+
+  const [{ data }, { data: sedesData }, { data: misSedes }, { categorias, etiquetas }] = await Promise.all([
+    ordQuery,
 
     // Todas las sedes activas para el selector de plantilla
     supabase
@@ -40,6 +55,9 @@ export default async function OrdenesInsumoPage() {
           .select('orden:ordenes_insumo ( sede_id )')
           .eq('usuario_id', user.id)
       : Promise.resolve({ data: [] }),
+
+    // Categorías + etiquetas para el filtro de clasificación
+    cargarEtiquetas(supabase),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -121,6 +139,9 @@ export default async function OrdenesInsumoPage() {
         </div>
         <PlantillaDownload sedes={sedes} misSedes={miSedesIds} />
       </div>
+      <Suspense fallback={null}>
+        <FiltroClasificacion categorias={categorias as Categoria[]} etiquetas={etiquetas as Etiqueta[]} />
+      </Suspense>
       <SobrePedidos items={sobrePedidos} />
       <OrdenesInsumoClient ordenes={ordenes} puedeCrear={perm.puede('crear_ordenes_insumo')} />
     </div>

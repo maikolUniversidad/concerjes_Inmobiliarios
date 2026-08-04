@@ -1,12 +1,16 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { Plus, ArrowDownToLine, ArrowUpFromLine, RefreshCw, Settings2, ArrowLeftRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import type { TipoMovimiento } from '@/lib/types/database'
+import type { Categoria, Etiqueta } from '@/lib/clasificacion'
+import { sedesPorClasificacion, leerFiltroClasif, cargarEtiquetas } from '@/lib/clasificacion-server'
+import { FiltroClasificacion } from '@/components/clasificacion/FiltroClasificacion'
 
 export const metadata: Metadata = { title: 'Movimientos' }
-export const revalidate = 10
+export const dynamic = 'force-dynamic'
 
 const TIPO_META: Record<TipoMovimiento, { label: string; cls: string; icon: typeof ArrowDownToLine }> = {
   ENTRADA: { label: 'Entrada', cls: 'bg-green-100 text-green-700', icon: ArrowDownToLine },
@@ -23,17 +27,33 @@ interface MovRow {
   observacion: string | null
   created_at: string
   producto: { nombre_estandar: string; presentacion: string | null } | null
+  sede: { nombre: string } | null
 }
 
-export default async function MovimientosPage() {
+export default async function MovimientosPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   await requirePermiso('ver_movimientos')
   const supabase = await createClient()
-  const { data, error } = await supabase
+  const sp = await searchParams
+
+  const filtro = leerFiltroClasif(sp)
+  const [sedeIds, { categorias, etiquetas }] = await Promise.all([
+    sedesPorClasificacion(supabase, filtro),
+    cargarEtiquetas(supabase),
+  ])
+
+  let query = supabase
     .from('movimientos')
-    .select('id, tipo, cantidad, observacion, created_at, producto:productos ( nombre_estandar, presentacion )')
+    .select('id, tipo, cantidad, observacion, created_at, producto:productos ( nombre_estandar, presentacion ), sede:sedes ( nombre )')
     .order('created_at', { ascending: false })
     .limit(100)
+  // Filtro por clasificación de contrato: sólo movimientos de esas sedes.
+  if (sedeIds !== null) query = query.in('sede_id', sedeIds)
 
+  const { data, error } = await query
   const movs = (data as unknown as MovRow[]) ?? []
 
   return (
@@ -50,6 +70,10 @@ export default async function MovimientosPage() {
           <Plus className="w-4 h-4" /> Registrar movimiento
         </Link>
       </div>
+
+      <Suspense fallback={null}>
+        <FiltroClasificacion categorias={categorias as Categoria[]} etiquetas={etiquetas as Etiqueta[]} />
+      </Suspense>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-700 font-body text-sm">
@@ -74,6 +98,7 @@ export default async function MovimientosPage() {
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Tipo</th>
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Producto</th>
+                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Sede</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Cantidad</th>
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Observación</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Fecha</th>
@@ -94,6 +119,7 @@ export default async function MovimientosPage() {
                         <p className="font-body font-medium text-sm text-gray-900">{m.producto?.nombre_estandar ?? '—'}</p>
                         <p className="font-body text-xs text-gray-400">{m.producto?.presentacion}</p>
                       </td>
+                      <td className="px-4 py-3 font-body text-sm text-gray-500">{m.sede?.nombre ?? '—'}</td>
                       <td className="px-4 py-3 text-right font-heading font-bold text-base text-gray-900">{m.cantidad}</td>
                       <td className="px-4 py-3 font-body text-sm text-gray-500 max-w-[260px] truncate">{m.observacion ?? '—'}</td>
                       <td className="px-4 py-3 text-right font-body text-xs text-gray-400">
