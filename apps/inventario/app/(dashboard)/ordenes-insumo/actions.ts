@@ -510,8 +510,16 @@ export async function despacharOrden(
     .select('id, producto_id, cantidad_solicitada, cantidad_alistada, alistado')
     .eq('orden_id', ordenId)
   const lista = (items ?? []) as { id: string; producto_id: string; cantidad_solicitada: number; cantidad_alistada: number; alistado: boolean }[]
-  const aDespachar = lista.filter((it) => it.alistado && Number(it.cantidad_alistada) > 0)
-  if (aDespachar.length === 0) return { error: 'No hay ítems alistados con cantidad para despachar.' }
+  if (lista.length === 0) return { error: 'La orden no tiene ítems para despachar.' }
+
+  // Cantidad efectiva: la alistada y, si quedó en cero, lo solicitado.
+  const cantDe = (it: { cantidad_alistada: number; cantidad_solicitada: number }) =>
+    Number(it.cantidad_alistada) > 0 ? Number(it.cantidad_alistada) : Number(it.cantidad_solicitada)
+
+  // Se despacha lo chuleado; si no se chuleó nada, sale la orden completa.
+  const marcados = lista.filter((it) => it.alistado)
+  const aDespachar = (marcados.length > 0 ? marcados : lista).filter((it) => cantDe(it) > 0)
+  if (aDespachar.length === 0) return { error: 'Los ítems no tienen cantidad para despachar.' }
 
   // Registrar SALIDA de stock (traslado a la sede) por cada ítem alistado.
   let fallos = 0
@@ -519,7 +527,7 @@ export async function despacharOrden(
     const { error } = await sb.rpc('registrar_movimiento', {
       p_producto: it.producto_id,
       p_tipo: 'SALIDA',
-      p_cantidad: Number(it.cantidad_alistada),
+      p_cantidad: cantDe(it),
       p_sede: orden.sede_id,
       p_observacion: `Despacho orden de insumo`,
       p_ubicacion: null,
@@ -528,6 +536,19 @@ export async function despacharOrden(
   }
   if (fallos === aDespachar.length) {
     return { error: 'No se pudo registrar la salida de stock (permisos o stock). No se despachó.' }
+  }
+
+  // Deja registrada en el ítem la cantidad que realmente salió (la remisión la usa).
+  for (const it of aDespachar) {
+    if (Number(it.cantidad_alistada) === cantDe(it) && it.alistado) continue
+    await sb.from('orden_insumo_items')
+      .update({
+        cantidad_alistada: cantDe(it),
+        alistado: true,
+        // Solo se atribuye el alistamiento si nadie lo había marcado.
+        ...(it.alistado ? {} : { alistado_por: user.id, alistado_at: new Date().toISOString() }),
+      })
+      .eq('id', it.id)
   }
 
   const esPropio = tipo === 'CONDUCTOR_PROPIO'

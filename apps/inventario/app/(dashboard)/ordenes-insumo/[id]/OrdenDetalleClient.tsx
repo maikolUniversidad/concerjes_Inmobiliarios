@@ -103,10 +103,20 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     if (!editable) return
     setBusyItem(it.id)
     const nuevo = !it.alistado
-    setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, alistado: nuevo } : x))
-    const res = await actualizarItemAlistamiento(orden.id, it.id, { alistado: nuevo })
+    // Al chulear un ítem sin cantidad, se asume que se alista todo lo solicitado.
+    const cantPrev = Number(it.cantidad_alistada)
+    const cant = nuevo && cantPrev <= 0 ? Number(it.cantidad_solicitada) : cantPrev
+    setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, alistado: nuevo, cantidad_alistada: cant } : x))
+    const res = await actualizarItemAlistamiento(orden.id, it.id, {
+      alistado: nuevo,
+      ...(cant !== cantPrev ? { cantidad_alistada: cant } : {}),
+    })
     setBusyItem(null)
-    if (res.error) { toast.error(res.error); setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, alistado: !nuevo } : x)); return }
+    if (res.error) {
+      toast.error(res.error)
+      setItems((prev) => prev.map((x) => x.id === it.id ? { ...x, alistado: !nuevo, cantidad_alistada: cantPrev } : x))
+      return
+    }
     router.refresh()
   }
 
@@ -337,13 +347,17 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
 
             <button
               onClick={() => setShowVideo(true)}
-              disabled={!puedeAlistar || !hayAlistados || despachando || !despachoValido}
+              disabled={!puedeAlistar || despachando || !despachoValido}
               className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50">
               {despachando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
               Grabar video y despachar
             </button>
-            {!hayAlistados && <p className="font-body text-xs text-gray-400">Marca al menos un ítem como alistado (con cantidad) para poder despachar.</p>}
-            {hayAlistados && !despachoValido && <p className="font-body text-xs text-gray-400">Indica si el pedido sale con conductor propio o con transportadora.</p>}
+            {!despachoValido && <p className="font-body text-xs text-gray-400">Indica si el pedido sale con conductor propio o con transportadora.</p>}
+            {despachoValido && !hayAlistados && (
+              <p className="font-body text-xs text-amber-600">
+                Ningún ítem tiene cantidad alistada: se despachará con las cantidades solicitadas.
+              </p>
+            )}
           </div>
         )}
       </div>
