@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { FileDown, Loader2, Truck, ClipboardList } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { FileDown, Loader2, Truck, ClipboardList, Building2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 
@@ -28,6 +28,12 @@ type Tipo = 'ORDEN' | 'REMISION'
 
 interface Emisor { nombre: string; nit: string; tel: string; direccion: string | null; logoDataUrl: string | null }
 
+// Empresa emisora tal como viene de la BD (el logo se resuelve al generar el PDF).
+interface EmisoraRaw {
+  id: string; razon_social: string; nombre_comercial: string | null
+  nit: string | null; telefono: string | null; direccion: string | null; logo_path: string | null
+}
+
 // Respaldo si aún no hay empresa emisora configurada.
 const EMPRESA_FALLBACK: Emisor = { nombre: 'CONSERJES INMOBILIARIOS LTDA', nit: 'NIT 800093388-2', tel: '+57 320 808 1399', direccion: null, logoDataUrl: null }
 
@@ -51,35 +57,57 @@ function fecha(iso?: string | null) {
  */
 export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
   const [generando, setGenerando] = useState<Tipo | null>(null)
-  const [emisor, setEmisor] = useState<Emisor>(EMPRESA_FALLBACK)
+  const [emisoras, setEmisoras] = useState<EmisoraRaw[]>([])
+  const [emisoraId, setEmisoraId] = useState<string>('')
+  const logoCache = useRef<Map<string, string | null>>(new Map())
 
-  // Empresa emisora predeterminada (datos + logo) para los documentos.
+  // Empresas emisoras activas (predeterminada primero). El usuario elige con
+  // cuál generar la remisión / orden; el logo se resuelve al generar el PDF.
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = createClient() as any
     sb.from('empresas_emisoras')
-      .select('razon_social, nit, telefono, direccion, logo_path')
-      .eq('es_predeterminada', true).eq('activo', true).maybeSingle()
-      .then(async ({ data }: { data: { razon_social: string; nit: string | null; telefono: string | null; direccion: string | null; logo_path: string | null } | null }) => {
-        if (!data) return
-        let logoDataUrl: string | null = null
-        if (data.logo_path) {
-          const url = sb.storage.from('empresas').getPublicUrl(data.logo_path).data.publicUrl
-          logoDataUrl = await comoDataUrl(url)
-        }
-        setEmisor({
-          nombre: data.razon_social,
-          nit: data.nit ? `NIT ${data.nit}` : '',
-          tel: data.telefono ?? '',
-          direccion: data.direccion ?? null,
-          logoDataUrl,
-        })
+      .select('id, razon_social, nombre_comercial, nit, telefono, direccion, logo_path, es_predeterminada')
+      .eq('activo', true)
+      .order('es_predeterminada', { ascending: false })
+      .order('razon_social', { ascending: true })
+      .then(({ data }: { data: (EmisoraRaw & { es_predeterminada: boolean })[] | null }) => {
+        const lista = data ?? []
+        setEmisoras(lista)
+        const predet = lista.find(e => e.es_predeterminada) ?? lista[0]
+        if (predet) setEmisoraId(predet.id)
       })
   }, [])
+
+  // Resuelve la empresa elegida a los datos del documento (con logo incrustado).
+  async function resolverEmisor(): Promise<Emisor> {
+    const raw = emisoras.find(e => e.id === emisoraId)
+    if (!raw) return EMPRESA_FALLBACK
+    let logoDataUrl: string | null = null
+    if (raw.logo_path) {
+      if (logoCache.current.has(raw.id)) {
+        logoDataUrl = logoCache.current.get(raw.id) ?? null
+      } else {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sb = createClient() as any
+        const url = sb.storage.from('empresas').getPublicUrl(raw.logo_path).data.publicUrl
+        logoDataUrl = await comoDataUrl(url)
+        logoCache.current.set(raw.id, logoDataUrl)
+      }
+    }
+    return {
+      nombre: raw.razon_social,
+      nit: raw.nit ? `NIT ${raw.nit}` : '',
+      tel: raw.telefono ?? '',
+      direccion: raw.direccion ?? null,
+      logoDataUrl,
+    }
+  }
 
   async function generar(tipo: Tipo) {
     setGenerando(tipo)
     try {
+      const emisor = await resolverEmisor()
       const { pdf, Document, Page, Text, View, Image, StyleSheet } = await import('@react-pdf/renderer')
       const React = (await import('react')).default
       const h = React.createElement
@@ -197,6 +225,28 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       <p className="font-body text-sm text-gray-500 mb-3">
         La <strong>remisión</strong> se imprime y viaja físicamente con el pedido; la firma quien recibe en la sede.
       </p>
+
+      {/* Empresa emisora: con cuál se genera el documento (logo + datos) */}
+      {emisoras.length > 1 && (
+        <label className="block mb-3">
+          <span className="flex items-center gap-1.5 font-body text-xs font-semibold text-gray-500 mb-1">
+            <Building2 className="w-3.5 h-3.5 text-brand-green" /> Generar con la empresa
+          </span>
+          <select
+            value={emisoraId}
+            onChange={e => setEmisoraId(e.target.value)}
+            disabled={generando !== null}
+            className="w-full sm:w-auto min-w-[16rem] border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-800 bg-white focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green disabled:opacity-50"
+          >
+            {emisoras.map(e => (
+              <option key={e.id} value={e.id}>
+                {e.nombre_comercial?.trim() || e.razon_social}{e.nit ? ` · NIT ${e.nit}` : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <div className="flex flex-wrap gap-2">
         <button onClick={() => generar('ORDEN')} disabled={generando !== null}
           className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-4 py-2 font-body text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">

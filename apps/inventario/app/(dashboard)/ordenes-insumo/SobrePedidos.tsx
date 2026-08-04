@@ -17,7 +17,7 @@ const ESTADO_LABEL: Record<string, string> = {
 }
 
 export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
-  const [abierto, setAbierto] = useState(true)
+  const [abierto, setAbierto] = useState(false)
   const [expandido, setExpandido] = useState<Set<string>>(new Set())
 
   if (items.length === 0) return null
