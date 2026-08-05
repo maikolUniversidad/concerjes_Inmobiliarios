@@ -1,27 +1,15 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
-import { PackageCheck, MapPin, ArrowRight, Truck } from 'lucide-react'
+import { PackageCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
+import { AlistamientoClient, type Fila } from './AlistamientoClient'
 
 export const metadata: Metadata = { title: 'Alistamiento' }
 export const revalidate = 0
 
 /** Estados que YA pasaron la aprobación de la central y viven en bodega. */
 const ESTADOS_ALISTAMIENTO = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO']
-
-const META: Record<string, { label: string; color: string }> = {
-  APROBADA:        { label: 'Lista para alistar', color: 'bg-blue-100 text-blue-700' },
-  EN_ALISTAMIENTO: { label: 'En alistamiento',    color: 'bg-violet-100 text-violet-700' },
-  ALISTADO:        { label: 'Alistado',           color: 'bg-teal-100 text-teal-700' },
-  DESPACHADO:      { label: 'Despachado',         color: 'bg-green-100 text-green-700' },
-}
-
-interface Fila {
-  id: string; numero: string; estado: string; created_at: string; aprobado_at: string | null
-  sede: { nombre: string } | null
-  items: { alistado: boolean }[]
-}
 
 export default async function AlistamientoPage() {
   await requirePermiso('ver_alistamiento')
@@ -34,7 +22,7 @@ export default async function AlistamientoPage() {
     .order('aprobado_at', { ascending: false, nullsFirst: false })
 
   const ordenes = (data as unknown as Fila[]) ?? []
-  const pendientes = ordenes.filter(o => o.estado !== 'DESPACHADO')
+  const pendientes = ordenes.filter((o) => o.estado !== 'DESPACHADO').length
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -44,7 +32,7 @@ export default async function AlistamientoPage() {
         </h1>
         <p className="font-body text-sm text-gray-500 mt-0.5">
           Órdenes de insumo <strong>ya aprobadas</strong> por la central. Aquí bodega alista y despacha.
-          {pendientes.length > 0 && ` · ${pendientes.length} por trabajar`}
+          {pendientes > 0 && ` · ${pendientes} por trabajar`}
         </p>
       </div>
 
@@ -60,39 +48,7 @@ export default async function AlistamientoPage() {
           </Link>
         </div>
       ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {ordenes.map(o => {
-            const m = META[o.estado] ?? { label: o.estado, color: 'bg-gray-100 text-gray-600' }
-            const total = o.items?.length ?? 0
-            const listos = (o.items ?? []).filter(i => i.alistado).length
-            const pct = total > 0 ? Math.round((listos / total) * 100) : 0
-            return (
-              <Link key={o.id} href={`/ordenes-insumo/${o.id}`}
-                className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-heading font-bold text-base text-gray-900">{o.numero}</span>
-                  <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${m.color}`}>{m.label}</span>
-                </div>
-                <p className="font-body text-xs text-gray-500 mt-1 flex items-center gap-1 truncate">
-                  <MapPin className="w-3 h-3 shrink-0" /> {o.sede?.nombre ?? 'Sin sede'}
-                </p>
-
-                <div className="mt-3">
-                  <div className="flex items-center justify-between font-body text-xs text-gray-500 mb-1">
-                    <span>Alistamiento</span><span>{listos}/{total} ítems</span>
-                  </div>
-                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                    <div className="h-full bg-brand-green rounded-full transition-all" style={{ width: `${pct}%` }} />
-                  </div>
-                </div>
-
-                <span className="mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-brand-green">
-                  {o.estado === 'DESPACHADO' ? <><Truck className="w-3.5 h-3.5" /> Ver despacho</> : <>Abrir alistamiento <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" /></>}
-                </span>
-              </Link>
-            )
-          })}
-        </div>
+        <AlistamientoClient ordenes={ordenes} />
       )}
     </div>
   )
