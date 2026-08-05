@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X } from 'lucide-react'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 
 export interface OrdenRow {
@@ -42,6 +42,10 @@ function fmt(iso: string | null) {
   return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
 
+// Búsqueda "inteligente": sin acentos/mayúsculas, por tokens (cada palabra debe
+// aparecer, en cualquier orden).
+const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
+
 type Tab = 'proceso' | 'todas'
 
 const ESTADOS_PROCESO: EstadoOrdenInsumo[] = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO']
@@ -65,6 +69,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
   const [tab, setTab] = useState<Tab>('todas')
   const [filtroEstado, setFiltroEstado] = useState<EstadoOrdenInsumo | 'todos'>('todos')
   const [showFiltro, setShowFiltro] = useState(false)
+  const [q, setQ] = useState('')
 
   const proceso = useMemo(
     () => ordenes.filter((o) => (ESTADOS_PROCESO as string[]).includes(o.estado)),
@@ -73,12 +78,32 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
 
   const lista = useMemo(() => {
     const base = tab === 'proceso' ? proceso : ordenes
-    if (filtroEstado === 'todos') return base
-    return base.filter((o) => o.estado === filtroEstado)
-  }, [tab, proceso, ordenes, filtroEstado])
+    const porEstado = filtroEstado === 'todos' ? base : base.filter((o) => o.estado === filtroEstado)
+    const tokens = norm(q).split(/\s+/).filter(Boolean)
+    if (tokens.length === 0) return porEstado
+    return porEstado.filter((o) => {
+      const heno = norm(`${o.numero} ${o.sede}`)
+      return tokens.every((t) => heno.includes(t))
+    })
+  }, [tab, proceso, ordenes, filtroEstado, q])
 
   return (
     <div className="space-y-4">
+      {/* Buscador inteligente por número o sede */}
+      <div className="relative max-w-md">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+        <input
+          value={q} onChange={(e) => setQ(e.target.value)}
+          placeholder="Buscar por número o sede…"
+          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-9 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20"
+        />
+        {q && (
+          <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-2">
           <button onClick={() => setTab('todas')}
@@ -124,7 +149,10 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
         <div className="bg-white border border-gray-100 rounded-2xl p-16 text-center shadow-sm">
           <ClipboardList className="w-12 h-12 text-gray-200 mx-auto mb-3" />
           <p className="font-body text-sm text-gray-400">
-            {tab === 'proceso' ? 'No hay órdenes por procesar.' : filtroEstado !== 'todos' ? 'No hay órdenes con ese estado.' : 'Aún no hay órdenes de insumo.'}
+            {q ? 'Ninguna orden coincide con tu búsqueda.'
+              : tab === 'proceso' ? 'No hay órdenes por procesar.'
+              : filtroEstado !== 'todos' ? 'No hay órdenes con ese estado.'
+              : 'Aún no hay órdenes de insumo.'}
           </p>
         </div>
       ) : (
