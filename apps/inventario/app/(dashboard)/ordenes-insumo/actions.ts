@@ -23,6 +23,30 @@ async function nombreUsuario(sb: any, userId: string): Promise<string> {
   return data?.nombre ?? 'Usuario'
 }
 
+/**
+ * Calcula el siguiente número de orden del período a partir del MÁXIMO sufijo
+ * existente (no del conteo): así los borrados no reutilizan un número ya usado.
+ * Devuelve el entero del siguiente consecutivo (>= 1).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function siguienteConsecutivoOI(sb: any, prefijo: string): Promise<number> {
+  const { data } = await sb.from('ordenes_insumo').select('numero').like('numero', prefijo + '%')
+  let max = 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of ((data ?? []) as any[])) {
+    const m = String(r.numero).match(/-(\d+)$/)
+    if (m) { const n = parseInt(m[1], 10); if (n > max) max = n }
+  }
+  return max + 1
+}
+
+/** true si el error de Postgres es una violación de la clave única del número. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function esColisionNumero(error: any): boolean {
+  const msg = String(error?.message ?? '')
+  return error?.code === '23505' || msg.includes('duplicate key') || msg.includes('ordenes_insumo_numero_key')
+}
+
 // ── Crear orden de insumo a partir de la parametrización de una sede ──────────
 export async function crearOrdenInsumo(input: {
   sede_id: string
@@ -44,22 +68,36 @@ export async function crearOrdenInsumo(input: {
   const now = new Date()
   const nowIso = now.toISOString()
   const periodo = now.toISOString().slice(0, 8) + '01'
-  const { count } = await sb.from('ordenes_insumo').select('*', { count: 'exact', head: true })
-  const numero = `OI-${now.toISOString().slice(0, 7).replace('-', '')}-${String((count ?? 0) + 1).padStart(3, '0')}`
+  const prefijo = `OI-${now.toISOString().slice(0, 7).replace('-', '')}-`
 
-  // Autorización por supervisor DESACTIVADA de momento: la orden nace APROBADA y
-  // pasa directo a Alistamiento (antes: BORRADOR → revisión → doble aprobación).
-  const { data: orden, error } = await sb.from('ordenes_insumo').insert({
-    numero, sede_id: input.sede_id, bodega_id: input.bodega_id || null,
-    observacion: input.observacion?.trim() || null, periodo, estado: 'APROBADA', creado_por: user.id,
-    aprobado_por: user.id, aprobado_at: nowIso,
-    aprobado_solicitante_por: user.id, aprobado_solicitante_at: nowIso,
-    aprobado_coordinador_por: user.id, aprobado_coordinador_at: nowIso,
-  }).select('id').single()
+  // Numeración robusta: se toma el MÁXIMO consecutivo del período (no el conteo,
+  // que colisiona cuando se borran órdenes) y se reintenta si otro usuario tomó
+  // el mismo número al mismo tiempo (creaciones concurrentes).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let orden: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let error: any = null
+  let consecutivo = await siguienteConsecutivoOI(sb, prefijo)
+  for (let intento = 0; intento < 15; intento++) {
+    const numero = `${prefijo}${String(consecutivo).padStart(3, '0')}`
+    // Autorización por supervisor DESACTIVADA de momento: la orden nace APROBADA y
+    // pasa directo a Alistamiento (antes: BORRADOR → revisión → doble aprobación).
+    const res = await sb.from('ordenes_insumo').insert({
+      numero, sede_id: input.sede_id, bodega_id: input.bodega_id || null,
+      observacion: input.observacion?.trim() || null, periodo, estado: 'APROBADA', creado_por: user.id,
+      aprobado_por: user.id, aprobado_at: nowIso,
+      aprobado_solicitante_por: user.id, aprobado_solicitante_at: nowIso,
+      aprobado_coordinador_por: user.id, aprobado_coordinador_at: nowIso,
+    }).select('id').single()
+    if (!res.error) { orden = res.data; break }
+    if (esColisionNumero(res.error)) { consecutivo++; continue }   // número tomado → probar el siguiente
+    error = res.error; break
+  }
 
   if (error || !orden) {
     if ((error?.message ?? '').includes('row-level security')) return { error: 'No tienes permisos para crear órdenes.' }
-    return { error: 'No se pudo crear la orden: ' + (error?.message ?? '') }
+    if (esColisionNumero(error)) return { error: 'No se pudo asignar un número de orden libre. Intenta de nuevo.' }
+    return { error: 'No se pudo crear la orden: ' + (error?.message ?? 'error desconocido') }
   }
 
   const itemsInsert = items.map((it) => ({

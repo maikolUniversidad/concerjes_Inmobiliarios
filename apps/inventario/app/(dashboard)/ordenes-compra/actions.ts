@@ -31,19 +31,39 @@ export async function crearOC(_prev: ActionResult, formData: FormData): Promise<
 
   const valor_total = items.reduce((a, it) => a + it.cantidad_ped * it.precio_unit, 0)
 
-  // Numeración automática: OC-YYYYMM-NNN
-  const { count } = await supabase.from('ordenes_compra').select('*', { count: 'exact', head: true })
-  const numero_oc = `OC-${periodoStr.replace('-', '') || new Date().toISOString().slice(0, 7).replace('-', '')}-${String((count ?? 0) + 1).padStart(3, '0')}`
+  // Numeración automática robusta: OC-YYYYMM-NNN a partir del MÁXIMO consecutivo
+  // del período (no del conteo, que colisiona al anular/borrar), con reintento
+  // ante creaciones concurrentes.
+  const prefijo = `OC-${periodoStr.replace('-', '') || new Date().toISOString().slice(0, 7).replace('-', '')}-`
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const { data: previas } = await sb.from('ordenes_compra').select('numero_oc').like('numero_oc', prefijo + '%')
+  let consecutivo = 1
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  for (const r of ((previas ?? []) as any[])) {
+    const mm = String(r.numero_oc).match(/-(\d+)$/)
+    if (mm) { const n = parseInt(mm[1], 10); if (n >= consecutivo) consecutivo = n + 1 }
+  }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: oc, error } = await (supabase as any).from('ordenes_compra').insert({
-    numero_oc, proveedor_id, periodo, fecha_entrega, observaciones,
-    estado: 'BORRADOR', valor_total, creado_por: user.id,
-  }).select('id').single()
+  let oc: any = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let error: any = null
+  for (let intento = 0; intento < 15; intento++) {
+    const numero_oc = `${prefijo}${String(consecutivo).padStart(3, '0')}`
+    const res = await sb.from('ordenes_compra').insert({
+      numero_oc, proveedor_id, periodo, fecha_entrega, observaciones,
+      estado: 'BORRADOR', valor_total, creado_por: user.id,
+    }).select('id').single()
+    if (!res.error) { oc = res.data; break }
+    const msg = String(res.error.message ?? '')
+    if (res.error.code === '23505' || msg.includes('duplicate key')) { consecutivo++; continue }
+    error = res.error; break
+  }
 
-  if (error) {
-    if (error.message.includes('row-level security')) return { error: 'No tienes permisos (requiere Admin o Coord. Compras).' }
-    return { error: 'No se pudo crear la orden: ' + error.message }
+  if (error || !oc) {
+    if ((error?.message ?? '').includes('row-level security')) return { error: 'No tienes permisos (requiere Admin o Coord. Compras).' }
+    return { error: 'No se pudo crear la orden: ' + (error?.message ?? 'no se pudo asignar número, intenta de nuevo') }
   }
 
   const itemsInsert = items.map(it => ({ oc_id: oc.id, producto_id: it.producto_id, cantidad_ped: it.cantidad_ped, precio_unit: it.precio_unit }))
