@@ -5,14 +5,14 @@ import { Plus, X, Loader2, Building2, MapPin, Pencil, Trash2, Navigation, Crossh
 import { toast } from 'sonner'
 import { crearSede, actualizarSede, eliminarSede, geocodificarSede, type ActionResult } from './actions'
 import { DeleteButton } from '@/components/ui/DeleteButton'
-import { GRUPO_LABELS, type GrupoContrato } from '@/lib/types/database'
+import { grupoColor, type GrupoContrato } from '@/lib/types/database'
 import { TIPO_CONTRATO_META, TIPO_CONTRATO_OPCIONES, type Categoria, type Etiqueta, type TipoContrato } from '@/lib/clasificacion'
 import { EtiquetaPicker, TipoBadge, EtiquetaChip } from './Clasificacion'
 
 export interface GrupoOpt { id: string; codigo: GrupoContrato; nombre: string }
 export interface SedeRow {
   id: string; nombre: string; zona: string | null; ciudad: string; codigo_interno: string | null
-  grupo_id: string; grupo_codigo: GrupoContrato | null
+  grupo_id: string; grupo_codigo: GrupoContrato | null; grupo_nombre?: string | null
   direccion?: string | null; lat?: number | null; lng?: number | null
   tipo_contrato?: TipoContrato | null; etiquetaIds?: string[]
 }
@@ -103,11 +103,14 @@ export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: 
           {state.error && <p className="font-body text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{state.error}</p>}
           <div className="grid sm:grid-cols-2 gap-3">
             <div>
-              <label className="font-body font-semibold text-xs text-gray-600">Grupo de contrato *</label>
+              <label className="font-body font-semibold text-xs text-gray-600">Contrato *</label>
               <select name="grupo_id" required defaultValue={editing?.grupo_id ?? ''} className={inputCls + ' mt-1 bg-white'}>
                 <option value="" disabled>— Selecciona —</option>
-                {grupos.map(g => <option key={g.id} value={g.id}>{g.nombre}</option>)}
+                {grupos.map(g => <option key={g.id} value={g.id}>{g.codigo} · {g.nombre}</option>)}
               </select>
+              {grupos.length === 0 && (
+                <p className="font-body text-[11px] text-amber-700 mt-1">No hay contratos. Crea uno arriba en «Contratos» antes de registrar sedes.</p>
+              )}
             </div>
             <div>
               <label className="font-body font-semibold text-xs text-gray-600">N° contrato</label>
@@ -209,7 +212,6 @@ export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: 
             </thead>
             <tbody className="divide-y divide-gray-50">
               {sedes.map(s => {
-                const meta = s.grupo_codigo ? GRUPO_LABELS[s.grupo_codigo] : null
                 return (
                   <tr key={s.id} className="hover:bg-gray-50/50 group">
                     <td className="px-4 py-3">
@@ -228,7 +230,14 @@ export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: 
                         })}
                       </div>
                     </td>
-                    <td className="px-4 py-3">{meta && <span className={`font-body text-xs px-2 py-0.5 rounded-full ${meta.color}`}>{meta.nombre}</span>}</td>
+                    <td className="px-4 py-3">
+                      {s.grupo_codigo && (
+                        <span className="inline-flex items-center gap-1.5">
+                          <span className={`font-body text-[11px] font-bold px-1.5 py-0.5 rounded ${grupoColor(s.grupo_codigo)}`}>{s.grupo_codigo}</span>
+                          {s.grupo_nombre && <span className="font-body text-xs text-gray-500 max-w-[12rem] truncate">{s.grupo_nombre}</span>}
+                        </span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 font-body text-sm text-gray-500">{s.zona ?? '—'}</td>
                     <td className="px-4 py-3 font-body text-sm text-gray-500">{s.ciudad}</td>
                     <td className="px-4 py-3">

@@ -67,6 +67,99 @@ function traducir(msg: string): string {
   return 'Operación fallida: ' + msg
 }
 
+// ─── Contratos (grupos_contrato) ─────────────────────────────────────────────
+
+/** Deriva un código corto (A-Z0-9) a partir del nombre si no se indicó uno. */
+function derivarCodigo(nombre: string): string {
+  const limpio = nombre.toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Z0-9 ]/g, '')
+  const palabras = limpio.split(/\s+/).filter(Boolean)
+  const base = palabras.length >= 2
+    ? palabras.slice(0, 3).map((p) => p[0]).join('')      // iniciales
+    : (palabras[0] ?? 'CON').slice(0, 4)
+  return base.slice(0, 20) || 'CON'
+}
+
+function campoGrupo(formData: FormData) {
+  const codigoRaw = String(formData.get('codigo') ?? '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '')
+  const nombre = String(formData.get('nombre') ?? '').trim()
+  return {
+    nombre,
+    codigo: codigoRaw || derivarCodigo(nombre),
+    descripcion: String(formData.get('descripcion') ?? '').trim() || null,
+    tipo_contrato: tipoOpc(formData.get('tipo_contrato')),
+  }
+}
+
+/** Asegura que el código sea único (agrega sufijo numérico si ya existe). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function codigoUnico(sb: any, codigo: string, excluirId?: string): Promise<string> {
+  let cand = codigo
+  for (let n = 2; n < 100; n++) {
+    let q = sb.from('grupos_contrato').select('id').eq('codigo', cand).limit(1)
+    if (excluirId) q = q.neq('id', excluirId)
+    const { data } = await q
+    if (!data || data.length === 0) return cand
+    const sufijo = String(n)
+    cand = codigo.slice(0, 20 - sufijo.length) + sufijo
+  }
+  return cand
+}
+
+export async function crearGrupo(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const data = campoGrupo(formData)
+  if (data.nombre.length < 3) return { error: 'El nombre del contrato es obligatorio.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const codigo = await codigoUnico(sb, data.codigo)
+  const { error } = await sb.from('grupos_contrato').insert({ ...data, codigo, activo: true })
+  if (error) return { error: traducir(error.message) }
+  revalidatePath('/contratos')
+  return { ok: true }
+}
+
+export async function actualizarGrupo(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const id = String(formData.get('id') ?? '')
+  if (!id) return { error: 'Contrato no especificado.' }
+  const data = campoGrupo(formData)
+  if (data.nombre.length < 3) return { error: 'El nombre del contrato es obligatorio.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const codigo = await codigoUnico(sb, data.codigo, id)
+  const { error } = await sb.from('grupos_contrato').update({ ...data, codigo }).eq('id', id)
+  if (error) return { error: traducir(error.message) }
+  revalidatePath('/contratos')
+  return { ok: true }
+}
+
+export async function eliminarGrupo(formData: FormData): Promise<void> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return
+  const id = String(formData.get('id') ?? '')
+  if (!id) return
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  // No dejar sedes activas huérfanas: si el contrato tiene sedes, se desactiva (soft delete).
+  const { count } = await sb.from('sedes').select('id', { count: 'exact', head: true }).eq('grupo_id', id).eq('activo', true)
+  if (count && count > 0) {
+    await sb.from('grupos_contrato').update({ activo: false }).eq('id', id)
+  } else {
+    const { error } = await sb.from('grupos_contrato').delete().eq('id', id)
+    if (error) await sb.from('grupos_contrato').update({ activo: false }).eq('id', id)
+  }
+  revalidatePath('/contratos')
+}
+
 export async function crearSede(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

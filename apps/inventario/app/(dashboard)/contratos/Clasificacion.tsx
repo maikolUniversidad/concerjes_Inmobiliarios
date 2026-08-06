@@ -1,19 +1,24 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
+import { useActionState } from 'react'
+import { useFormStatus } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import {
-  Tag, Plus, X, Pencil, Trash2, Loader2, ChevronDown, ChevronRight, Check, Settings2,
+  Tag, Plus, X, Pencil, Trash2, Loader2, ChevronDown, ChevronRight, Check, Settings2, Building2, FolderPlus,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   ETIQUETA_COLORES, ETIQUETA_COLOR_NOMBRES, colorEtiqueta, TIPO_CONTRATO_META, TIPO_CONTRATO_OPCIONES,
   type Categoria, type Etiqueta, type TipoContrato,
 } from '@/lib/clasificacion'
+import { grupoColor } from '@/lib/types/database'
+import { DeleteButton } from '@/components/ui/DeleteButton'
 import {
   guardarCategoria, eliminarCategoria, guardarEtiqueta, eliminarEtiqueta,
   setTipoGrupo, asignarEtiquetasGrupo,
 } from './etiquetas-actions'
+import { crearGrupo, actualizarGrupo, eliminarGrupo, type ActionResult } from './actions'
 
 // ── Badges reutilizables ──────────────────────────────────────────────────────
 export function TipoBadge({ tipo, heredado }: { tipo: TipoContrato | null; heredado?: boolean }) {
@@ -84,10 +89,73 @@ export function EtiquetaPicker({
 // ── Clasificación por grupo de contrato ──────────────────────────────────────────
 export interface GrupoClasif { id: string; codigo: string; nombre: string; descripcion: string | null; tipo_contrato: TipoContrato | null; etiquetaIds: string[] }
 
+function GrupoSubmit({ editando }: { editando: boolean }) {
+  const { pending } = useFormStatus()
+  return (
+    <button type="submit" disabled={pending}
+      className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">
+      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+      {editando ? 'Guardar cambios' : 'Crear contrato'}
+    </button>
+  )
+}
+
+const grupoInputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green'
+
+/** Formulario para dar de alta o editar un contrato (grupo). */
+function ContratoForm({ editing, onDone }: { editing: GrupoClasif | null; onDone: () => void }) {
+  const action = editing ? actualizarGrupo : crearGrupo
+  const [state, formAction] = useActionState<ActionResult, FormData>(action, {})
+  const [tipo, setTipo] = useState<TipoContrato | ''>(editing?.tipo_contrato ?? '')
+
+  useEffect(() => { if (state.ok) onDone() }, [state.ok, onDone])
+
+  return (
+    <form action={formAction} key={editing?.id ?? 'nuevo'} className="rounded-2xl border border-brand-green/30 bg-green-50/40 p-4 space-y-3">
+      {editing && <input type="hidden" name="id" value={editing.id} />}
+      <p className="font-heading font-semibold text-sm text-gray-800">{editing ? 'Editar contrato' : 'Nuevo contrato'}</p>
+      {state.error && <p className="font-body text-sm text-red-700 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{state.error}</p>}
+      <div className="grid sm:grid-cols-3 gap-3">
+        <div className="sm:col-span-2">
+          <label className="font-body font-semibold text-xs text-gray-600">Nombre del contrato *</label>
+          <input name="nombre" required defaultValue={editing?.nombre ?? ''} className={grupoInputCls + ' mt-1'} placeholder="Ej: Ministerio de Salud" />
+        </div>
+        <div>
+          <label className="font-body font-semibold text-xs text-gray-600">Código</label>
+          <input name="codigo" defaultValue={editing?.codigo ?? ''} maxLength={20} className={grupoInputCls + ' mt-1 uppercase'} placeholder="Auto" />
+          <p className="font-body text-[11px] text-gray-400 mt-0.5">Si lo dejas vacío se genera solo.</p>
+        </div>
+      </div>
+      <div>
+        <label className="font-body font-semibold text-xs text-gray-600">Descripción</label>
+        <input name="descripcion" defaultValue={editing?.descripcion ?? ''} className={grupoInputCls + ' mt-1'} placeholder="Sedes / entidades que agrupa (opcional)" />
+      </div>
+      <div>
+        <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Tipo de contrato</label>
+        <input type="hidden" name="tipo_contrato" value={tipo} />
+        <div className="flex gap-1.5">
+          {TIPO_CONTRATO_OPCIONES.map(o => (
+            <button key={o.value} type="button" onClick={() => setTipo(t => t === o.value ? '' : o.value)}
+              className={`rounded-lg border px-3 py-1.5 font-body text-xs font-semibold transition-all ${
+                tipo === o.value ? `${TIPO_CONTRATO_META[o.value].badge} border-transparent` : 'border-gray-200 text-gray-500 hover:border-gray-300'
+              }`}>{o.label}</button>
+          ))}
+        </div>
+      </div>
+      <div className="flex items-center gap-2">
+        <GrupoSubmit editando={!!editing} />
+        <button type="button" onClick={onDone} className="font-body text-sm text-gray-500 px-2 py-2">Cancelar</button>
+      </div>
+    </form>
+  )
+}
+
 export function GruposClasificacion({ grupos, categorias, etiquetas }: { grupos: GrupoClasif[]; categorias: Categoria[]; etiquetas: Etiqueta[] }) {
   const router = useRouter()
   const [pending, start] = useTransition()
   const [abierto, setAbierto] = useState<string | null>(null)
+  const [creando, setCreando] = useState(false)
+  const [editing, setEditing] = useState<GrupoClasif | null>(null)
 
   function guardarTipo(id: string, tipo: TipoContrato | null) {
     start(async () => {
@@ -101,46 +169,85 @@ export function GruposClasificacion({ grupos, categorias, etiquetas }: { grupos:
       if (r.error) toast.error(r.error); else router.refresh()
     })
   }
+  function cerrarForm() { setCreando(false); setEditing(null); router.refresh() }
 
   return (
-    <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-      {grupos.map(g => {
-        const open = abierto === g.id
-        const tags = etiquetas.filter(e => g.etiquetaIds.includes(e.id))
-        return (
-          <div key={g.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
-            <div className="flex items-center justify-between mb-2 gap-2">
-              <span className="font-heading font-bold text-sm text-gray-900">{g.nombre}</span>
-              <TipoBadge tipo={g.tipo_contrato} />
-            </div>
-            {g.descripcion && <p className="font-body text-sm text-gray-600 leading-relaxed line-clamp-2">{g.descripcion}</p>}
-            {tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{tags.map(t => <EtiquetaChip key={t.id} et={t} />)}</div>}
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Building2 className="w-4 h-4 text-brand-green" />
+          <h2 className="font-heading font-semibold text-sm text-gray-900">Contratos ({grupos.length})</h2>
+        </div>
+        {!creando && !editing && (
+          <button onClick={() => setCreando(true)}
+            className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-brand-green-dark">
+            <FolderPlus className="w-3.5 h-3.5" /> Nuevo contrato
+          </button>
+        )}
+      </div>
 
-            <button onClick={() => setAbierto(open ? null : g.id)}
-              className="mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-brand-green hover:underline">
-              <Settings2 className="w-3.5 h-3.5" /> {open ? 'Cerrar' : 'Clasificar'}
-              {pending && open && <Loader2 className="w-3 h-3 animate-spin" />}
-            </button>
+      {(creando || editing) && <ContratoForm editing={editing} onDone={cerrarForm} />}
 
-            {open && (
-              <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
-                <div>
-                  <p className="mb-1 font-body text-[11px] font-semibold uppercase tracking-wide text-gray-400">Tipo de contrato</p>
-                  <div className="flex gap-1.5">
-                    {TIPO_CONTRATO_OPCIONES.map(o => (
-                      <button key={o.value} onClick={() => guardarTipo(g.id, g.tipo_contrato === o.value ? null : o.value)}
-                        className={`rounded-lg border px-3 py-1.5 font-body text-xs font-semibold transition-all ${
-                          g.tipo_contrato === o.value ? `${TIPO_CONTRATO_META[o.value].badge} border-transparent` : 'border-gray-200 text-gray-500 hover:border-gray-300'
-                        }`}>{o.label}</button>
-                    ))}
+      {grupos.length === 0 && !creando ? (
+        <div className="rounded-2xl border border-dashed border-gray-200 p-8 text-center">
+          <Building2 className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+          <p className="font-body text-sm text-gray-500">No hay contratos todavía. Crea el primero para poder registrar sus sedes.</p>
+        </div>
+      ) : (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {grupos.map(g => {
+            const open = abierto === g.id
+            const tags = etiquetas.filter(e => g.etiquetaIds.includes(e.id))
+            return (
+              <div key={g.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm group/card">
+                <div className="flex items-center justify-between mb-2 gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className={`shrink-0 rounded-md px-1.5 py-0.5 font-mono text-[10px] font-bold ${grupoColor(g.codigo)}`}>{g.codigo}</span>
+                    <span className="font-heading font-bold text-sm text-gray-900 truncate">{g.nombre}</span>
                   </div>
+                  <TipoBadge tipo={g.tipo_contrato} />
                 </div>
-                <EtiquetaPicker categorias={categorias} etiquetas={etiquetas} value={g.etiquetaIds} onChange={ids => guardarTags(g.id, ids)} />
+                {g.descripcion && <p className="font-body text-sm text-gray-600 leading-relaxed line-clamp-2">{g.descripcion}</p>}
+                {tags.length > 0 && <div className="mt-2 flex flex-wrap gap-1">{tags.map(t => <EtiquetaChip key={t.id} et={t} />)}</div>}
+
+                <div className="mt-3 flex items-center gap-3">
+                  <button onClick={() => setAbierto(open ? null : g.id)}
+                    className="inline-flex items-center gap-1 font-body text-xs font-semibold text-brand-green hover:underline">
+                    <Settings2 className="w-3.5 h-3.5" /> {open ? 'Cerrar' : 'Clasificar'}
+                    {pending && open && <Loader2 className="w-3 h-3 animate-spin" />}
+                  </button>
+                  <button onClick={() => { setCreando(false); setEditing(g) }}
+                    className="inline-flex items-center gap-1 font-body text-xs font-semibold text-gray-500 hover:text-blue-600">
+                    <Pencil className="w-3.5 h-3.5" /> Editar
+                  </button>
+                  <DeleteButton action={eliminarGrupo} id={g.id}
+                    mensaje={`¿Eliminar el contrato “${g.nombre}”? Si tiene sedes, se archivará en vez de borrarse.`}
+                    className="inline-flex items-center gap-1 font-body text-xs font-semibold text-gray-500 hover:text-red-600">
+                    <Trash2 className="w-3.5 h-3.5" /> Eliminar
+                  </DeleteButton>
+                </div>
+
+                {open && (
+                  <div className="mt-3 space-y-3 border-t border-gray-100 pt-3">
+                    <div>
+                      <p className="mb-1 font-body text-[11px] font-semibold uppercase tracking-wide text-gray-400">Tipo de contrato</p>
+                      <div className="flex gap-1.5">
+                        {TIPO_CONTRATO_OPCIONES.map(o => (
+                          <button key={o.value} onClick={() => guardarTipo(g.id, g.tipo_contrato === o.value ? null : o.value)}
+                            className={`rounded-lg border px-3 py-1.5 font-body text-xs font-semibold transition-all ${
+                              g.tipo_contrato === o.value ? `${TIPO_CONTRATO_META[o.value].badge} border-transparent` : 'border-gray-200 text-gray-500 hover:border-gray-300'
+                            }`}>{o.label}</button>
+                        ))}
+                      </div>
+                    </div>
+                    <EtiquetaPicker categorias={categorias} etiquetas={etiquetas} value={g.etiquetaIds} onChange={ids => guardarTags(g.id, ids)} />
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        )
-      })}
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

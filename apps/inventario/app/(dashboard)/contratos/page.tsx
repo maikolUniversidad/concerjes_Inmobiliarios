@@ -35,9 +35,11 @@ export default async function ContratosPage() {
   const categorias = (catsData as Categoria[]) ?? []
   const etiquetas = (etsData as Etiqueta[]) ?? []
 
+  const gruposById = new Map(grupos.map(g => [g.id, g]))
   const sedes: SedeRow[] = sedesRaw.map(s => ({
     id: s.id, nombre: s.nombre, zona: s.zona, ciudad: s.ciudad,
     codigo_interno: s.codigo_interno, grupo_id: s.grupo_id, grupo_codigo: s.grupo?.codigo ?? null,
+    grupo_nombre: gruposById.get(s.grupo_id)?.nombre ?? null,
     direccion: s.direccion ?? null, lat: s.lat ?? null, lng: s.lng ?? null,
     tipo_contrato: s.tipo_contrato ?? null,
     etiquetaIds: (s.sede_etiquetas ?? []).map(e => e.etiqueta_id),

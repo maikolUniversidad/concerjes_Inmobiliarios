@@ -2,7 +2,10 @@ export type CategoriaRotacion = 'A' | 'B' | 'C' | 'D'
 export type TipoInsumo =
   | 'CAFETERIA' | 'LIQUIDOS' | 'ASEO' | 'EPP' | 'PAPELERIA'
   | 'MAQUINARIA' | 'JARDINERIA' | 'REPUESTOS' | 'NO_DISPONIBLE' | 'OTROS'
-export type GrupoContrato = 'CA' | 'MO' | 'MB' | 'PB' | 'AD'
+// Código de contrato: los históricos (CA, MO, MB, PB, AD) más cualquiera creado
+// desde la app. Es texto libre; las constantes conocidas se conservan como guía.
+export type GrupoContrato = string
+export const GRUPOS_CONTRATO_HISTORICOS = ['CA', 'MO', 'MB', 'PB', 'AD'] as const
 export type TipoMovimiento = 'ENTRADA' | 'SALIDA' | 'TRASLADO' | 'AJUSTE' | 'DEVOLUCION'
 export type EstadoOC = 'BORRADOR' | 'APROBADA' | 'ENVIADA' | 'PARCIAL' | 'COMPLETA' | 'ANULADA'
 export type RolUsuario =
@@ -397,12 +400,29 @@ export const CATEGORIA_LABELS: Record<CategoriaRotacion, { label: string; color:
   D: { label: 'No disponible', color: 'text-red-700', bg: 'bg-red-100' },
 }
 
-export const GRUPO_LABELS: Record<GrupoContrato, { nombre: string; color: string }> = {
+export const GRUPO_LABELS: Record<string, { nombre: string; color: string }> = {
   CA: { nombre: 'C.A.', color: 'bg-blue-100 text-blue-800' },
   MO: { nombre: 'M.O.', color: 'bg-purple-100 text-purple-800' },
   MB: { nombre: 'M.B.', color: 'bg-green-100 text-green-800' },
   PB: { nombre: 'P.B.', color: 'bg-orange-100 text-orange-800' },
   AD: { nombre: 'A.D.', color: 'bg-gray-100 text-gray-800' },
+}
+
+// Paleta estable para códigos de contrato nuevos (sin entrada en GRUPO_LABELS).
+const GRUPO_COLORES_FALLBACK = [
+  'bg-blue-100 text-blue-800', 'bg-purple-100 text-purple-800', 'bg-green-100 text-green-800',
+  'bg-orange-100 text-orange-800', 'bg-pink-100 text-pink-800', 'bg-teal-100 text-teal-800',
+  'bg-indigo-100 text-indigo-800', 'bg-amber-100 text-amber-800',
+]
+
+/** Color de la insignia de un contrato: conocido de GRUPO_LABELS o derivado del código. */
+export function grupoColor(codigo: string | null | undefined): string {
+  if (!codigo) return 'bg-gray-100 text-gray-700'
+  const conocido = GRUPO_LABELS[codigo]
+  if (conocido) return conocido.color
+  let h = 0
+  for (let i = 0; i < codigo.length; i++) h = (h * 31 + codigo.charCodeAt(i)) >>> 0
+  return GRUPO_COLORES_FALLBACK[h % GRUPO_COLORES_FALLBACK.length]
 }
 
 export const ROL_LABELS: Record<RolUsuario, { label: string; color: string }> = {
