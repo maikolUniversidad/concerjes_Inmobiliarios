@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, ArrowRight, Truck, Search, PackageCheck, X, LayoutGrid, List,
-  ClipboardCheck, Boxes, Clock, ListChecks, PackageOpen,
+  ClipboardCheck, Boxes, Clock, ListChecks, PackageOpen, User2,
 } from 'lucide-react'
 
 export interface Fila {
@@ -32,7 +32,9 @@ const cuenta = (o: Fila) => {
 
 type Vista = 'tarjetas' | 'tabla'
 
-export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
+export function AlistamientoClient({ ordenes, responsables = {} }: {
+  ordenes: Fila[]; responsables?: Record<string, string[]>
+}) {
   const router = useRouter()
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<string>('PENDIENTES')
@@ -128,11 +130,12 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
       ) : vista === 'tabla' ? (
         /* ── Tabla de control ── */
         <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <table className="w-full min-w-[680px]">
+          <table className="w-full min-w-[820px]">
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/60">
                 <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Orden</th>
                 <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Sede</th>
+                <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Responsable</th>
                 <th className="px-4 py-3 text-center font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</th>
                 <th className="px-4 py-3 text-right font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Falta</th>
                 <th className="px-4 py-3 text-right font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Alistado</th>
@@ -147,7 +150,17 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
                   <tr key={o.id} onClick={() => router.push(`/ordenes-insumo/${o.id}`)}
                     className="cursor-pointer hover:bg-gray-50/70">
                     <td className="px-4 py-3 font-heading text-sm font-bold text-gray-900">{o.numero}</td>
-                    <td className="px-4 py-3 font-body text-sm text-gray-600 max-w-[220px] truncate">{o.sede?.nombre ?? 'Sin sede'}</td>
+                    <td className="px-4 py-3 font-body text-sm text-gray-600 max-w-[200px] truncate">{o.sede?.nombre ?? 'Sin sede'}</td>
+                    <td className="px-4 py-3 max-w-[180px]">
+                      {(responsables[o.id]?.length ?? 0) > 0 ? (
+                        <span className="flex items-center gap-1.5 truncate font-body text-sm text-gray-700">
+                          <User2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
+                          <span className="truncate">
+                            {responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}
+                          </span>
+                        </span>
+                      ) : <span className="font-body text-xs text-gray-300">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-center">
                       <span className={`rounded-full px-2 py-0.5 font-body text-[11px] font-semibold ${m.color}`}>{m.label}</span>
                     </td>
@@ -185,6 +198,11 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
                 <p className="mt-1 flex items-center gap-1 truncate font-body text-xs text-gray-500">
                   <MapPin className="h-3 w-3 shrink-0" /> {o.sede?.nombre ?? 'Sin sede'}
                 </p>
+                {(responsables[o.id]?.length ?? 0) > 0 && (
+                  <p className="mt-0.5 flex items-center gap-1 truncate font-body text-xs text-gray-400">
+                    <User2 className="h-3 w-3 shrink-0" /> {responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}
+                  </p>
+                )}
                 <div className="mt-3">
                   <div className="mb-1 flex items-center justify-between font-body text-xs text-gray-500">
                     <span>{c.falta > 0 ? `Faltan ${c.falta}` : 'Completo'}</span><span>{c.listos}/{c.total} ítems</span>

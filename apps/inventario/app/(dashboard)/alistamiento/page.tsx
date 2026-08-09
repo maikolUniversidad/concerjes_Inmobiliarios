@@ -24,6 +24,18 @@ export default async function AlistamientoPage() {
   const ordenes = (data as unknown as Fila[]) ?? []
   const pendientes = ordenes.filter((o) => o.estado !== 'DESPACHADO').length
 
+  // Responsables por orden (vista que salta la RLS de usuarios para exponer solo el nombre)
+  const responsables: Record<string, string[]> = {}
+  if (ordenes.length > 0) {
+    const { data: resp } = await supabase
+      .from('responsables_opciones')
+      .select('orden_id, nombre')
+      .in('orden_id', ordenes.map((o) => o.id))
+    for (const r of ((resp ?? []) as { orden_id: string; nombre: string }[])) {
+      (responsables[r.orden_id] ??= []).push(r.nombre)
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
       <div>
@@ -48,7 +60,7 @@ export default async function AlistamientoPage() {
           </Link>
         </div>
       ) : (
-        <AlistamientoClient ordenes={ordenes} />
+        <AlistamientoClient ordenes={ordenes} responsables={responsables} />
       )}
     </div>
   )
