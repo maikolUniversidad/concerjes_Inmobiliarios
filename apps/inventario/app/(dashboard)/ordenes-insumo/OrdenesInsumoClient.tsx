@@ -2,8 +2,9 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X, AlertTriangle, CalendarClock } from 'lucide-react'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
+import { calcularUrgencia, fmtFecha } from './urgencia'
 
 export interface OrdenRow {
   id: string
@@ -15,6 +16,8 @@ export interface OrdenRow {
   total_items: number
   alistados: number
   responsables: number
+  fecha_entrega_pactada: string | null
+  urgente: boolean
 }
 
 export const ESTADO_META: Record<EstadoOrdenInsumo, { label: string; cls: string }> = {
@@ -46,9 +49,11 @@ function fmt(iso: string | null) {
 // aparecer, en cualquier orden).
 const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
-type Tab = 'proceso' | 'todas'
+type Tab = 'entregar' | 'proceso' | 'todas'
 
 const ESTADOS_PROCESO: EstadoOrdenInsumo[] = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO']
+// "Por entregar" = todo lo que sigue en curso hacia la sede (no recibido ni anulado).
+const ESTADOS_CERRADOS: string[] = ['RECIBIDO', 'ANULADA']
 
 const FILTROS_ESTADO: { value: EstadoOrdenInsumo | 'todos'; label: string }[] = [
   { value: 'todos',            label: 'Todos'            },
@@ -65,9 +70,14 @@ const FILTROS_ESTADO: { value: EstadoOrdenInsumo | 'todos'; label: string }[] = 
   { value: 'ANULADA',          label: 'Anulada'          },
 ]
 
-export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow[]; puedeCrear: boolean }) {
-  const [tab, setTab] = useState<Tab>('todas')
-  const [filtroEstado, setFiltroEstado] = useState<EstadoOrdenInsumo | 'todos'>('todos')
+export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
+  ordenes: OrdenRow[]; puedeCrear: boolean; estadoInicial?: string
+}) {
+  const estadoValido = estadoInicial && estadoInicial in ESTADO_META
+    ? (estadoInicial as EstadoOrdenInsumo) : 'todos'
+  // Primera vista: lo urgente por entregar, ordenado por fecha.
+  const [tab, setTab] = useState<Tab>('entregar')
+  const [filtroEstado, setFiltroEstado] = useState<EstadoOrdenInsumo | 'todos'>(estadoValido)
   const [showFiltro, setShowFiltro] = useState(false)
   const [q, setQ] = useState('')
 
@@ -75,17 +85,36 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
     () => ordenes.filter((o) => (ESTADOS_PROCESO as string[]).includes(o.estado)),
     [ordenes],
   )
+  const porEntregar = useMemo(
+    () => ordenes.filter((o) => !ESTADOS_CERRADOS.includes(o.estado)),
+    [ordenes],
+  )
+  // Cuántas están urgentes/vencidas (para el aviso del tab).
+  const urgentesCount = useMemo(
+    () => porEntregar.filter((o) => calcularUrgencia(o).rank <= 2).length,
+    [porEntregar],
+  )
 
   const lista = useMemo(() => {
-    const base = tab === 'proceso' ? proceso : ordenes
+    const base = tab === 'proceso' ? proceso : tab === 'entregar' ? porEntregar : ordenes
     const porEstado = filtroEstado === 'todos' ? base : base.filter((o) => o.estado === filtroEstado)
     const tokens = norm(q).split(/\s+/).filter(Boolean)
-    if (tokens.length === 0) return porEstado
-    return porEstado.filter((o) => {
+    const filtrada = tokens.length === 0 ? porEstado : porEstado.filter((o) => {
       const heno = norm(`${o.numero} ${o.sede}`)
       return tokens.every((t) => heno.includes(t))
     })
-  }, [tab, proceso, ordenes, filtroEstado, q])
+    // En "Por entregar" se ordena por urgencia (vencidas primero), luego por
+    // fecha pactada más próxima y por más recientes.
+    if (tab !== 'entregar') return filtrada
+    return [...filtrada].sort((a, b) => {
+      const ra = calcularUrgencia(a).rank, rb = calcularUrgencia(b).rank
+      if (ra !== rb) return ra - rb
+      const fa = a.fecha_entrega_pactada ?? '9999-12-31'
+      const fb = b.fecha_entrega_pactada ?? '9999-12-31'
+      if (fa !== fb) return fa < fb ? -1 : 1
+      return a.created_at < b.created_at ? 1 : -1
+    })
+  }, [tab, proceso, porEntregar, ordenes, filtroEstado, q])
 
   return (
     <div className="space-y-4">
@@ -105,14 +134,23 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
       </div>
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex gap-2">
-          <button onClick={() => setTab('todas')}
-            className={`font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'todas' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
-            Todas ({ordenes.length})
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => setTab('entregar')}
+            className={`inline-flex items-center gap-1.5 font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'entregar' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+            <CalendarClock className="w-3.5 h-3.5" /> Por entregar ({porEntregar.length})
+            {urgentesCount > 0 && (
+              <span className={`ml-0.5 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${tab === 'entregar' ? 'bg-white/25 text-white' : 'bg-red-100 text-red-700'}`}>
+                <AlertTriangle className="w-2.5 h-2.5" /> {urgentesCount}
+              </span>
+            )}
           </button>
           <button onClick={() => setTab('proceso')}
             className={`font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'proceso' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
             Por procesar ({proceso.length})
+          </button>
+          <button onClick={() => setTab('todas')}
+            className={`font-body font-semibold text-sm px-4 py-2 rounded-xl border transition-colors ${tab === 'todas' ? 'bg-brand-green text-white border-brand-green' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+            Todas ({ordenes.length})
           </button>
         </div>
         <div className="flex items-center gap-2">
@@ -150,6 +188,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
           <ClipboardList className="w-12 h-12 text-gray-200 mx-auto mb-3" />
           <p className="font-body text-sm text-gray-400">
             {q ? 'Ninguna orden coincide con tu búsqueda.'
+              : tab === 'entregar' ? 'No hay órdenes pendientes por entregar.'
               : tab === 'proceso' ? 'No hay órdenes por procesar.'
               : filtroEstado !== 'todos' ? 'No hay órdenes con ese estado.'
               : 'Aún no hay órdenes de insumo.'}
@@ -159,10 +198,13 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
           {lista.map((o) => {
             const meta = metaEstado(o.estado)
+            const urg = calcularUrgencia(o)
             const pct = o.total_items > 0 ? Math.round((o.alistados / o.total_items) * 100) : 0
+            // Borde de acento para lo más urgente.
+            const acento = urg.nivel === 'VENCIDA' ? 'border-red-300' : urg.nivel === 'HOY' ? 'border-orange-300' : urg.nivel === 'URGENTE' ? 'border-amber-300' : 'border-gray-100'
             return (
               <Link key={o.id} href={`/ordenes-insumo/${o.id}`}
-                className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group">
+                className={`bg-white border rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group ${acento}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="font-heading font-bold text-sm text-gray-900">{o.numero}</p>
@@ -170,16 +212,26 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear }: { ordenes: OrdenRow
                       <MapPin className="w-3 h-3 text-brand-green shrink-0" /> {o.sede}
                     </p>
                   </div>
-                  <span className={`shrink-0 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                  <div className="flex flex-col items-end gap-1 shrink-0">
+                    <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                    {urg.label && (
+                      <span className={`inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${urg.cls}`}>
+                        {urg.rank <= 1 && <AlertTriangle className="w-2.5 h-2.5" />}{urg.label}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
-                <div className="mt-3 flex items-center gap-3 font-body text-xs text-gray-500">
+                <div className="mt-3 flex items-center gap-3 font-body text-xs text-gray-500 flex-wrap">
                   <span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5" /> {o.total_items} ítems</span>
                   <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {o.responsables}</span>
                   <span className="inline-flex items-center gap-1">
                     {o.estado === 'DESPACHADO' ? <Clock className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
                     {o.estado === 'DESPACHADO' ? fmt(o.despachado_at) : fmt(o.created_at)}
                   </span>
+                  {o.fecha_entrega_pactada && (
+                    <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Entrega {fmtFecha(o.fecha_entrega_pactada)}</span>
+                  )}
                 </div>
 
                 {!['DESPACHADO', 'RECIBIDO', 'ANULADA'].includes(o.estado) && (
