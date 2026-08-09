@@ -1,9 +1,11 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { User2, ArrowRight, Search, X } from 'lucide-react'
+import { User2, ArrowRight, Search, X, ChevronLeft, ChevronRight } from 'lucide-react'
+
+const POR_PAGINA = 8
 
 export interface PedidoFila {
   id: string; numero: string; estado: string
@@ -30,6 +32,7 @@ export function PedidosBodegaTabla({ pedidos, responsables }: {
   const router = useRouter()
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<string>('TODAS')
+  const [pagina, setPagina] = useState(1)
 
   const conteos = useMemo(() => {
     const c: Record<string, number> = { TODAS: pedidos.length }
@@ -46,6 +49,14 @@ export function PedidosBodegaTabla({ pedidos, responsables }: {
       return tokens.every((t) => heno.includes(t))
     })
   }, [pedidos, q, filtro, responsables])
+
+  // Paginación
+  const totalPaginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
+  useEffect(() => { setPagina(1) }, [q, filtro])   // al cambiar filtro/búsqueda, vuelve a la 1
+  const paginaSegura = Math.min(pagina, totalPaginas)
+  const visibles = filtrados.slice((paginaSegura - 1) * POR_PAGINA, paginaSegura * POR_PAGINA)
+  const desde = filtrados.length === 0 ? 0 : (paginaSegura - 1) * POR_PAGINA + 1
+  const hasta = Math.min(paginaSegura * POR_PAGINA, filtrados.length)
 
   const chip = (key: string, label: string) => {
     const activo = filtro === key
@@ -100,7 +111,7 @@ export function PedidosBodegaTabla({ pedidos, responsables }: {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filtrados.map((p) => {
+              {visibles.map((p) => {
                 const falta = p.total - p.listos
                 const pct = p.total > 0 ? Math.round((p.listos / p.total) * 100) : 0
                 const m = META[p.estado] ?? { label: p.estado, color: 'bg-gray-100 text-gray-600' }
@@ -141,6 +152,26 @@ export function PedidosBodegaTabla({ pedidos, responsables }: {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Paginación */}
+      {filtrados.length > POR_PAGINA && (
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-gray-100">
+          <p className="font-body text-xs text-gray-500">
+            Mostrando <span className="font-semibold text-gray-700">{desde}–{hasta}</span> de {filtrados.length}
+          </p>
+          <div className="flex items-center gap-1">
+            <button onClick={() => setPagina((p) => Math.max(1, p - 1))} disabled={paginaSegura <= 1}
+              className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 font-body text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+            </button>
+            <span className="px-2 font-body text-xs text-gray-500">{paginaSegura} / {totalPaginas}</span>
+            <button onClick={() => setPagina((p) => Math.min(totalPaginas, p + 1))} disabled={paginaSegura >= totalPaginas}
+              className="flex items-center gap-1 rounded-lg border border-gray-200 px-2.5 py-1.5 font-body text-xs font-semibold text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed">
+              Siguiente <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       )}
     </div>
