@@ -6,6 +6,7 @@ import { Loader2, Package, MapPin, AlertCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { crearOrdenInsumo } from '../actions'
+import { ProductoThumb } from '../[id]/ProductoThumb'
 
 export interface SedeOpt { id: string; nombre: string; grupo: string | null }
 export interface BodegaOpt { id: string; nombre: string }
@@ -15,13 +16,14 @@ interface ItemForm {
   producto_id: string
   nombre: string
   presentacion: string | null
+  imagen_url: string | null
   maximo: number
   cantidad: number
   /** true = pedido fuera de la parametrización de la sede (sin tope). */
   es_adicional: boolean
 }
 
-interface ProdOpt { id: string; nombre: string; presentacion: string | null; codigo: number | null }
+interface ProdOpt { id: string; nombre: string; presentacion: string | null; codigo: number | null; imagen_url: string | null }
 
 const inputCls =
   'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white transition-colors'
@@ -91,7 +93,7 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
   function agregarAdicional(p: ProdOpt) {
     if (items.some((i) => i.producto_id === p.id)) { toast.info('Ese producto ya está en la orden.'); return }
     setItems((prev) => [...prev, {
-      producto_id: p.id, nombre: p.nombre, presentacion: p.presentacion,
+      producto_id: p.id, nombre: p.nombre, presentacion: p.presentacion, imagen_url: p.imagen_url,
       maximo: 0, cantidad: 1, es_adicional: true,
     }])
     setBuscar('')
@@ -110,10 +112,10 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
     try {
       const [{ data }, { data: prods }] = await Promise.all([
         sb.from('sede_productos')
-          .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion )')
+          .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion, imagen_url )')
           .eq('sede_id', id).eq('activo', true),
         // limit alto: PostgREST corta en 1000 filas por defecto y el catálogo puede ser mayor.
-        sb.from('productos').select('id, nombre_estandar, presentacion, codigo').eq('activo', true).order('nombre_estandar').limit(5000),
+        sb.from('productos').select('id, nombre_estandar, presentacion, codigo, imagen_url').eq('activo', true).order('nombre_estandar').limit(5000),
       ])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const rows = ((data ?? []) as any[])
@@ -122,6 +124,7 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
           producto_id: r.producto.id,
           nombre: r.producto.nombre_estandar,
           presentacion: r.producto.presentacion ?? null,
+          imagen_url: r.producto.imagen_url ?? null,
           maximo: Number(r.cantidad_maxima) || 0,
           cantidad: Number(r.cantidad_maxima) || 0,
           es_adicional: false,
@@ -129,7 +132,7 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
         .sort((a, b) => a.nombre.localeCompare(b.nombre))
       setItems(rows)
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      setCatalogo(((prods ?? []) as any[]).map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null, codigo: p.codigo ?? null })))
+      setCatalogo(((prods ?? []) as any[]).map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null, codigo: p.codigo ?? null, imagen_url: p.imagen_url ?? null })))
       // No es bloqueante: siempre se pueden agregar productos adicionales.
       if (rows.length === 0) setError('Esta sede no tiene productos parametrizados. Puedes agregar los que necesites como adicionales.')
     } finally {
@@ -269,8 +272,13 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
                 {items.map((it, i) => (
                   <tr key={it.producto_id} className={`hover:bg-gray-50/60 ${it.es_adicional ? 'bg-amber-50/40' : ''}`}>
                     <td className="px-4 py-2">
-                      <p className="font-body text-sm text-gray-900 truncate max-w-[260px]">{it.nombre}</p>
-                      {it.presentacion && <p className="font-body text-[11px] text-gray-400">{it.presentacion}</p>}
+                      <div className="flex items-center gap-2.5">
+                        <ProductoThumb url={it.imagen_url} nombre={it.nombre} />
+                        <div className="min-w-0">
+                          <p className="font-body text-sm text-gray-900 truncate max-w-[220px]">{it.nombre}</p>
+                          {it.presentacion && <p className="font-body text-[11px] text-gray-400">{it.presentacion}</p>}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-3 py-2">
                       {it.es_adicional ? (

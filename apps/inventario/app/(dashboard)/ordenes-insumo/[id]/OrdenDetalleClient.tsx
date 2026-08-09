@@ -13,6 +13,7 @@ import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { metaEstado } from '../OrdenesInsumoClient'
 import { actualizarItemAlistamiento, despacharOrden, anularOrden } from '../actions'
 import { VideoDespacho } from './VideoDespacho'
+import { ProductoThumb } from './ProductoThumb'
 
 interface Item {
   id: string
@@ -22,7 +23,7 @@ interface Item {
   cantidad_alistada: number
   alistado: boolean
   es_adicional?: boolean
-  producto: { nombre_estandar: string; presentacion: string | null } | null
+  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null } | null
 }
 interface Orden {
   id: string
@@ -231,15 +232,20 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
                     </button>
                   </td>
                   <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <p className="font-body text-sm text-gray-900 truncate max-w-[240px]">{it.producto?.nombre_estandar ?? '—'}</p>
-                      {it.es_adicional ? (
-                        <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
-                      ) : (
-                        <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
-                      )}
+                    <div className="flex items-center gap-2.5">
+                      <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <p className="font-body text-sm text-gray-900 truncate max-w-[200px]">{it.producto?.nombre_estandar ?? '—'}</p>
+                          {it.es_adicional ? (
+                            <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
+                          ) : (
+                            <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
+                          )}
+                        </div>
+                        {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
+                      </div>
                     </div>
-                    {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
                   </td>
                   <td className="px-3 py-2.5 text-center font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</td>
                   <td className="px-3 py-2.5">

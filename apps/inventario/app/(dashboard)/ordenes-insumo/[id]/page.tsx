@@ -27,7 +27,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       conductor:usuarios!ordenes_insumo_conductor_id_fkey ( nombre ),
       sede:sedes ( nombre, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)

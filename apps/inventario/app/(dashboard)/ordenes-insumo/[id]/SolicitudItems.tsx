@@ -6,6 +6,7 @@ import { Package, Plus, Trash2, Search, Loader2, User2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { actualizarItemSolicitado, agregarItemSolicitado, quitarItemSolicitado } from '../actions'
+import { ProductoThumb } from './ProductoThumb'
 
 interface Item {
   id: string
@@ -14,7 +15,7 @@ interface Item {
   es_adicional?: boolean
   modificado_nombre?: string | null
   modificado_at?: string | null
-  producto: { nombre_estandar: string; presentacion: string | null } | null
+  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null } | null
 }
 interface ProdOpt { id: string; nombre: string; presentacion: string | null }
 
@@ -152,8 +153,13 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: 
             {items.map((it) => (
               <tr key={it.id} className={it.es_adicional ? 'bg-amber-50/30' : ''}>
                 <td className="px-4 py-2.5">
-                  <p className="font-body text-sm text-gray-900 truncate max-w-[260px]">{it.producto?.nombre_estandar ?? '—'}</p>
-                  {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
+                  <div className="flex items-center gap-2.5">
+                    <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
+                    <div className="min-w-0">
+                      <p className="font-body text-sm text-gray-900 truncate max-w-[220px]">{it.producto?.nombre_estandar ?? '—'}</p>
+                      {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
+                    </div>
+                  </div>
                 </td>
                 <td className="px-3 py-2.5">
                   {it.es_adicional ? (
