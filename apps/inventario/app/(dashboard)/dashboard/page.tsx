@@ -49,13 +49,13 @@ export default async function DashboardPage() {
       recibidos:      c((s) => s === 'RECIBIDO'),
     }
 
-    // Órdenes en proceso de alistamiento (para la tabla de control de bodega)
+    // Órdenes en curso (bodega + en camino): se siguen hasta que la sede recibe.
     const { data: act } = await supabase
       .from('ordenes_insumo')
       .select('id, numero, estado, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado )')
-      .in('estado', ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO'])
+      .in('estado', ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO'])
       .order('aprobado_at', { ascending: false, nullsFirst: false })
-      .limit(50)
+      .limit(100)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pedidosBodega = ((act ?? []) as any[]).map((o) => ({
       id: o.id, numero: o.numero, estado: o.estado,
