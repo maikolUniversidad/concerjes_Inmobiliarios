@@ -4,7 +4,9 @@ import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import type { Categoria, Etiqueta } from '@/lib/clasificacion'
 import { sedesPorClasificacion, leerFiltroClasif, cargarEtiquetas } from '@/lib/clasificacion-server'
+import { rangoSemana } from '@/lib/semana'
 import { FiltroClasificacion } from '@/components/clasificacion/FiltroClasificacion'
+import { FiltroSemana } from '@/components/filtros/FiltroSemana'
 import { OrdenesInsumoClient, type OrdenRow } from './OrdenesInsumoClient'
 import { PlantillaDownload, type SedeItem } from './PlantillaDownload'
 import { SobrePedidos, type ProductoSobrePedido } from './SobrePedidos'
@@ -26,6 +28,7 @@ export default async function OrdenesInsumoPage({
 
   const filtro = leerFiltroClasif(sp)
   const sedeIds = await sedesPorClasificacion(supabase, filtro)
+  const semana = rangoSemana(typeof sp.semana === 'string' ? sp.semana : null)
 
   let ordQuery = supabase
     .from('ordenes_insumo')
@@ -37,6 +40,7 @@ export default async function OrdenesInsumoPage({
     `)
     .order('created_at', { ascending: false })
   if (sedeIds !== null) ordQuery = ordQuery.in('sede_id', sedeIds)
+  if (semana) ordQuery = ordQuery.gte('created_at', semana.desde).lt('created_at', semana.hasta)
 
   const [{ data }, { data: sedesData }, { data: misSedes }, { categorias, etiquetas }] = await Promise.all([
     ordQuery,
@@ -139,6 +143,9 @@ export default async function OrdenesInsumoPage({
         </div>
         <PlantillaDownload sedes={sedes} misSedes={miSedesIds} />
       </div>
+      <Suspense fallback={null}>
+        <FiltroSemana />
+      </Suspense>
       <Suspense fallback={null}>
         <FiltroClasificacion categorias={categorias as Categoria[]} etiquetas={etiquetas as Etiqueta[]} />
       </Suspense>

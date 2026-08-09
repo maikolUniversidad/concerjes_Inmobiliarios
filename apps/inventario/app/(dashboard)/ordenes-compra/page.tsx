@@ -1,14 +1,17 @@
 import type { Metadata } from 'next'
+import { Suspense } from 'react'
 import Link from 'next/link'
 import { FileText, Plus, Ban, SlidersHorizontal, Printer } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import { DeleteButton } from '@/components/ui/DeleteButton'
+import { rangoSemana } from '@/lib/semana'
+import { FiltroSemana } from '@/components/filtros/FiltroSemana'
 import { anularOC } from './actions'
 import type { EstadoOC } from '@/lib/types/database'
 
 export const metadata: Metadata = { title: 'Órdenes de Compra' }
-export const revalidate = 30
+export const dynamic = 'force-dynamic'
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
@@ -35,15 +38,24 @@ interface OCRow {
   proveedor: { nombre: string } | null
 }
 
-export default async function OrdenesCompraPage() {
+export default async function OrdenesCompraPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>
+}) {
   await requirePermiso('ver_ordenes_compra')
   const supabase = await createClient()
-  const { data } = await supabase
+  const sp = await searchParams
+  const semana = rangoSemana(typeof sp.semana === 'string' ? sp.semana : null)
+
+  let query = supabase
     .from('ordenes_compra')
     .select('id, numero_oc, estado, periodo, fecha_emision, valor_total, proveedor:proveedores ( nombre )')
     .order('fecha_emision', { ascending: false })
-    .limit(100)
+    .limit(200)
+  if (semana) query = query.gte('created_at', semana.desde).lt('created_at', semana.hasta)
 
+  const { data } = await query
   const ordenes = (data as unknown as OCRow[]) ?? []
 
   return (
@@ -57,6 +69,10 @@ export default async function OrdenesCompraPage() {
           <Plus className="w-4 h-4" /> Nueva orden
         </Link>
       </div>
+
+      <Suspense fallback={null}>
+        <FiltroSemana />
+      </Suspense>
 
       {ordenes.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400">
