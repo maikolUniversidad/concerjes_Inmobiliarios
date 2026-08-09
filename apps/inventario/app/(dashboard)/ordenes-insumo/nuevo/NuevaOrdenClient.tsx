@@ -36,6 +36,8 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
   const [sedeId, setSedeId] = useState('')
   const [bodegaId, setBodegaId] = useState('')
   const [observacion, setObservacion] = useState('')
+  const [fechaEntrega, setFechaEntrega] = useState('')
+  const [urgente, setUrgente] = useState(false)
   const [items, setItems] = useState<ItemForm[]>([])
   const [cargando, setCargando] = useState(false)
   const [guardando, setGuardando] = useState(false)
@@ -160,6 +162,8 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
         sede_id: sedeId,
         bodega_id: bodegaId || null,
         observacion: observacion || null,
+        fecha_entrega_pactada: fechaEntrega || null,
+        urgente,
         items: conCantidad.map((it) => ({
           producto_id: it.producto_id, cantidad: it.cantidad, maximo: it.maximo, es_adicional: it.es_adicional,
         })),
@@ -390,10 +394,23 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
       </div>
 
       {/* Observación */}
-      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-        <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Observación</label>
-        <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} rows={2}
-          className={`${inputCls} resize-none`} placeholder="Notas del pedido (opcional)" />
+      <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-3 items-end">
+          <div>
+            <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Fecha de entrega pactada</label>
+            <input type="date" value={fechaEntrega} onChange={(e) => setFechaEntrega(e.target.value)} className={inputCls} />
+          </div>
+          <label className="inline-flex items-center gap-2 font-body text-sm text-gray-700 pb-2 cursor-pointer">
+            <input type="checkbox" checked={urgente} onChange={(e) => setUrgente(e.target.checked)}
+              className="w-4 h-4 rounded border-gray-300 text-brand-green focus:ring-brand-green" />
+            Marcar urgente
+          </label>
+        </div>
+        <div>
+          <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Observación</label>
+          <textarea value={observacion} onChange={(e) => setObservacion(e.target.value)} rows={2}
+            className={`${inputCls} resize-none`} placeholder="Notas del pedido (opcional)" />
+        </div>
       </div>
 
       <div className="flex items-center justify-end gap-3">

@@ -7,6 +7,7 @@ import { SolicitudItems } from './SolicitudItems'
 import { FlujoOrden, type EventoOrden } from './FlujoOrden'
 import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
 import { BorrarOrdenBtn } from './BorrarOrdenBtn'
+import { UrgenciaEditor } from './UrgenciaEditor'
 
 export const metadata: Metadata = { title: 'Orden de insumo' }
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     .from('ordenes_insumo')
     .select(`
       id, numero, estado, periodo, observacion, created_at, aprobado_at, creado_por,
+      fecha_entrega_pactada, urgente,
       aprobado_solicitante_at, aprobado_coordinador_at, recibido_at, recibido_obs,
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
       tipo_despacho, transportadora_nombre, transportadora_guia,
@@ -59,6 +61,12 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo'))
     && !['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
 
+  // La prioridad (urgente / fecha de entrega) se puede ajustar mientras la orden
+  // siga en curso (no recibida ni anulada).
+  const puedeEditarUrgencia =
+    (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo') || perm.puede('alistar_ordenes_insumo'))
+    && !['RECIBIDO', 'ANULADA'].includes(estado)
+
   // Datos planos para los PDF (orden / remisión que viaja con el pedido).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const o = orden as any
@@ -90,6 +98,13 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         firmaCoordinador={o.aprobado_coordinador_at ?? null}
         esSolicitante={Boolean(user && o.creado_por === user.id)}
         puedeRecibir={perm.puede('recibir_ordenes_insumo')}
+      />
+      <UrgenciaEditor
+        ordenId={id}
+        estado={estado}
+        urgente={!!o.urgente}
+        fechaEntrega={o.fecha_entrega_pactada ?? null}
+        puedeEditar={puedeEditarUrgencia}
       />
       {/* Etapa de SOLICITUD: ajustar cantidades / agregar / quitar productos. */}
       {enSolicitud && (

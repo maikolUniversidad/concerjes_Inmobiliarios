@@ -28,6 +28,7 @@ const TIPO_META: Record<string, { label: string; color: string }> = {
   ITEM_AGREGADO:       { label: 'Producto agregado',  color: 'bg-lime-100 text-lime-700' },
   ITEM_QUITADO:        { label: 'Producto quitado',   color: 'bg-rose-100 text-rose-700' },
   APROBACION_RETIRADA: { label: 'Aprobación retirada', color: 'bg-orange-100 text-orange-800' },
+  URGENCIA:            { label: 'Prioridad',          color: 'bg-orange-100 text-orange-700' },
   COMENTARIO:          { label: 'Comentario',         color: 'bg-gray-100 text-gray-600' },
   ALISTAMIENTO:        { label: 'Alistamiento',       color: 'bg-violet-100 text-violet-700' },
   DESPACHO:            { label: 'Enviado',            color: 'bg-emerald-100 text-emerald-700' },
