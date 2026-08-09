@@ -34,6 +34,7 @@ export default async function OrdenesInsumoPage({
     .from('ordenes_insumo')
     .select(`
       id, numero, estado, periodo, created_at, despachado_at, observacion,
+      fecha_entrega_pactada, urgente,
       sede:sedes ( nombre ),
       items:orden_insumo_items ( id, alistado ),
       responsables:orden_insumo_responsables ( usuario_id )
@@ -75,6 +76,8 @@ export default async function OrdenesInsumoPage({
     total_items: o.items?.length ?? 0,
     alistados: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
     responsables: o.responsables?.length ?? 0,
+    fecha_entrega_pactada: o.fecha_entrega_pactada ?? null,
+    urgente: !!o.urgente,
   }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -150,7 +153,11 @@ export default async function OrdenesInsumoPage({
         <FiltroClasificacion categorias={categorias as Categoria[]} etiquetas={etiquetas as Etiqueta[]} />
       </Suspense>
       <SobrePedidos items={sobrePedidos} />
-      <OrdenesInsumoClient ordenes={ordenes} puedeCrear={perm.puede('crear_ordenes_insumo')} />
+      <OrdenesInsumoClient
+        ordenes={ordenes}
+        puedeCrear={perm.puede('crear_ordenes_insumo')}
+        estadoInicial={typeof sp.estado === 'string' ? sp.estado : undefined}
+      />
     </div>
   )
 }

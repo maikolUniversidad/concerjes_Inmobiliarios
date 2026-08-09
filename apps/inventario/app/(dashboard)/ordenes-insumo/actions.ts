@@ -54,6 +54,8 @@ export async function crearOrdenInsumo(input: {
   observacion?: string | null
   items: { producto_id: string; cantidad: number; maximo: number; es_adicional?: boolean }[]
   responsables?: string[]
+  fecha_entrega_pactada?: string | null
+  urgente?: boolean
 }): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -88,6 +90,8 @@ export async function crearOrdenInsumo(input: {
       aprobado_por: user.id, aprobado_at: nowIso,
       aprobado_solicitante_por: user.id, aprobado_solicitante_at: nowIso,
       aprobado_coordinador_por: user.id, aprobado_coordinador_at: nowIso,
+      fecha_entrega_pactada: input.fecha_entrega_pactada || null,
+      urgente: !!input.urgente,
     }).select('id').single()
     if (!res.error) { orden = res.data; break }
     if (esColisionNumero(res.error)) { consecutivo++; continue }   // número tomado → probar el siguiente
@@ -641,6 +645,35 @@ export async function anularOrden(ordenId: string): Promise<ActionResult> {
   if (error) return { error: error.message }
   revalidatePath('/ordenes-insumo')
   revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
+}
+
+/** Fija/actualiza la urgencia y la fecha de entrega pactada de una orden. */
+export async function actualizarUrgencia(
+  ordenId: string, patch: { urgente?: boolean; fechaEntrega?: string | null },
+): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo') && !perm.puede('alistar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para cambiar la urgencia.' }
+  }
+  const sb = supabase as DB
+
+  const upd: Record<string, unknown> = {}
+  if (patch.urgente !== undefined) upd.urgente = !!patch.urgente
+  if (patch.fechaEntrega !== undefined) upd.fecha_entrega_pactada = patch.fechaEntrega || null
+  if (Object.keys(upd).length === 0) return { ok: true }
+
+  const { error } = await sb.from('ordenes_insumo').update(upd).eq('id', ordenId)
+  if (error) return { error: error.message }
+
+  const partes: string[] = []
+  if (patch.urgente !== undefined) partes.push(patch.urgente ? 'marcada como URGENTE' : 'quitada la marca de urgente')
+  if (patch.fechaEntrega !== undefined) partes.push(patch.fechaEntrega ? `entrega pactada: ${patch.fechaEntrega}` : 'sin fecha de entrega')
+  await sb.rpc('oi_evento', { p_orden: ordenId, p_tipo: 'URGENCIA', p_mensaje: `Prioridad actualizada — ${partes.join(' · ')}.` })
+
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
   return { ok: true }
 }
 
