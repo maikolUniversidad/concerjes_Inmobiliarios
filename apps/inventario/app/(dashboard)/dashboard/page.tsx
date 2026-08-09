@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario } from '@/lib/permisos-server'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { MovimientosChart, type ChartPoint } from './MovimientosChart'
+import { PedidosBodegaTabla, type PedidoFila } from './PedidosBodegaTabla'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 export const dynamic = 'force-dynamic'
@@ -34,6 +35,8 @@ export default async function DashboardPage() {
 
   // ── Pedidos (pipeline de órdenes de insumo) ──────────────────────────────
   let ped = { porAlistar: 0, enAlistamiento: 0, listos: 0, porEntregar: 0, recibidos: 0 }
+  let pedidosBodega: PedidoFila[] = []
+  let responsables: Record<string, string[]> = {}
   if (verPedidos) {
     const { data: est } = await supabase.from('ordenes_insumo').select('estado')
     const e = ((est ?? []) as { estado: string }[]).map((r) => r.estado)
@@ -44,6 +47,31 @@ export default async function DashboardPage() {
       listos:         c((s) => s === 'ALISTADO'),
       porEntregar:    c((s) => s === 'DESPACHADO' || s === 'EN_RUTA' || s === 'ENTREGADO'),
       recibidos:      c((s) => s === 'RECIBIDO'),
+    }
+
+    // Órdenes en proceso de alistamiento (para la tabla de control de bodega)
+    const { data: act } = await supabase
+      .from('ordenes_insumo')
+      .select('id, numero, estado, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado )')
+      .in('estado', ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO'])
+      .order('aprobado_at', { ascending: false, nullsFirst: false })
+      .limit(50)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pedidosBodega = ((act ?? []) as any[]).map((o) => ({
+      id: o.id, numero: o.numero, estado: o.estado,
+      sede: o.sede?.nombre ?? null,
+      total: o.items?.length ?? 0,
+      listos: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
+    }))
+
+    if (pedidosBodega.length > 0) {
+      const { data: resp } = await supabase
+        .from('responsables_opciones')
+        .select('orden_id, nombre')
+        .in('orden_id', pedidosBodega.map((p) => p.id))
+      for (const r of ((resp ?? []) as { orden_id: string; nombre: string }[])) {
+        (responsables[r.orden_id] ??= []).push(r.nombre)
+      }
     }
   }
 
@@ -107,6 +135,11 @@ export default async function DashboardPage() {
             <Kpi label="Listas" value={ped.listos} sub="alistadas, sin despachar" icon={Boxes} color="bg-teal-50 text-teal-600" href="/ordenes-insumo?estado=ALISTADO" />
             <Kpi label="Por entregar" value={ped.porEntregar} sub="despachadas / en ruta" icon={Truck} color="bg-amber-50 text-amber-600" href="/ordenes-insumo?estado=DESPACHADO" />
             <Kpi label="Recibidas" value={ped.recibidos} sub="entregadas en sede" icon={CheckCircle2} color="bg-green-50 text-green-600" href="/ordenes-insumo?estado=RECIBIDO" />
+          </div>
+
+          {/* Tabla de control de bodega: qué falta por alistar y qué ya está */}
+          <div className="mt-4">
+            <PedidosBodegaTabla pedidos={pedidosBodega} responsables={responsables} />
           </div>
         </section>
       )}
