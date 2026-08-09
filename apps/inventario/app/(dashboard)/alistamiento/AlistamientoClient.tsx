@@ -2,7 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { MapPin, ArrowRight, Truck, Search, PackageCheck, X } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import {
+  MapPin, ArrowRight, Truck, Search, PackageCheck, X, LayoutGrid, List,
+  ClipboardCheck, Boxes, Clock, ListChecks, PackageOpen,
+} from 'lucide-react'
 
 export interface Fila {
   id: string; numero: string; estado: string; created_at: string; aprobado_at: string | null
@@ -18,13 +22,35 @@ const META: Record<string, { label: string; color: string; chip: string }> = {
 }
 const ORDEN_ESTADOS = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO']
 
-// Búsqueda "inteligente": sin acentos, sin mayúsculas, por tokens (cada palabra
-// escrita debe aparecer en algún lugar del texto, en cualquier orden).
 const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
+const cuenta = (o: Fila) => {
+  const total = o.items?.length ?? 0
+  const listos = (o.items ?? []).filter((i) => i.alistado).length
+  return { total, listos, falta: total - listos, pct: total > 0 ? Math.round((listos / total) * 100) : 0 }
+}
+
+type Vista = 'tarjetas' | 'tabla'
+
 export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
+  const router = useRouter()
   const [q, setQ] = useState('')
   const [filtro, setFiltro] = useState<string>('PENDIENTES')
+  const [vista, setVista] = useState<Vista>('tabla')
+
+  // ── Resumen global de la bodega (todas las órdenes, no el filtro) ──────────
+  const resumen = useMemo(() => {
+    const r = { porAlistar: 0, enCurso: 0, listas: 0, itemsFalta: 0, itemsListos: 0 }
+    for (const o of ordenes) {
+      if (o.estado === 'APROBADA') r.porAlistar++
+      else if (o.estado === 'EN_ALISTAMIENTO') r.enCurso++
+      else if (o.estado === 'ALISTADO') r.listas++
+      if (o.estado !== 'DESPACHADO') {
+        const c = cuenta(o); r.itemsFalta += c.falta; r.itemsListos += c.listos
+      }
+    }
+    return r
+  }, [ordenes])
 
   const conteos = useMemo(() => {
     const c: Record<string, number> = { TODOS: ordenes.length, PENDIENTES: 0 }
@@ -60,19 +86,29 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Buscador */}
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <input
-          value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por número o sede…"
-          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-9 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20"
-        />
-        {q && (
-          <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            <X className="h-4 w-4" />
-          </button>
-        )}
+      {/* ── Cards de control de bodega ── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <Card label="Por alistar" value={resumen.porAlistar} sub="órdenes aprobadas" icon={ClipboardCheck} color="bg-blue-50 text-blue-600" onClick={() => setFiltro('APROBADA')} />
+        <Card label="En alistamiento" value={resumen.enCurso} sub="en curso ahora" icon={Clock} color="bg-violet-50 text-violet-600" onClick={() => setFiltro('EN_ALISTAMIENTO')} />
+        <Card label="Listas" value={resumen.listas} sub="alistadas, por despachar" icon={ListChecks} color="bg-teal-50 text-teal-600" onClick={() => setFiltro('ALISTADO')} />
+        <Card label="Ítems por alistar" value={resumen.itemsFalta} sub="pendientes en bodega" icon={PackageOpen} color="bg-amber-50 text-amber-700" alerta={resumen.itemsFalta > 0} />
+        <Card label="Ítems alistados" value={resumen.itemsListos} sub="ya preparados" icon={Boxes} color="bg-green-50 text-green-600" />
+      </div>
+
+      {/* Buscador + toggle de vista */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-md">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar por número o sede…"
+            className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-9 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20" />
+          {q && <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"><X className="h-4 w-4" /></button>}
+        </div>
+        <div className="flex rounded-xl border border-gray-200 bg-white p-0.5">
+          <button onClick={() => setVista('tabla')} title="Tabla"
+            className={'rounded-lg p-2 ' + (vista === 'tabla' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-100')}><List className="h-4 w-4" /></button>
+          <button onClick={() => setVista('tarjetas')} title="Tarjetas"
+            className={'rounded-lg p-2 ' + (vista === 'tarjetas' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-100')}><LayoutGrid className="h-4 w-4" /></button>
+        </div>
       </div>
 
       {/* Filtros por estado */}
@@ -87,17 +123,58 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
         <div className="rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center text-gray-400">
           <PackageCheck className="mx-auto mb-3 h-10 w-10 text-gray-300" />
           <p className="font-heading text-lg font-bold text-gray-600">Sin resultados</p>
-          <p className="mt-1 font-body text-sm">
-            {q ? 'Ninguna orden coincide con tu búsqueda.' : 'No hay órdenes en este estado.'}
-          </p>
+          <p className="mt-1 font-body text-sm">{q ? 'Ninguna orden coincide con tu búsqueda.' : 'No hay órdenes en este estado.'}</p>
+        </div>
+      ) : vista === 'tabla' ? (
+        /* ── Tabla de control ── */
+        <div className="overflow-x-auto rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <table className="w-full min-w-[680px]">
+            <thead>
+              <tr className="border-b border-gray-100 bg-gray-50/60">
+                <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Orden</th>
+                <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Sede</th>
+                <th className="px-4 py-3 text-center font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Estado</th>
+                <th className="px-4 py-3 text-right font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Falta</th>
+                <th className="px-4 py-3 text-right font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Alistado</th>
+                <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500 w-40">Avance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filtradas.map((o) => {
+                const c = cuenta(o)
+                const m = META[o.estado] ?? { label: o.estado, color: 'bg-gray-100 text-gray-600' }
+                return (
+                  <tr key={o.id} onClick={() => router.push(`/ordenes-insumo/${o.id}`)}
+                    className="cursor-pointer hover:bg-gray-50/70">
+                    <td className="px-4 py-3 font-heading text-sm font-bold text-gray-900">{o.numero}</td>
+                    <td className="px-4 py-3 font-body text-sm text-gray-600 max-w-[220px] truncate">{o.sede?.nombre ?? 'Sin sede'}</td>
+                    <td className="px-4 py-3 text-center">
+                      <span className={`rounded-full px-2 py-0.5 font-body text-[11px] font-semibold ${m.color}`}>{m.label}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <span className={'font-heading text-base font-bold ' + (c.falta > 0 ? 'text-amber-600' : 'text-gray-300')}>{c.falta}</span>
+                    </td>
+                    <td className="px-4 py-3 text-right font-body text-sm text-gray-700">{c.listos}/{c.total}</td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100">
+                          <div className={'h-full rounded-full ' + (c.pct === 100 ? 'bg-teal-500' : 'bg-brand-green')} style={{ width: `${c.pct}%` }} />
+                        </div>
+                        <span className="w-9 text-right font-body text-xs text-gray-400">{c.pct}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
         </div>
       ) : (
+        /* ── Tarjetas ── */
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtradas.map((o) => {
             const m = META[o.estado] ?? { label: o.estado, color: 'bg-gray-100 text-gray-600' }
-            const total = o.items?.length ?? 0
-            const listos = (o.items ?? []).filter((i) => i.alistado).length
-            const pct = total > 0 ? Math.round((listos / total) * 100) : 0
+            const c = cuenta(o)
             return (
               <Link key={o.id} href={`/ordenes-insumo/${o.id}`}
                 className="group rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-brand-green/40 hover:shadow">
@@ -110,10 +187,10 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
                 </p>
                 <div className="mt-3">
                   <div className="mb-1 flex items-center justify-between font-body text-xs text-gray-500">
-                    <span>Alistamiento</span><span>{listos}/{total} ítems</span>
+                    <span>{c.falta > 0 ? `Faltan ${c.falta}` : 'Completo'}</span><span>{c.listos}/{c.total} ítems</span>
                   </div>
                   <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
-                    <div className="h-full rounded-full bg-brand-green transition-all" style={{ width: `${pct}%` }} />
+                    <div className="h-full rounded-full bg-brand-green transition-all" style={{ width: `${c.pct}%` }} />
                   </div>
                 </div>
                 <span className="mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-brand-green">
@@ -128,4 +205,20 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
       )}
     </div>
   )
+}
+
+function Card({ label, value, sub, icon: Icon, color, onClick, alerta }: {
+  label: string; value: number; sub: string
+  icon: React.ComponentType<{ className?: string }>; color: string; onClick?: () => void; alerta?: boolean
+}) {
+  const cls = 'rounded-2xl border border-gray-100 bg-white p-4 shadow-sm text-left transition-all ' + (onClick ? 'hover:border-brand-green/40 hover:shadow cursor-pointer' : '')
+  const inner = (
+    <>
+      <div className={`mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${color}`}><Icon className="h-4 w-4" /></div>
+      <p className={'font-heading text-2xl font-bold ' + (alerta ? 'text-amber-600' : 'text-gray-900')}>{value.toLocaleString('es-CO')}</p>
+      <p className="font-body text-xs font-semibold text-gray-700">{label}</p>
+      <p className="font-body text-[11px] text-gray-400">{sub}</p>
+    </>
+  )
+  return onClick ? <button onClick={onClick} className={cls}>{inner}</button> : <div className={cls}>{inner}</div>
 }
