@@ -7,7 +7,30 @@ type DB = any
 const VERDE = 'FF2E7D32'
 const MAX_FILAS = 10000
 
-export interface TablaExport { tabla: string; hoja: string }
+export interface TablaExport {
+  tabla: string
+  hoja: string
+  /** Select personalizado (p. ej. con join a productos). Por defecto '*'. */
+  select?: string
+  /** Aplana/reordena cada fila (p. ej. incrusta el nombre del producto). */
+  plano?: (row: Record<string, unknown>) => Record<string, unknown>
+}
+
+// Aplana una fila de inventario incrustando el nombre/código del producto justo
+// después de producto_id, para que el Excel sea legible sin cruzar hojas.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function conNombreProducto(r: Record<string, any>): Record<string, unknown> {
+  const p = r.producto ?? {}
+  const { producto: _omit, id, producto_id, ...resto } = r
+  return {
+    id,
+    producto_id,
+    producto_nombre: p.nombre_estandar ?? null,
+    producto_ref: p.ref ?? null,
+    producto_codigo: p.codigo ?? null,
+    ...resto,
+  }
+}
 
 export interface GrupoExport { id: string; nombre: string; tablas: TablaExport[] }
 
@@ -15,8 +38,10 @@ export interface GrupoExport { id: string; nombre: string; tablas: TablaExport[]
 export const GRUPOS_EXPORT: GrupoExport[] = [
   { id: 'inventario', nombre: 'Inventario', tablas: [
     { tabla: 'productos', hoja: 'Productos' },
-    { tabla: 'stock', hoja: 'Stock' },
-    { tabla: 'movimientos', hoja: 'Movimientos' },
+    { tabla: 'stock', hoja: 'Stock',
+      select: '*, producto:productos ( nombre_estandar, ref, codigo )', plano: conNombreProducto },
+    { tabla: 'movimientos', hoja: 'Movimientos',
+      select: '*, producto:productos ( nombre_estandar, ref, codigo )', plano: conNombreProducto },
     { tabla: 'producto_fotos', hoja: 'Fotos producto' },
   ]},
   { id: 'bodegas', nombre: 'Bodegas', tablas: [
@@ -80,9 +105,10 @@ export async function exportarExcel(
     const t = tablas[i]
     onProgress?.(t.hoja, i + 1, tablas.length)
     const ws = wb.addWorksheet(t.hoja.slice(0, 31))
-    const { data, error } = await supabase.from(t.tabla).select('*').limit(MAX_FILAS)
+    const { data, error } = await supabase.from(t.tabla).select(t.select ?? '*').limit(MAX_FILAS)
     if (error) { ws.addRow([`Error: ${error.message}`]); continue }
-    const rows = (data ?? []) as Record<string, unknown>[]
+    let rows = (data ?? []) as Record<string, unknown>[]
+    if (t.plano) rows = rows.map(t.plano)
     if (rows.length === 0) { ws.addRow(['(sin datos)']); continue }
 
     const cols = Object.keys(rows[0])
