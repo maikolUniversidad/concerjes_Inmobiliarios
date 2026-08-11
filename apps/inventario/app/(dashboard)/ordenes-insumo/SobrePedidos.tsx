@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, ChevronDown, ChevronRight, PackageX, ExternalLink } from 'lucide-react'
+import { AlertTriangle, ChevronDown, ChevronRight, PackageX, ExternalLink, Download } from 'lucide-react'
 
 export interface OrdenDemanda { orden_id: string; numero: string; estado: string; sede: string | null; cantidad: number }
 export interface ProductoSobrePedido {
@@ -16,14 +16,98 @@ const ESTADO_LABEL: Record<string, string> = {
   PENDIENTE: 'Pendiente', EN_ALISTAMIENTO: 'Alistando', ALISTADO: 'Alistado', DESPACHADO: 'Despachado', ANULADA: 'Anulada',
 }
 
+const VERDE = 'FF2E7D32'
+const ROJO  = 'FFC62828'
+
+async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
+  const ExcelJS = (await import('exceljs')).default
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Conserjes Inmobiliarios'
+
+  // Hoja 1: resumen por producto
+  const wsResumen = wb.addWorksheet('Resumen')
+  wsResumen.columns = [
+    { header: 'Producto',      key: 'nombre',       width: 42 },
+    { header: 'Presentación',  key: 'presentacion', width: 20 },
+    { header: 'Stock real',    key: 'stock_real',   width: 14 },
+    { header: 'Comprometido',  key: 'comprometido', width: 14 },
+    { header: 'Déficit',       key: 'disponible',   width: 12 },
+    { header: '# Órdenes',     key: 'num_ordenes',  width: 12 },
+  ]
+  const hResumen = wsResumen.getRow(1)
+  hResumen.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  hResumen.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO } }
+  hResumen.alignment = { vertical: 'middle' }
+
+  for (const p of items) {
+    const row = wsResumen.addRow({
+      nombre: p.nombre,
+      presentacion: p.presentacion ?? '',
+      stock_real: p.stock_real,
+      comprometido: p.comprometido,
+      disponible: p.disponible,
+      num_ordenes: p.ordenes.length,
+    })
+    const deficitCell = row.getCell('disponible')
+    deficitCell.font = { bold: true, color: { argb: ROJO } }
+  }
+  wsResumen.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 6 } }
+
+  // Hoja 2: detalle por orden
+  const wsDetalle = wb.addWorksheet('Detalle por orden')
+  wsDetalle.columns = [
+    { header: 'Producto',      key: 'nombre',      width: 42 },
+    { header: 'Presentación',  key: 'presentacion',width: 20 },
+    { header: 'Orden',         key: 'numero',      width: 18 },
+    { header: 'Estado',        key: 'estado',      width: 18 },
+    { header: 'Sede',          key: 'sede',        width: 30 },
+    { header: 'Cantidad pedida', key: 'cantidad',  width: 16 },
+    { header: 'Déficit total', key: 'disponible',  width: 14 },
+  ]
+  const hDetalle = wsDetalle.getRow(1)
+  hDetalle.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+  hDetalle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } }
+  hDetalle.alignment = { vertical: 'middle' }
+
+  for (const p of items) {
+    for (const o of p.ordenes) {
+      wsDetalle.addRow({
+        nombre: p.nombre,
+        presentacion: p.presentacion ?? '',
+        numero: o.numero,
+        estado: ESTADO_LABEL[o.estado] ?? o.estado,
+        sede: o.sede ?? '—',
+        cantidad: o.cantidad,
+        disponible: p.disponible,
+      })
+    }
+  }
+  wsDetalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } }
+
+  const buf = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  const fecha = new Date().toISOString().slice(0, 10)
+  a.href = url; a.download = `sobre-pedidos-${fecha}.xlsx`; a.click()
+  URL.revokeObjectURL(url)
+}
+
 export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
   const [abierto, setAbierto] = useState(false)
   const [expandido, setExpandido] = useState<Set<string>>(new Set())
+  const [exportando, setExportando] = useState(false)
 
   if (items.length === 0) return null
 
   function toggle(id: string) {
     setExpandido(s => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+
+  async function handleExportar(e: React.MouseEvent) {
+    e.stopPropagation()
+    setExportando(true)
+    try { await exportarSobrePedidos(items) } finally { setExportando(false) }
   }
 
   return (
@@ -35,7 +119,17 @@ export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
           <span className="rounded-full bg-red-600 px-2 py-0.5 font-body text-[11px] font-bold text-white">{items.length}</span>
           <span className="font-body text-xs text-red-500/80 hidden sm:inline">se pidió más de lo que hay en órdenes en cola</span>
         </div>
-        {abierto ? <ChevronDown className="w-4 h-4 text-red-400" /> : <ChevronRight className="w-4 h-4 text-red-400" />}
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleExportar}
+            disabled={exportando}
+            className="flex items-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 py-1 font-body text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 transition-colors"
+          >
+            <Download className="w-3.5 h-3.5" />
+            {exportando ? 'Exportando…' : 'Excel'}
+          </button>
+          {abierto ? <ChevronDown className="w-4 h-4 text-red-400" /> : <ChevronRight className="w-4 h-4 text-red-400" />}
+        </div>
       </button>
 
       {abierto && (
