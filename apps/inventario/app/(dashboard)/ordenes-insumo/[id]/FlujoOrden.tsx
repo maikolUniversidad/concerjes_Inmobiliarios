@@ -6,7 +6,7 @@ import { toast } from 'sonner'
 import {
   Send, CheckCircle2, MessageSquare, Loader2, PenLine, ArrowRight, Clock, PackageCheck,
 } from 'lucide-react'
-import { enviarARevision, solicitarCambios, aprobarOrden, comentarOrden, confirmarRecepcion } from '../actions'
+import { enviarARevision, solicitarCambios, aprobarOrden, aprobarBorrador, comentarOrden, confirmarRecepcion } from '../actions'
 
 export interface EventoOrden {
   id: string
@@ -49,8 +49,8 @@ const AUTORIZACION_ACTIVA = false
 
 /** Línea de estado del proceso: quién hace cada etapa. */
 const PASOS = [
-  { key: 'BORRADOR',     label: 'Borrador',     quien: 'Supervisor de sede' },
-  { key: 'APROBADA',     label: 'Aprobado',     quien: AUTORIZACION_ACTIVA ? 'Solicitante + Coordinador' : 'Automático al crear' },
+  { key: 'BORRADOR',     label: 'Borrador',     quien: 'Se crea y se ajusta' },
+  { key: 'APROBADA',     label: 'Aprobado',     quien: AUTORIZACION_ACTIVA ? 'Solicitante + Coordinador' : 'Con el botón Aprobar' },
   { key: 'ALISTAMIENTO', label: 'Alistamiento', quien: 'Bodega' },
   { key: 'ENVIADO',      label: 'Enviado',      quien: 'Despacho' },
   { key: 'RECIBIDO',     label: 'Recibido',     quien: 'Supervisor del contrato' },
@@ -122,6 +122,9 @@ export function FlujoOrden({
   const editable = ['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(estado)
   const enRevision = estado === 'EN_REVISION'
   const enviada = estado === 'DESPACHADO'
+  // Aprobación en una segunda instancia: BORRADOR → APROBADA con un botón.
+  const enBorrador = ['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(estado)
+  const puedeAprobarBorrador = enBorrador && (puedeProponer || puedeAprobar)
 
   // Cada quien firma su lado; nadie firma dos veces.
   const miFirma = esSolicitante ? firmaSolicitante : firmaCoordinador
@@ -138,7 +141,7 @@ export function FlujoOrden({
   }
 
   const descripcion =
-    estado === 'BORRADOR' ? 'Propuesta en borrador. Ajusta las cantidades y agrega o quita productos; envíala a la central cuando esté lista.'
+    estado === 'BORRADOR' ? 'Orden en borrador. Revisa y ajusta las cantidades y agrega o quita productos; cuando esté lista pulsa «Aprobar» para enviarla a Alistamiento de bodega.'
     : estado === 'EN_REVISION' ? 'En revisión. Deben aprobarla el solicitante y el coordinador de conserjes. Aún puedes ajustar el pedido: si lo cambias, se retiran las aprobaciones y ambos deben aprobar de nuevo.'
     : estado === 'CAMBIOS_SOLICITADOS' ? 'La central solicitó cambios. Se retiraron las aprobaciones: ajusta la propuesta, reenvíala y ambos deben aprobar de nuevo.'
     : estado === 'APROBADA' ? (AUTORIZACION_ACTIVA
@@ -197,6 +200,13 @@ export function FlujoOrden({
             className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green resize-none"
           />
           <div className="flex flex-wrap gap-2">
+            {/* Aprobar borrador (segunda instancia) — flujo simple sin doble firma */}
+            {!AUTORIZACION_ACTIVA && puedeAprobarBorrador && (
+              <button onClick={() => run(() => aprobarBorrador(ordenId, msg), 'Orden aprobada. Ya está en Alistamiento.')} disabled={pending}
+                className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">
+                {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Aprobar
+              </button>
+            )}
             {AUTORIZACION_ACTIVA && puedeProponer && editable && (
               <button onClick={() => run(() => enviarARevision(ordenId, msg), 'Enviada a la central')} disabled={pending}
                 className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">

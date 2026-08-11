@@ -82,14 +82,11 @@ export async function crearOrdenInsumo(input: {
   let consecutivo = await siguienteConsecutivoOI(sb, prefijo)
   for (let intento = 0; intento < 15; intento++) {
     const numero = `${prefijo}${String(consecutivo).padStart(3, '0')}`
-    // Autorización por supervisor DESACTIVADA de momento: la orden nace APROBADA y
-    // pasa directo a Alistamiento (antes: BORRADOR → revisión → doble aprobación).
+    // La orden nace en BORRADOR: se revisa/ajusta y luego se pasa a APROBADA con
+    // el botón "Aprobar" (segunda instancia). Solo al aprobar entra a Alistamiento.
     const res = await sb.from('ordenes_insumo').insert({
       numero, sede_id: input.sede_id, bodega_id: input.bodega_id || null,
-      observacion: input.observacion?.trim() || null, periodo, estado: 'APROBADA', creado_por: user.id,
-      aprobado_por: user.id, aprobado_at: nowIso,
-      aprobado_solicitante_por: user.id, aprobado_solicitante_at: nowIso,
-      aprobado_coordinador_por: user.id, aprobado_coordinador_at: nowIso,
+      observacion: input.observacion?.trim() || null, periodo, estado: 'BORRADOR', creado_por: user.id,
       fecha_entrega_pactada: input.fecha_entrega_pactada || null,
       urgente: !!input.urgente,
     }).select('id').single()
@@ -123,12 +120,58 @@ export async function crearOrdenInsumo(input: {
 
   await sb.rpc('oi_evento', {
     p_orden: orden.id, p_tipo: 'CREACION',
-    p_mensaje: `Orden creada y aprobada con ${items.length} producto(s). Pasa directo a alistamiento.`,
-    p_nue: 'APROBADA',
+    p_mensaje: `Orden creada en borrador con ${items.length} producto(s). Pendiente de aprobar.`,
+    p_nue: 'BORRADOR',
   })
 
   revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
   redirect(`/ordenes-insumo/${orden.id}`)
+}
+
+/**
+ * Aprueba un BORRADOR (segunda instancia): pasa la orden a APROBADA y la habilita
+ * para Alistamiento en bodega. Un solo clic, con el botón "Aprobar".
+ */
+export async function aprobarBorrador(ordenId: string, mensaje?: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para aprobar órdenes.' }
+  }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(orden.estado)) {
+    return { error: 'Solo se aprueba una orden en borrador.' }
+  }
+
+  // ¿Tiene al menos un producto con cantidad? Si no, no tiene sentido aprobar.
+  const { count } = await sb.from('orden_insumo_items')
+    .select('id', { count: 'exact', head: true }).eq('orden_id', ordenId).gt('cantidad_solicitada', 0)
+  if (!count || count === 0) return { error: 'La orden no tiene productos con cantidad. Agrega productos antes de aprobar.' }
+
+  const ahora = new Date().toISOString()
+  const { error } = await sb.from('ordenes_insumo')
+    .update({
+      estado: 'APROBADA', aprobado_por: user.id, aprobado_at: ahora,
+      aprobado_solicitante_por: user.id, aprobado_solicitante_at: ahora,
+      aprobado_coordinador_por: user.id, aprobado_coordinador_at: ahora,
+    })
+    .eq('id', ordenId)
+  if (error) {
+    if (error.message.includes('row-level security')) return { error: 'No tienes permisos para aprobar.' }
+    return { error: error.message }
+  }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'APROBACION',
+    p_mensaje: mensaje?.trim() || 'Orden aprobada. Disponible en Alistamiento de bodega.',
+    p_ant: orden.estado, p_nue: 'APROBADA',
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return { ok: true }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
