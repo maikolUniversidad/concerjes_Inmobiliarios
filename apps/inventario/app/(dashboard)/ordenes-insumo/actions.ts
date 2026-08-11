@@ -174,6 +174,50 @@ export async function aprobarBorrador(ordenId: string, mensaje?: string): Promis
   return { ok: true }
 }
 
+/**
+ * Devuelve una orden ya existente a BORRADOR para volver a editarla. Solo desde
+ * estados previos al despacho (aún no se movió inventario): APROBADA, PENDIENTE,
+ * EN_ALISTAMIENTO, ALISTADO. Retira las aprobaciones y deja rastro.
+ */
+const REVERTIBLES_A_BORRADOR = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO', 'CAMBIOS_SOLICITADOS', 'EN_REVISION']
+
+export async function devolverABorrador(ordenId: string, mensaje?: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para editar órdenes.' }
+  }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (orden.estado === 'BORRADOR') return { error: 'La orden ya está en borrador.' }
+  if (!REVERTIBLES_A_BORRADOR.includes(orden.estado)) {
+    return { error: 'Esta orden ya fue despachada o cerrada; no se puede volver a borrador.' }
+  }
+
+  // Volver a borrador retira las aprobaciones y limpia marcas de alistamiento.
+  const { error } = await sb.from('ordenes_insumo')
+    .update({
+      estado: 'BORRADOR', ...RESET_APROBACIONES,
+      alistamiento_iniciado_at: null, alistado_at: null,
+    })
+    .eq('id', ordenId)
+  if (error) {
+    if (error.message.includes('row-level security')) return { error: 'No tienes permisos para editar esta orden.' }
+    return { error: error.message }
+  }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'APROBACION_RETIRADA',
+    p_mensaje: mensaje?.trim() || `Orden devuelta a borrador (desde ${orden.estado}) para editarla de nuevo.`,
+    p_ant: orden.estado, p_nue: 'BORRADOR',
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return { ok: true }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // FLUJO DE APROBACIÓN (coordinador de sede ⇄ central)
 // ═══════════════════════════════════════════════════════════════════════════

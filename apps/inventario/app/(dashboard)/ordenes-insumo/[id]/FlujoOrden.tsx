@@ -4,9 +4,9 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import {
-  Send, CheckCircle2, MessageSquare, Loader2, PenLine, ArrowRight, Clock, PackageCheck,
+  Send, CheckCircle2, MessageSquare, Loader2, PenLine, ArrowRight, Clock, PackageCheck, Undo2,
 } from 'lucide-react'
-import { enviarARevision, solicitarCambios, aprobarOrden, aprobarBorrador, comentarOrden, confirmarRecepcion } from '../actions'
+import { enviarARevision, solicitarCambios, aprobarOrden, aprobarBorrador, devolverABorrador, comentarOrden, confirmarRecepcion } from '../actions'
 
 export interface EventoOrden {
   id: string
@@ -125,6 +125,9 @@ export function FlujoOrden({
   // Aprobación en una segunda instancia: BORRADOR → APROBADA con un botón.
   const enBorrador = ['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(estado)
   const puedeAprobarBorrador = enBorrador && (puedeProponer || puedeAprobar)
+  // Devolver a borrador una orden ya existente (antes del despacho).
+  const revertibleABorrador = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO'].includes(estado)
+  const puedeDevolverABorrador = revertibleABorrador && (puedeProponer || puedeAprobar)
 
   // Cada quien firma su lado; nadie firma dos veces.
   const miFirma = esSolicitante ? firmaSolicitante : firmaCoordinador
@@ -205,6 +208,19 @@ export function FlujoOrden({
               <button onClick={() => run(() => aprobarBorrador(ordenId, msg), 'Orden aprobada. Ya está en Alistamiento.')} disabled={pending}
                 className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">
                 {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />} Aprobar
+              </button>
+            )}
+            {/* Devolver a borrador una orden ya existente (antes del despacho) */}
+            {puedeDevolverABorrador && (
+              <button
+                onClick={() => {
+                  if (window.confirm('¿Devolver esta orden a Borrador? Se retirarán las aprobaciones y saldrá de Alistamiento hasta que la vuelvas a aprobar.')) {
+                    run(() => devolverABorrador(ordenId, msg), 'Orden devuelta a borrador')
+                  }
+                }}
+                disabled={pending}
+                className="flex items-center gap-1.5 border border-amber-300 text-amber-800 font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-amber-50 disabled:opacity-50">
+                {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Undo2 className="w-4 h-4" />} Devolver a borrador
               </button>
             )}
             {AUTORIZACION_ACTIVA && puedeProponer && editable && (
