@@ -25,7 +25,7 @@ export default async function StockPage() {
 
   const { data, error } = await supabase
     .from('productos')
-    .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cce_tipo, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ), stock_cce ( cantidad_real, cantidad_disp )')
+    .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal )')
     .eq('activo', true)
     .order('ref', { ascending: false })
 
@@ -50,9 +50,9 @@ export default async function StockPage() {
     entrante: p.stock?.cantidad_entr ?? 0,
     saliente: p.stock?.cantidad_sal ?? 0,
     minimo: p.stock_minimo_def ?? 0,
-    cceTipo: p.cce_tipo,
-    cceReal: p.stock_cce?.cantidad_real ?? null,
-    cceDisp: p.stock_cce?.cantidad_disp ?? null,
+    cceTipo: null,
+    cceReal: null,
+    cceDisp: null,
   }))
 
   return (
