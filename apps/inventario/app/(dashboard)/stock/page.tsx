@@ -14,7 +14,9 @@ interface Row {
   presentacion: string | null
   cat_rotacion: CategoriaRotacion
   stock_minimo_def: number
+  cce_tipo: 'PROPIO' | 'COMPARTIDO' | null
   stock: { cantidad_real: number; cantidad_disp: number; cantidad_entr: number; cantidad_sal: number } | null
+  stock_cce: { cantidad_real: number; cantidad_disp: number } | null
 }
 
 export default async function StockPage() {
@@ -23,7 +25,7 @@ export default async function StockPage() {
 
   const { data, error } = await supabase
     .from('productos')
-    .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal )')
+    .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cce_tipo, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ), stock_cce ( cantidad_real, cantidad_disp )')
     .eq('activo', true)
     .order('ref', { ascending: false })
 
@@ -48,6 +50,9 @@ export default async function StockPage() {
     entrante: p.stock?.cantidad_entr ?? 0,
     saliente: p.stock?.cantidad_sal ?? 0,
     minimo: p.stock_minimo_def ?? 0,
+    cceTipo: p.cce_tipo,
+    cceReal: p.stock_cce?.cantidad_real ?? null,
+    cceDisp: p.stock_cce?.cantidad_disp ?? null,
   }))
 
   return (

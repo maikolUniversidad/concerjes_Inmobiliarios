@@ -34,6 +34,8 @@ type ProductoConRelaciones = Producto & {
   proveedor2: Pick<Proveedor,'nombre'> | null
   ubicacion: UbicacionRel | null
   cce: CceBienRel | null
+  cce_tipo: 'PROPIO' | 'COMPARTIDO' | null
+  stock_cce: { cantidad_real: number; cantidad_disp: number } | null
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -60,7 +62,8 @@ export default async function ProductoPage({ params }: Props) {
       proveedor:proveedor_id ( nombre, telefono, email ),
       proveedor2:proveedor2_id ( nombre ),
       ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) ),
-      cce:cce_bien_id ( id, bien, especificacion, presentacion, cantidad_mensual, precio_piso )
+      cce:cce_bien_id ( id, bien, especificacion, presentacion, cantidad_mensual, precio_piso ),
+      stock_cce ( cantidad_real, cantidad_disp )
     `)
     .eq('id', id)
     .single()
@@ -97,7 +100,13 @@ export default async function ProductoPage({ params }: Props) {
         </span>
       </div>
 
-      <ProductoDetalle producto={producto} movimientos={movimientos} fotos={fotos} />
+      <ProductoDetalle
+        producto={producto}
+        movimientos={movimientos}
+        fotos={fotos}
+        cceTipo={producto.cce_tipo ?? null}
+        stockCce={producto.stock_cce ?? null}
+      />
 
       <ReembasadoProducto productoId={producto.id} />
     </div>

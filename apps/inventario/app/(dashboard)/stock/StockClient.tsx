@@ -1,6 +1,6 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Boxes, TrendingDown, TrendingUp, AlertCircle, Search } from 'lucide-react'
+import { Boxes, TrendingDown, TrendingUp, AlertCircle, Search, Share2, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 
@@ -15,6 +15,9 @@ export interface StockRow {
   entrante: number
   saliente: number
   minimo: number
+  cceTipo: 'PROPIO' | 'COMPARTIDO' | null
+  cceReal: number | null
+  cceDisp: number | null
 }
 
 function estado(real: number, minimo: number) {
@@ -28,14 +31,21 @@ function estado(real: number, minimo: number) {
 export function StockClient({ rows }: { rows: StockRow[] }) {
   const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState('')
+  const [cceFilter, setCceFilter] = useState('')
 
   const filtered = useMemo(() => rows.filter(r => {
     const q = search.toLowerCase()
     const matchSearch = !q || r.nombre.toLowerCase().includes(q) || String(r.ref).includes(q)
     const e = estado(r.real, r.minimo).key
     const matchFiltro = !filtro || (filtro === 'alerta' ? (e === 'critico' || e === 'bajo') : e === filtro)
-    return matchSearch && matchFiltro
-  }), [rows, search, filtro])
+    const matchCce = !cceFilter || (
+      cceFilter === 'propio'      ? r.cceTipo === 'PROPIO' :
+      cceFilter === 'compartido'  ? r.cceTipo === 'COMPARTIDO' :
+      cceFilter === 'cce'         ? r.cceTipo !== null :
+      cceFilter === 'sin_cce'     ? r.cceTipo === null : true
+    )
+    return matchSearch && matchFiltro && matchCce
+  }), [rows, search, filtro, cceFilter])
 
   const totalReal = rows.reduce((a, s) => a + s.real, 0)
   const totalEntrante = rows.reduce((a, s) => a + s.entrante, 0)
@@ -79,6 +89,14 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
           <option value="bajo">Bajo</option>
           <option value="normal">Normal</option>
         </select>
+        <select value={cceFilter} onChange={e => setCceFilter(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none bg-white">
+          <option value="">Inventario CCE</option>
+          <option value="cce">Con categoría CCE</option>
+          <option value="propio">🔒 Propio CCE</option>
+          <option value="compartido">↔ Compartido</option>
+          <option value="sin_cce">Sin CCE</option>
+        </select>
         <Link href="/movimientos/nuevo" className="ml-auto bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark transition-colors">
           Registrar movimiento
         </Link>
@@ -97,6 +115,7 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
                 <th className="text-right font-body font-semibold text-xs text-blue-600 uppercase px-4 py-3 bg-blue-50">Entr.</th>
                 <th className="text-right font-body font-semibold text-xs text-orange-600 uppercase px-4 py-3 bg-orange-50">Sal.</th>
                 <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Mín.</th>
+                <th className="text-center font-body font-semibold text-xs text-purple-600 uppercase px-4 py-3 bg-purple-50/60">CCE</th>
                 <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Estado</th>
               </tr>
             </thead>
@@ -123,6 +142,24 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
                     <td className="px-4 py-3 text-right bg-blue-50/30">{s.entrante > 0 ? <span className="font-body text-sm text-blue-600 font-semibold">+{s.entrante}</span> : <span className="text-gray-300 text-xs">—</span>}</td>
                     <td className="px-4 py-3 text-right bg-orange-50/30">{s.saliente > 0 ? <span className="font-body text-sm text-orange-600 font-semibold">-{s.saliente}</span> : <span className="text-gray-300 text-xs">—</span>}</td>
                     <td className="px-4 py-3 text-right font-body text-sm text-gray-500">{s.minimo || '—'}</td>
+                    <td className="px-4 py-3 text-center bg-purple-50/20">
+                      {s.cceTipo === 'PROPIO' && (
+                        <div className="flex flex-col items-center gap-0.5">
+                          <div className="flex items-center gap-1">
+                            <Lock className="w-3 h-3 text-purple-500" />
+                            <span className="font-body text-[10px] font-bold text-purple-700">PROPIO</span>
+                          </div>
+                          <span className="font-heading font-bold text-sm text-purple-900">{s.cceReal ?? 0}</span>
+                        </div>
+                      )}
+                      {s.cceTipo === 'COMPARTIDO' && (
+                        <div className="flex items-center justify-center gap-1">
+                          <Share2 className="w-3 h-3 text-teal-500" />
+                          <span className="font-body text-[10px] font-bold text-teal-700">COMPARTIDO</span>
+                        </div>
+                      )}
+                      {!s.cceTipo && <span className="text-gray-200 text-xs">—</span>}
+                    </td>
                     <td className="px-4 py-3 text-center"><span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${e.cls}`}>{e.label}</span></td>
                   </tr>
                 )

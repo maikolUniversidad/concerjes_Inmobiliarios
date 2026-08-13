@@ -24,8 +24,10 @@ interface Producto {
   activo: boolean
   sku: string | null
   codigo_barras: string | null
+  cce_tipo: 'PROPIO' | 'COMPARTIDO' | null
   stock: { cantidad_real: number; cantidad_disp: number } | null
   cce: CceBien | null
+  stock_cce: { cantidad_real: number; cantidad_disp: number } | null
 }
 
 function getStockStatus(real: number, minimo: number) {
@@ -224,9 +226,17 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                     </p>
                     <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
                     {p.cce && (
-                      <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate" title={p.cce.bien}>
-                        🏛 {p.cce.bien}
-                      </p>
+                      <div className="flex items-center gap-1 flex-wrap">
+                        <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate flex-1 min-w-0" title={p.cce.bien}>
+                          🏛 {p.cce.bien}
+                        </p>
+                        {p.cce_tipo === 'PROPIO' && (
+                          <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1 py-0.5 shrink-0">PROPIO</span>
+                        )}
+                        {p.cce_tipo === 'COMPARTIDO' && (
+                          <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded px-1 py-0.5 shrink-0">COMPARTIDO</span>
+                        )}
+                      </div>
                     )}
                     <div className="flex items-center justify-between gap-1">
                       {real > 0 ? (
@@ -319,11 +329,23 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                           {p.cat_rotacion}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 max-w-[200px]">
+                      <td className="px-4 py-2.5 max-w-[220px]">
                         {p.cce ? (
-                          <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={p.cce.bien}>
-                            🏛 {p.cce.bien}
-                          </span>
+                          <div className="space-y-0.5">
+                            <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={p.cce.bien}>
+                              🏛 {p.cce.bien}
+                            </span>
+                            {p.cce_tipo === 'PROPIO' && (
+                              <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 inline-block">
+                                📦 Propio CCE: {p.stock_cce?.cantidad_real ?? 0} uds
+                              </span>
+                            )}
+                            {p.cce_tipo === 'COMPARTIDO' && (
+                              <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 inline-block">
+                                ↔ Compartido
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="font-body text-xs text-gray-300">—</span>
                         )}

@@ -110,6 +110,57 @@ export async function actualizarProducto(_prev: ActionResult, formData: FormData
   redirect(`/productos/${id}`)
 }
 
+export async function setCceTipo(
+  productoId: string,
+  tipo: 'PROPIO' | 'COMPARTIDO' | null
+): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from('productos')
+    .update({ cce_tipo: tipo })
+    .eq('id', productoId)
+
+  if (error) return { error: traducirError(error.message) }
+
+  // Si es PROPIO, inicializar stock_cce si no existe
+  if (tipo === 'PROPIO') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any)
+      .from('stock_cce')
+      .upsert({ producto_id: productoId }, { onConflict: 'producto_id', ignoreDuplicates: true })
+  }
+
+  revalidatePath('/productos')
+  revalidatePath(`/productos/${productoId}`)
+  revalidatePath('/stock')
+  return {}
+}
+
+export async function setCceStockPropio(
+  productoId: string,
+  cantidadReal: number,
+  cantidadDisp: number
+): Promise<ActionResult> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any)
+    .from('stock_cce')
+    .upsert({ producto_id: productoId, cantidad_real: cantidadReal, cantidad_disp: cantidadDisp }, { onConflict: 'producto_id' })
+
+  if (error) return { error: traducirError(error.message) }
+
+  revalidatePath(`/productos/${productoId}`)
+  revalidatePath('/stock')
+  return {}
+}
+
 export async function eliminarProducto(formData: FormData): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
