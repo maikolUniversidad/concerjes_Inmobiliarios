@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package, Trash2, Warehouse, MapPin } from 'lucide-react'
+import { Edit2, TrendingUp, TrendingDown, ArrowLeftRight, Package, Trash2, Warehouse, MapPin, ChevronDown, ChevronUp, Building2 } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { ProductoGaleria, type FotoItem } from '@/components/ui/ProductoGaleria'
@@ -13,6 +13,15 @@ interface Movimiento {
   cantidad: number
   created_at: string
   observacion: string | null
+}
+
+interface CceBien {
+  id: string
+  bien: string
+  especificacion: string | null
+  presentacion: string | null
+  cantidad_mensual: string | null
+  precio_piso: boolean
 }
 
 interface Props {
@@ -54,6 +63,7 @@ interface Props {
       pos_y: number | null
       bodega: { nombre: string; plano_url: string | null } | null
     } | null
+    cce: CceBien | null
   }
   movimientos: Movimiento[]
   fotos: { id: string; url: string; storage_path: string | null; orden: number; es_principal: boolean }[]
@@ -93,6 +103,7 @@ function MovIcon({ tipo }: { tipo: string }) {
 
 export function ProductoDetalle({ producto: initial, movimientos, fotos }: Props) {
   const [imagenUrl, setImagenUrl] = useState(initial.imagen_url)
+  const [cceOpen, setCceOpen] = useState(false)
 
   // Construir lista de fotos: prioriza producto_fotos si existe, si no cae a imagen_url
   const fotoItems: FotoItem[] = fotos.length > 0
@@ -336,6 +347,77 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos }: Props
               </div>
             )}
           </div>
+        </div>
+
+        {/* Colombia Compra Eficiente */}
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+          <button
+            type="button"
+            onClick={() => setCceOpen(o => !o)}
+            className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-gray-50/50 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-blue-600" />
+              <h3 className="font-heading font-semibold text-sm text-gray-700">Colombia Compra Eficiente</h3>
+              {initial.cce ? (
+                <span className="font-body text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 truncate max-w-[260px]">
+                  {initial.cce.bien}
+                </span>
+              ) : (
+                <span className="font-body text-xs text-gray-400">Sin categoría asignada</span>
+              )}
+            </div>
+            {cceOpen
+              ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+              : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+          </button>
+
+          {cceOpen && initial.cce && (
+            <div className="px-5 pb-5 border-t border-gray-100 space-y-3 pt-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                <div className="sm:col-span-2">
+                  <p className="font-body text-xs text-gray-400">Nombre de bien (CCE)</p>
+                  <p className="font-body font-semibold text-sm text-gray-900 mt-0.5">{initial.cce.bien}</p>
+                </div>
+                {initial.cce.presentacion && (
+                  <div>
+                    <p className="font-body text-xs text-gray-400">Presentación CCE</p>
+                    <p className="font-body text-sm text-gray-700 mt-0.5">{initial.cce.presentacion}</p>
+                  </div>
+                )}
+                {initial.cce.cantidad_mensual && (
+                  <div>
+                    <p className="font-body text-xs text-gray-400">Cantidad mensual referencia</p>
+                    <p className="font-body text-sm text-gray-700 mt-0.5">{initial.cce.cantidad_mensual}</p>
+                  </div>
+                )}
+                <div>
+                  <p className="font-body text-xs text-gray-400">Precio piso</p>
+                  <p className="font-body text-sm mt-0.5">
+                    {initial.cce.precio_piso
+                      ? <span className="text-green-700 font-semibold">Sí aplica</span>
+                      : <span className="text-gray-400">No aplica</span>}
+                  </p>
+                </div>
+              </div>
+              {initial.cce.especificacion && (
+                <div className="pt-3 border-t border-gray-100">
+                  <p className="font-body text-xs text-gray-400 mb-1.5">Especificación técnica CCE</p>
+                  <p className="font-body text-xs text-gray-600 whitespace-pre-line leading-relaxed bg-gray-50 rounded-xl px-4 py-3">
+                    {initial.cce.especificacion}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {cceOpen && !initial.cce && (
+            <div className="px-5 pb-5 border-t border-gray-100 pt-4">
+              <p className="font-body text-sm text-gray-400 text-center py-4">
+                Este producto no tiene una categoría CCE asignada.
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Últimos movimientos */}

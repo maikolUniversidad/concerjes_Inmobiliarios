@@ -6,6 +6,11 @@ import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 
+interface CceBien {
+  id: string
+  bien: string
+}
+
 interface Producto {
   id: string
   ref: number | null
@@ -20,6 +25,7 @@ interface Producto {
   sku: string | null
   codigo_barras: string | null
   stock: { cantidad_real: number; cantidad_disp: number } | null
+  cce: CceBien | null
 }
 
 function getStockStatus(real: number, minimo: number) {
@@ -217,6 +223,11 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                       {p.nombre_estandar}
                     </p>
                     <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
+                    {p.cce && (
+                      <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate" title={p.cce.bien}>
+                        🏛 {p.cce.bien}
+                      </p>
+                    )}
                     <div className="flex items-center justify-between gap-1">
                       {real > 0 ? (
                         <span className="font-body text-xs text-gray-500">
@@ -267,6 +278,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">REF</th>
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Producto</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Cat.</th>
+                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">CCE</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Stock</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Estado</th>
                   <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Acciones</th>
@@ -306,6 +318,15 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                         <span className={`font-body font-bold text-xs px-2 py-1 rounded-full ${cat.bg} ${cat.color}`}>
                           {p.cat_rotacion}
                         </span>
+                      </td>
+                      <td className="px-4 py-2.5 max-w-[200px]">
+                        {p.cce ? (
+                          <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={p.cce.bien}>
+                            🏛 {p.cce.bien}
+                          </span>
+                        ) : (
+                          <span className="font-body text-xs text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">
                         {real > 0 ? (

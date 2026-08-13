@@ -17,7 +17,8 @@ export default async function ProductosPage() {
     id, ref, codigo, nombre_estandar, presentacion,
     tipo_insumo, cat_rotacion, stock_minimo_def, imagen_url, activo,
     sku, codigo_barras,
-    stock ( cantidad_real, cantidad_disp )
+    stock ( cantidad_real, cantidad_disp ),
+    cce:cce_bien_id ( id, bien )
   `
   // Paginar para traer TODOS los productos activos (Supabase limita a 1000 por request)
   const PAGE = 1000

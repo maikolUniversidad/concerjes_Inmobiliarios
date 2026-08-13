@@ -19,11 +19,21 @@ type UbicacionRel = {
   bodega: { nombre: string; plano_url: string | null } | null
 }
 
+type CceBienRel = {
+  id: string
+  bien: string
+  especificacion: string | null
+  presentacion: string | null
+  cantidad_mensual: string | null
+  precio_piso: boolean
+}
+
 type ProductoConRelaciones = Producto & {
   stock: Stock | null
   proveedor: Pick<Proveedor,'nombre'|'telefono'|'email'> | null
   proveedor2: Pick<Proveedor,'nombre'> | null
   ubicacion: UbicacionRel | null
+  cce: CceBienRel | null
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -49,7 +59,8 @@ export default async function ProductoPage({ params }: Props) {
       stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal, updated_at ),
       proveedor:proveedor_id ( nombre, telefono, email ),
       proveedor2:proveedor2_id ( nombre ),
-      ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) )
+      ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) ),
+      cce:cce_bien_id ( id, bien, especificacion, presentacion, cantidad_mensual, precio_piso )
     `)
     .eq('id', id)
     .single()
