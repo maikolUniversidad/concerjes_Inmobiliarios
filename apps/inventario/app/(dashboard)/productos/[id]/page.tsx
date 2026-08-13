@@ -61,7 +61,9 @@ export default async function ProductoPage({ params }: Props) {
       stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal, updated_at ),
       proveedor:proveedor_id ( nombre, telefono, email ),
       proveedor2:proveedor2_id ( nombre ),
-      ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) )
+      ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) ),
+      cce:cce_bien_id ( id, bien, especificacion, presentacion, cantidad_mensual, precio_piso ),
+      stock_cce ( cantidad_real, cantidad_disp )
     `)
     .eq('id', id)
     .single()
@@ -102,8 +104,8 @@ export default async function ProductoPage({ params }: Props) {
         producto={producto}
         movimientos={movimientos}
         fotos={fotos}
-        cceTipo={null}
-        stockCce={null}
+        cceTipo={producto.cce_tipo ?? null}
+        stockCce={producto.stock_cce ?? null}
       />
 
       <ReembasadoProducto productoId={producto.id} />
