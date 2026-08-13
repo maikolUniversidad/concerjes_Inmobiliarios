@@ -44,14 +44,11 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   // El alistamiento SOLO se habilita cuando ya firmaron las dos partes.
   const estado = (orden as unknown as { estado: string }).estado
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'RECIBIDO'].includes(estado)
-  // En la etapa de solicitud (borrador / cambios) se ajustan cantidades y se
-  // agregan/quitan productos; el alistamiento no existe todavía.
-  const enSolicitud = !aprobada
-  // Se puede editar en borrador, con cambios y también en revisión (ajustar el
-  // pedido durante la revisión retira las aprobaciones, ver actions.ts).
+  // La solicitud de ítems se muestra siempre; en estados aprobados también
+  // se puede editar (novedad post-aprobación) y queda en trazabilidad.
   const puedeEditarSolicitud =
     (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo'))
-    && ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION'].includes(estado)
+    && ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION', 'APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO'].includes(estado)
 
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -71,6 +68,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const o = orden as any
   const datosDoc: DatosDoc = {
+    ordenId: id,
     numero: o.numero, estado, created_at: o.created_at,
     aprobado_at: o.aprobado_at ?? null, despachado_at: o.despachado_at ?? null,
     observacion: o.observacion ?? null,
@@ -106,15 +104,15 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         fechaEntrega={o.fecha_entrega_pactada ?? null}
         puedeEditar={puedeEditarUrgencia}
       />
-      {/* Etapa de SOLICITUD: ajustar cantidades / agregar / quitar productos. */}
-      {enSolicitud && (
-        <SolicitudItems
-          ordenId={id}
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          items={(o.items ?? []) as any}
-          puedeEditar={puedeEditarSolicitud}
-        />
-      )}
+      {/* Ítems de la solicitud: siempre visible. En estados aprobados, los cambios
+          quedan como novedad en la trazabilidad y generan notificación. */}
+      <SolicitudItems
+        ordenId={id}
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        items={(o.items ?? []) as any}
+        puedeEditar={puedeEditarSolicitud}
+        esAprobada={aprobada}
+      />
 
       {/* Etapa de ALISTAMIENTO/DESPACHO: solo una vez aprobada por ambas partes. */}
       {aprobada && (

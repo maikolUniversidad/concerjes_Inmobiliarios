@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario } from '@/lib/permisos-server'
+import { emitirNotificacion } from '@/lib/notificaciones'
 
 export interface ActionResult { error?: string; ok?: boolean; id?: string }
 
@@ -225,8 +226,11 @@ export async function devolverABorrador(ordenId: string, mensaje?: string): Prom
 /**
  * Estados en los que aún se puede editar el pedido. También en revisión: si se
  * ajusta algo estando en revisión, se retiran las aprobaciones (ver más abajo).
+ * Los estados APROBADA/EN_ALISTAMIENTO/ALISTADO también permiten editar (novedad
+ * post-aprobación): el cambio queda en trazabilidad y genera notificación.
  */
-const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION']
+const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION', 'APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO']
+const ESTADOS_APROBADOS = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO']
 
 /**
  * Cualquier cambio en la orden invalida las aprobaciones: las dos partes deben
@@ -257,7 +261,7 @@ async function retirarAprobacionesSiRevision(sb: any, ordenId: string, estado: s
   })
 }
 
-/** El coordinador ajusta la cantidad propuesta de un ítem (antes de aprobar). */
+/** Ajusta la cantidad de un ítem (pre o post aprobación). */
 export async function actualizarItemSolicitado(
   ordenId: string, itemId: string, cantidad: number,
 ): Promise<ActionResult> {
@@ -269,40 +273,52 @@ export async function actualizarItemSolicitado(
   }
   const sb = supabase as DB
 
-  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado, numero').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (ya fue aprobada).' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya fue despachada o cerrada; no se puede modificar.' }
 
   const cant = Math.max(0, Number(cantidad) || 0)
-  // Se captura el valor anterior para dejar el cambio en la trazabilidad.
   const { data: antes } = await sb.from('orden_insumo_items')
     .select('cantidad_solicitada, producto:productos ( nombre_estandar )').eq('id', itemId).single()
 
   const quien = await nombreUsuario(sb, user.id)
+  const esAprobada = ESTADOS_APROBADOS.includes(orden.estado)
   const { error } = await sb.from('orden_insumo_items')
     .update({
-      cantidad_solicitada: cant, cantidad_alistada: cant,
+      cantidad_solicitada: cant,
+      // En orden aprobada no pisamos la cantidad alistada (bodega puede haberla ajustado).
+      ...(esAprobada ? {} : { cantidad_alistada: cant }),
       modificado_por: user.id, modificado_nombre: quien, modificado_at: new Date().toISOString(),
     })
     .eq('id', itemId)
   if (error) return { error: error.message }
 
-  // Quién modificó qué queda registrado (oi_evento captura al usuario).
   const prod = antes?.producto?.nombre_estandar ?? 'producto'
   if (antes && Number(antes.cantidad_solicitada) !== cant) {
+    const prefijo = esAprobada ? 'Novedad post-aprobación — ' : ''
     await sb.rpc('oi_evento', {
       p_orden: ordenId, p_tipo: 'AJUSTE',
-      p_mensaje: `Ajustó «${prod}»: ${antes.cantidad_solicitada} → ${cant}`,
+      p_mensaje: `${prefijo}Ajustó «${prod}»: ${antes.cantidad_solicitada} → ${cant}`,
       p_detalle: { item_id: itemId, antes: antes.cantidad_solicitada, despues: cant },
     })
     await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
+
+    if (esAprobada) {
+      await emitirNotificacion(sb, {
+        codigo: 'SISTEMA',
+        titulo: `Novedad en orden aprobada ${orden.numero}`,
+        descripcion: `${quien} ajustó «${prod}»: ${antes.cantidad_solicitada} → ${cant}`,
+        entidad: 'ordenes_insumo', entidadId: ordenId,
+        enlace: `/ordenes-insumo/${ordenId}`,
+      })
+    }
   }
 
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }
 
-/** El supervisor agrega un producto a la propuesta (parametrizado o adicional). */
+/** Agrega un producto a la orden (pre o post aprobación). */
 export async function agregarItemSolicitado(
   ordenId: string, productoId: string, cantidad: number, esAdicional: boolean,
 ): Promise<ActionResult> {
@@ -317,37 +333,49 @@ export async function agregarItemSolicitado(
   const cant = Math.max(1, Number(cantidad) || 0)
   if (!productoId) return { error: 'Selecciona un producto.' }
 
-  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado, numero').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (ya fue aprobada).' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya fue despachada o cerrada; no se puede modificar.' }
 
-  // Evita duplicar el mismo producto en la orden.
   const { data: existe } = await sb.from('orden_insumo_items')
     .select('id').eq('orden_id', ordenId).eq('producto_id', productoId).maybeSingle()
   if (existe) return { error: 'Ese producto ya está en la orden. Ajusta su cantidad.' }
 
   const { data: prod } = await sb.from('productos').select('nombre_estandar').eq('id', productoId).single()
   const quien = await nombreUsuario(sb, user.id)
+  const esAprobada = ESTADOS_APROBADOS.includes(orden.estado)
 
   const { error } = await sb.from('orden_insumo_items').insert({
     orden_id: ordenId, producto_id: productoId,
     cantidad_solicitada: cant, cantidad_maxima_ref: null,
-    es_adicional: esAdicional, cantidad_alistada: cant,
+    es_adicional: true, cantidad_alistada: cant,
     modificado_por: user.id, modificado_nombre: quien, modificado_at: new Date().toISOString(),
   })
   if (error) return { error: error.message }
 
+  const prefijo = esAprobada ? 'Novedad post-aprobación — ' : ''
   await sb.rpc('oi_evento', {
     p_orden: ordenId, p_tipo: 'ITEM_AGREGADO',
-    p_mensaje: `Agregó «${prod?.nombre_estandar ?? 'producto'}» (${cant}) ${esAdicional ? '· adicional' : '· parametrizado'}`,
-    p_detalle: { producto_id: productoId, cantidad: cant, es_adicional: esAdicional },
+    p_mensaje: `${prefijo}Agregó «${prod?.nombre_estandar ?? 'producto'}» (${cant}) · adicional`,
+    p_detalle: { producto_id: productoId, cantidad: cant, es_adicional: true },
   })
   await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
+
+  if (esAprobada) {
+    await emitirNotificacion(sb, {
+      codigo: 'SISTEMA',
+      titulo: `Novedad en orden aprobada ${orden.numero}`,
+      descripcion: `${quien} agregó «${prod?.nombre_estandar ?? 'producto'}» (${cant}) a la orden.`,
+      entidad: 'ordenes_insumo', entidadId: ordenId,
+      enlace: `/ordenes-insumo/${ordenId}`,
+    })
+  }
+
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }
 
-/** El supervisor quita un producto de la propuesta. */
+/** Quita un producto de la orden (pre o post aprobación). */
 export async function quitarItemSolicitado(ordenId: string, itemId: string): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -357,9 +385,9 @@ export async function quitarItemSolicitado(ordenId: string, itemId: string): Pro
   }
   const sb = supabase as DB
 
-  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado, numero').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
-  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya no es editable (ya fue aprobada).' }
+  if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya fue despachada o cerrada; no se puede modificar.' }
 
   const { data: item } = await sb.from('orden_insumo_items')
     .select('producto:productos ( nombre_estandar )').eq('id', itemId).single()
@@ -367,12 +395,27 @@ export async function quitarItemSolicitado(ordenId: string, itemId: string): Pro
   const { error } = await sb.from('orden_insumo_items').delete().eq('id', itemId)
   if (error) return { error: error.message }
 
+  const esAprobada = ESTADOS_APROBADOS.includes(orden.estado)
+  const prefijo = esAprobada ? 'Novedad post-aprobación — ' : ''
+  const nomProd = item?.producto?.nombre_estandar ?? 'producto'
   await sb.rpc('oi_evento', {
     p_orden: ordenId, p_tipo: 'ITEM_QUITADO',
-    p_mensaje: `Quitó «${item?.producto?.nombre_estandar ?? 'producto'}» de la orden.`,
+    p_mensaje: `${prefijo}Quitó «${nomProd}» de la orden.`,
     p_detalle: { item_id: itemId },
   })
   await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
+
+  if (esAprobada) {
+    const quien = await nombreUsuario(sb, user.id)
+    await emitirNotificacion(sb, {
+      codigo: 'SISTEMA',
+      titulo: `Novedad en orden aprobada ${orden.numero}`,
+      descripcion: `${quien} quitó «${nomProd}» de la orden.`,
+      entidad: 'ordenes_insumo', entidadId: ordenId,
+      enlace: `/ordenes-insumo/${ordenId}`,
+    })
+  }
+
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   return { ok: true }
 }
@@ -720,6 +763,32 @@ export async function despacharOrden(
   revalidatePath(`/ordenes-insumo/${ordenId}`)
   revalidatePath('/ordenes-insumo')
   return { ok: true, error: fallos > 0 ? `Despachada con ${fallos} ítem(s) sin descontar stock.` : undefined }
+}
+
+/**
+ * Registra en trazabilidad que se generó un PDF de la orden (orden o remisión).
+ * La versión se calcula contando generaciones previas del mismo tipo.
+ */
+export async function registrarGeneracionPDF(
+  ordenId: string, tipo: 'ORDEN' | 'REMISION', storagePath: string,
+): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Sin sesión.' }
+  const sb = supabase as DB
+
+  const { data: prev } = await sb.from('orden_insumo_eventos')
+    .select('detalle').eq('orden_id', ordenId).eq('tipo', 'PDF_GENERADO')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const version = ((prev ?? []) as { detalle: any }[]).filter(e => e.detalle?.tipo === tipo).length + 1
+
+  const label = tipo === 'REMISION' ? 'Remisión de despacho' : 'Orden de insumo'
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'PDF_GENERADO',
+    p_mensaje: `Generó la ${label} (PDF)${version > 1 ? ` · versión ${version}` : ''}`,
+    p_detalle: { tipo, path: storagePath, version },
+  })
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
 }
 
 export async function anularOrden(ordenId: string): Promise<ActionResult> {

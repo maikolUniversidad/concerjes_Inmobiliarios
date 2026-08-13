@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Plus, Trash2, Search, Loader2, User2 } from 'lucide-react'
+import { Package, Plus, Trash2, Search, Loader2, User2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { actualizarItemSolicitado, agregarItemSolicitado, quitarItemSolicitado } from '../actions'
@@ -27,15 +27,14 @@ function fmtCorto(iso?: string | null) {
 }
 
 /**
- * Editor de la SOLICITUD (etapa de borrador / cambios solicitados).
- * Aquí se ajustan cantidades y se agregan o quitan productos. Cada cambio deja
- * quién lo hizo en la columna "Modificado por" y en la trazabilidad.
- * El alistamiento/despacho NO vive aquí: aparece una vez la orden está aprobada.
+ * Productos de la solicitud. Siempre visible. En estados post-aprobación los
+ * cambios quedan como novedad en la trazabilidad y generan notificación.
  */
-export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: {
+export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, esAprobada = false }: {
   ordenId: string
   items: Item[]
   puedeEditar: boolean
+  esAprobada?: boolean
 }) {
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -136,6 +135,14 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar }: 
         </p>
         <span className="font-body text-xs text-gray-400">{items.length} ítem(s)</span>
       </div>
+      {esAprobada && puedeEditar && (
+        <div className="flex items-start gap-2 px-4 py-2.5 bg-amber-50 border-b border-amber-100">
+          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <p className="font-body text-xs text-amber-800">
+            <span className="font-semibold">Orden aprobada.</span> Cualquier cambio queda registrado como novedad en la trazabilidad y genera una notificación.
+          </p>
+        </div>
+      )}
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[640px]">

@@ -1,11 +1,13 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { FileDown, Loader2, Truck, ClipboardList, Building2 } from 'lucide-react'
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { FileDown, Loader2, Truck, ClipboardList, Building2, Download, FileText } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { registrarGeneracionPDF } from '../actions'
 
 export interface DatosDoc {
+  ordenId: string
   numero: string
   estado: string
   created_at: string
@@ -22,6 +24,15 @@ export interface DatosDoc {
     solicitada: number
     alistada: number
   }[]
+}
+
+interface PdfHistorialItem {
+  id: string
+  tipo: 'ORDEN' | 'REMISION'
+  path: string
+  version: number
+  usuario_nombre: string | null
+  created_at: string
 }
 
 type Tipo = 'ORDEN' | 'REMISION'
@@ -56,10 +67,33 @@ function fecha(iso?: string | null) {
  * @react-pdf/renderer (import dinámico: la librería es pesada y es client-only).
  */
 export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
+  const { ordenId } = datos
   const [generando, setGenerando] = useState<Tipo | null>(null)
   const [emisoras, setEmisoras] = useState<EmisoraRaw[]>([])
   const [emisoraId, setEmisoraId] = useState<string>('')
   const logoCache = useRef<Map<string, string | null>>(new Map())
+  const [historial, setHistorial] = useState<PdfHistorialItem[]>([])
+  const [descargando, setDescargando] = useState<string | null>(null)
+
+  const cargarHistorial = useCallback(async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sb = createClient() as any
+    const { data } = await sb.from('orden_insumo_eventos')
+      .select('id, usuario_nombre, created_at, detalle')
+      .eq('orden_id', ordenId).eq('tipo', 'PDF_GENERADO')
+      .order('created_at', { ascending: false })
+    setHistorial(
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      ((data ?? []) as any[]).map(e => ({
+        id: e.id,
+        tipo: (e.detalle?.tipo ?? 'ORDEN') as 'ORDEN' | 'REMISION',
+        path: e.detalle?.path ?? '',
+        version: Number(e.detalle?.version ?? 1),
+        usuario_nombre: e.usuario_nombre ?? null,
+        created_at: e.created_at,
+      })),
+    )
+  }, [ordenId])
 
   // Empresas emisoras activas (predeterminada primero). El usuario elige con
   // cuál generar la remisión / orden; el logo se resuelve al generar el PDF.
@@ -77,7 +111,8 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
         const predet = lista.find(e => e.es_predeterminada) ?? lista[0]
         if (predet) setEmisoraId(predet.id)
       })
-  }, [])
+    cargarHistorial()
+  }, [cargarHistorial])
 
   // Resuelve la empresa elegida a los datos del documento (con logo incrustado).
   async function resolverEmisor(): Promise<Emisor> {
@@ -200,17 +235,54 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
 
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const blob = await pdf(doc as any).toBlob()
+
+      // Descargar en el navegador
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
       a.download = `${esRemision ? 'Remision' : 'Orden'}_${datos.numero}.pdf`
       a.click()
       URL.revokeObjectURL(url)
+
+      // Almacenar en el bucket y registrar en trazabilidad
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const sb = createClient() as any
+        const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+        const storagePath = `ordenes/${ordenId}/pdfs/${tipo}_${ts}.pdf`
+        const { error: upErr } = await sb.storage.from('ordenes-insumo')
+          .upload(storagePath, blob, { contentType: 'application/pdf', upsert: false })
+        if (!upErr) {
+          await registrarGeneracionPDF(ordenId, tipo, storagePath)
+          await cargarHistorial()
+        }
+      } catch {
+        // El almacenamiento falla silenciosamente: el usuario ya tiene el PDF.
+      }
+
       toast.success(`${esRemision ? 'Remisión' : 'Orden'} generada`)
     } catch (e) {
       toast.error('No se pudo generar el PDF: ' + (e instanceof Error ? e.message : 'error'))
     } finally {
       setGenerando(null)
+    }
+  }
+
+  async function descargarHistorial(item: PdfHistorialItem) {
+    setDescargando(item.id)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = createClient() as any
+      const { data } = await sb.storage.from('ordenes-insumo').createSignedUrl(item.path, 3600)
+      if (!data?.signedUrl) { toast.error('No se pudo obtener el enlace de descarga.'); return }
+      const a = document.createElement('a')
+      a.href = data.signedUrl
+      a.download = `${item.tipo === 'REMISION' ? 'Remision' : 'Orden'}_${datos.numero}_v${item.version}.pdf`
+      a.click()
+    } catch {
+      toast.error('Error al descargar el PDF.')
+    } finally {
+      setDescargando(null)
     }
   }
 
@@ -260,6 +332,44 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       </div>
       {!aprobada && (
         <p className="font-body text-xs text-amber-700 mt-2">La remisión se habilita cuando la orden está aprobada.</p>
+      )}
+
+      {/* Historial de PDFs generados */}
+      {historial.length > 0 && (
+        <div className="mt-4 pt-4 border-t border-gray-100">
+          <p className="font-body font-semibold text-xs text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+            <FileText className="w-3.5 h-3.5" /> PDFs almacenados
+          </p>
+          <div className="space-y-1.5">
+            {historial.map((item) => (
+              <div key={item.id} className="flex items-center justify-between gap-2 rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${
+                      item.tipo === 'REMISION' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'
+                    }`}>
+                      {item.tipo === 'REMISION' ? 'Remisión' : 'Orden'} v{item.version}
+                    </span>
+                    <span className="font-body text-xs text-gray-400">
+                      {item.usuario_nombre ?? 'Sistema'} · {fecha(item.created_at)}
+                    </span>
+                  </div>
+                </div>
+                <button
+                  onClick={() => descargarHistorial(item)}
+                  disabled={descargando === item.id}
+                  title="Descargar esta versión"
+                  className="flex items-center gap-1 border border-gray-200 rounded-lg px-2.5 py-1.5 font-body text-xs text-gray-600 hover:bg-white hover:border-gray-300 disabled:opacity-40 shrink-0"
+                >
+                  {descargando === item.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Download className="w-3.5 h-3.5" />}
+                  Descargar
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   )

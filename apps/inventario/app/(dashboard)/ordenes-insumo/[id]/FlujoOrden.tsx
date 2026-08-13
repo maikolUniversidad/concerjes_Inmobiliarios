@@ -33,6 +33,7 @@ const TIPO_META: Record<string, { label: string; color: string }> = {
   ALISTAMIENTO:        { label: 'Alistamiento',       color: 'bg-violet-100 text-violet-700' },
   DESPACHO:            { label: 'Enviado',            color: 'bg-emerald-100 text-emerald-700' },
   ANULACION:           { label: 'Anulada',            color: 'bg-red-100 text-red-700' },
+  PDF_GENERADO:        { label: 'PDF generado',       color: 'bg-indigo-100 text-indigo-700' },
 }
 
 function fmt(iso: string) {
