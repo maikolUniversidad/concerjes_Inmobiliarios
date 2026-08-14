@@ -42,6 +42,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [catFilter, setCat]     = useState('')
   const [tipoFilter, setTipo]   = useState('')
   const [stockFilter, setStock] = useState('')
+  const [cceFilter, setCce]     = useState('')
   const [view, setView]         = useState<'grid' | 'list'>('grid')
   const [scannerOpen, setScannerOpen] = useState(false)
 
@@ -60,7 +61,13 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         stockFilter === 'critico' ? real > 0 && real <= minimo :
         stockFilter === 'normal'  ? real > minimo * 1.5 : true
       )
-      return matchCat && matchTipo && matchStock
+      const matchCce = !cceFilter || (
+        cceFilter === 'cce'        ? p.cce !== null :
+        cceFilter === 'propio'     ? p.cce_tipo === 'PROPIO' :
+        cceFilter === 'compartido' ? p.cce_tipo === 'COMPARTIDO' :
+        cceFilter === 'sin_cce'    ? p.cce === null : true
+      )
+      return matchCat && matchTipo && matchStock && matchCce
     }
 
     const evaluados = productos.map(p => {
@@ -69,7 +76,9 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
         .map(v => String(v).toLowerCase())
       const codigosDigits = codigos.map(c => c.replace(/\D/g, '')).filter(Boolean)
-      const texto = `${p.nombre_estandar.toLowerCase()} ${codigos.join(' ')}`
+      // Incluye el nombre del bien CCE en la búsqueda de texto
+      const cceBien = p.cce?.bien.toLowerCase() ?? ''
+      const texto = `${p.nombre_estandar.toLowerCase()} ${codigos.join(' ')} ${cceBien}`
 
       let score = 0
       if (q) {
@@ -86,7 +95,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
     // Con búsqueda, ordena por relevancia (coincidencia exacta de código primero)
     if (q) res.sort((a, b) => b.score - a.score)
     return res.map(x => x.p)
-  }, [productos, search, catFilter, tipoFilter, stockFilter])
+  }, [productos, search, catFilter, tipoFilter, stockFilter, cceFilter])
 
   // Stats
   const stats = useMemo(() => ({
@@ -96,7 +105,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       const r = p.stock?.cantidad_real ?? 0
       return r <= (p.stock_minimo_def ?? 0)
     }).length,
-    sinFoto: productos.filter(p => !p.imagen_url).length,
+    conCce: productos.filter(p => p.cce !== null).length,
   }), [productos])
 
   return (
@@ -107,7 +116,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           { label: 'Total productos',  value: stats.total,   color: 'bg-blue-50 text-blue-700 border-blue-100' },
           { label: 'Cat. A alta rot.', value: stats.catA,    color: 'bg-green-50 text-green-700 border-green-100' },
           { label: 'Stock crítico',    value: stats.critico, color: 'bg-red-50 text-red-700 border-red-100' },
-          { label: 'Sin foto',         value: stats.sinFoto, color: 'bg-amber-50 text-amber-700 border-amber-100' },
+          { label: '🏛 Colombia Compra', value: stats.conCce, color: 'bg-purple-50 text-purple-700 border-purple-100' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-3 ${s.color}`}>
             <p className="font-heading font-bold text-xl">{s.value}</p>
@@ -163,6 +172,14 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           <option value="agotado">Agotado</option>
           <option value="normal">Normal</option>
         </select>
+        <select value={cceFilter} onChange={e => setCce(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none focus:border-brand-green bg-white">
+          <option value="">🏛 CCE</option>
+          <option value="cce">Con categoría CCE</option>
+          <option value="propio">🔒 Propio CCE</option>
+          <option value="compartido">↔ Compartido</option>
+          <option value="sin_cce">Sin CCE</option>
+        </select>
 
         {/* View toggle */}
         <div className="flex border border-gray-200 rounded-lg overflow-hidden ml-auto">
@@ -180,7 +197,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       {/* Results count */}
       <p className="font-body text-xs text-gray-400">
         {filtered.length} de {total} productos
-        {(search || catFilter || tipoFilter || stockFilter) ? ' (filtrado)' : ''}
+        {(search || catFilter || tipoFilter || stockFilter || cceFilter) ? ' (filtrado)' : ''}
       </p>
 
       {/* GRID view */}
