@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Wrench, Plus, Search, MapPin, ChevronRight } from 'lucide-react'
+import { Wrench, Plus, Search, MapPin, PencilLine } from 'lucide-react'
 import { ESTADOS_MAQ, ESTADO_MAQ_META } from './estados'
 import { MaquinariaForm } from './MaquinariaForm'
 
@@ -104,6 +104,14 @@ export function MaquinariaClient({ maquinas: init, sedes, puedeGestionar }: Prop
                   ? <Image src={m.imagen_url} alt={m.nombre} fill className="object-cover" sizes="(max-width:640px) 100vw, 33vw" />
                   : <div className="flex h-full w-full items-center justify-center text-gray-300"><Wrench className="w-10 h-10" /></div>}
                 <span className={`absolute top-2 right-2 font-body text-[11px] font-medium px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                {puedeGestionar && (
+                  <button
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); editar(m) }}
+                    title="Editar máquina"
+                    className="absolute top-2 left-2 flex items-center justify-center h-7 w-7 rounded-full bg-white/90 text-gray-600 shadow-sm hover:bg-white hover:text-brand-green transition-colors opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100">
+                    <PencilLine className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
               <div className="p-3">
                 <div className="flex items-center gap-2">

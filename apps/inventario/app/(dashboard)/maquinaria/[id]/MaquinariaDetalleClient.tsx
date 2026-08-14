@@ -11,6 +11,8 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { ESTADOS_MAQ, ESTADO_MAQ_META, subirFotoMaq } from '../estados'
+import { MaquinariaForm } from '../MaquinariaForm'
+import type { MaquinariaRow, SedeOpt as FormSedeOpt } from '../MaquinariaClient'
 import { MaquinariaQR } from './MaquinariaQR'
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
@@ -52,6 +54,7 @@ export function MaquinariaDetalleClient({ maquina, eventos, sedes, puedeGestiona
   const [sedeId, setSedeId] = useState(maquina.ubicacion_sede_id ?? '')
   const [ubicTexto, setUbicTexto] = useState(maquina.ubicacion_texto ?? '')
   const [comentario, setComentario] = useState('')
+  const [editando, setEditando] = useState(false)
 
   const meta = ESTADO_MAQ_META[maquina.estado] ?? { label: maquina.estado, cls: 'bg-gray-100 text-gray-600' }
   const fotos = eventos.filter(e => e.tipo === 'FOTO' && e.foto_path)
@@ -106,9 +109,17 @@ export function MaquinariaDetalleClient({ maquina, eventos, sedes, puedeGestiona
               : <div className="flex h-full w-full items-center justify-center text-gray-300"><Wrench className="w-12 h-12" /></div>}
           </div>
           <div className="p-5">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-mono text-sm bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{maquina.codigo}</span>
-              <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${meta.cls}`}>{meta.label}</span>
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-mono text-sm bg-gray-100 text-gray-700 px-2 py-0.5 rounded">{maquina.codigo}</span>
+                <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${meta.cls}`}>{meta.label}</span>
+              </div>
+              {puedeGestionar && (
+                <button onClick={() => setEditando(true)}
+                  className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-1.5 text-xs font-semibold text-gray-600 hover:bg-gray-50 hover:border-brand-green/40 hover:text-brand-green transition-colors shrink-0">
+                  <PencilLine className="w-3.5 h-3.5" /> Editar
+                </button>
+              )}
             </div>
             <h1 className="mt-1.5 font-heading font-bold text-xl text-gray-900">{maquina.nombre}</h1>
             <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5 text-sm">
@@ -207,6 +218,20 @@ export function MaquinariaDetalleClient({ maquina, eventos, sedes, puedeGestiona
             )
           })}
         </ol>
+      </div>
+
+      {/* Drawer de edición */}
+      <div className={`fixed inset-0 z-30 bg-black/20 transition-opacity duration-300 ${editando ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`} onClick={() => setEditando(false)} />
+      <div className={`fixed top-0 right-0 z-40 h-full w-full max-w-md bg-white shadow-2xl transition-transform duration-300 ease-out flex flex-col ${editando ? 'translate-x-0' : 'translate-x-full'}`}>
+        {editando && (
+          <MaquinariaForm
+            maquina={maquina as unknown as MaquinariaRow}
+            sedes={sedes as FormSedeOpt[]}
+            onClose={() => setEditando(false)}
+            onSaved={() => { setEditando(false); router.refresh() }}
+            onDeleted={() => router.push('/maquinaria')}
+          />
+        )}
       </div>
     </div>
   )
