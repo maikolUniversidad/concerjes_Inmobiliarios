@@ -276,11 +276,11 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
                 {items.map((it, i) => (
                   <tr key={it.producto_id} className={`hover:bg-gray-50/60 ${it.es_adicional ? 'bg-amber-50/40' : ''}`}>
                     <td className="px-4 py-2">
-                      <div className="flex items-center gap-2.5">
+                      <div className="flex items-start gap-2.5">
                         <ProductoThumb url={it.imagen_url} nombre={it.nombre} />
                         <div className="min-w-0">
-                          <p className="font-body text-sm text-gray-900 truncate max-w-[220px]">{it.nombre}</p>
-                          {it.presentacion && <p className="font-body text-[11px] text-gray-400">{it.presentacion}</p>}
+                          <p className="font-body text-sm text-gray-900 break-words leading-snug">{it.nombre}</p>
+                          {it.presentacion && <p className="font-body text-[11px] text-gray-400 mt-0.5">{it.presentacion}</p>}
                         </div>
                       </div>
                     </td>

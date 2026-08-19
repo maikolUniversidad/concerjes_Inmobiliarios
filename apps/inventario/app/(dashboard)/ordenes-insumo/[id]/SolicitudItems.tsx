@@ -160,11 +160,11 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
             {items.map((it) => (
               <tr key={it.id} className={it.es_adicional ? 'bg-amber-50/30' : ''}>
                 <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-2.5">
+                  <div className="flex items-start gap-2.5">
                     <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
                     <div className="min-w-0">
-                      <p className="font-body text-sm text-gray-900 truncate max-w-[220px]">{it.producto?.nombre_estandar ?? '—'}</p>
-                      {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
+                      <p className="font-body text-sm text-gray-900 break-words leading-snug">{it.producto?.nombre_estandar ?? '—'}</p>
+                      {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400 mt-0.5">{it.producto.presentacion}</p>}
                     </div>
                   </div>
                 </td>
