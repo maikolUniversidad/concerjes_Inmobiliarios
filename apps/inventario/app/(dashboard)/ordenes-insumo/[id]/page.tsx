@@ -8,6 +8,7 @@ import { FlujoOrden, type EventoOrden } from './FlujoOrden'
 import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
 import { BorrarOrdenBtn } from './BorrarOrdenBtn'
 import { UrgenciaEditor } from './UrgenciaEditor'
+import { DevolucionOrden } from './DevolucionOrden'
 
 export const metadata: Metadata = { title: 'Orden de insumo' }
 export const dynamic = 'force-dynamic'
@@ -29,13 +30,23 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       conductor:usuarios!ordenes_insumo_conductor_id_fkey ( nombre ),
       sede:sedes ( nombre, direccion, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_disp ) ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, cantidad_devuelta, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_disp ) ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)
     .single()
 
   if (!orden) notFound()
+
+  // Devoluciones de la orden (qué productos y cuánto regresó la sede).
+  const { data: devolucionesData } = await supabase
+    .from('orden_insumo_devoluciones')
+    .select(`
+      id, motivo, observacion, reingresa_stock, total_unidades, registrado_nombre, created_at,
+      items:orden_insumo_devolucion_items ( id, cantidad, producto:productos ( nombre_estandar, presentacion ) )
+    `)
+    .eq('orden_id', id)
+    .order('created_at', { ascending: false })
 
   const { data: eventosData } = await supabase.from('orden_insumo_eventos')
     .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
@@ -63,6 +74,10 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   const puedeEditarUrgencia =
     (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo') || perm.puede('alistar_ordenes_insumo'))
     && !['RECIBIDO', 'ANULADA'].includes(estado)
+
+  // Devoluciones: solo tienen sentido cuando el pedido ya salió de la bodega.
+  const despachada = ['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
+  const puedeDevolver = perm.puede('alistar_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo')
 
   // Datos planos para los PDF (orden / remisión que viaja con el pedido).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -123,6 +138,17 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           orden={orden as any}
           puedeAlistar={perm.puede('alistar_ordenes_insumo')}
+        />
+      )}
+      {/* Devoluciones del pedido (parciales, con reingreso de stock si aplica). */}
+      {despachada && (
+        <DevolucionOrden
+          ordenId={id}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          items={(o.items ?? []) as any}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          devoluciones={(devolucionesData ?? []) as any}
+          puedeDevolver={puedeDevolver}
         />
       )}
       <DocumentosPDF datos={datosDoc} />

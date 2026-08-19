@@ -887,3 +887,49 @@ export async function borrarOrden(ordenId: string): Promise<ActionResult> {
   revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
   return { ok: true }
 }
+
+// ── Devoluciones: la sede regresa parte de un pedido ya despachado ────────────
+export type MotivoDevolucion = 'SOBRANTE' | 'AVERIADO' | 'ERRADO' | 'NO_REQUERIDO' | 'OTRO'
+
+export interface DevolucionInput {
+  motivo: MotivoDevolucion
+  observacion?: string | null
+  /** false cuando el producto vuelve inservible (averiado/vencido): no suma stock. */
+  reingresaStock?: boolean
+  items: { itemId: string; cantidad: number }[]
+}
+
+/**
+ * Registra una devolución de la orden: qué productos y cuántas unidades
+ * regresaron. Todo (cabecera + ítems + reingreso de stock + trazabilidad) se
+ * hace en una sola transacción dentro de `registrar_devolucion_oi`.
+ */
+export async function registrarDevolucion(ordenId: string, input: DevolucionInput): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('alistar_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para registrar devoluciones.' }
+  }
+  const sb = supabase as DB
+
+  const items = (input.items ?? [])
+    .map((i) => ({ item_id: i.itemId, cantidad: Number(i.cantidad) }))
+    .filter((i) => i.item_id && Number.isFinite(i.cantidad) && i.cantidad > 0)
+  if (items.length === 0) return { error: 'Marca al menos un producto con la cantidad devuelta.' }
+
+  const { data, error } = await sb.rpc('registrar_devolucion_oi', {
+    p_orden: ordenId,
+    p_motivo: input.motivo || 'OTRO',
+    p_items: items,
+    p_observacion: input.observacion?.trim() || null,
+    p_reingresa: input.reingresaStock !== false,
+  })
+  if (error) {
+    return { error: error.message.includes('row-level security') ? 'Sin permisos para devolver stock.' : error.message }
+  }
+
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento'); revalidatePath('/movimientos')
+  return { ok: true, id: (data as string) ?? undefined }
+}
