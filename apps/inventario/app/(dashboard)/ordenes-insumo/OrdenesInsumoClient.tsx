@@ -282,8 +282,10 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
         )}
       </div>
 
-      {/* Reporte de órdenes por quién la creó (estado + conteo) */}
-      <ReportePorCreador ordenes={ordenes} />
+      {/* Reporte de órdenes por quién la creó (estado + conteo).
+          Usa la lista YA filtrada (tab + estado + creador + búsqueda) para que
+          los filtros de pantalla también afecten el reporte. */}
+      <ReportePorCreador ordenes={lista} />
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-2 flex-wrap">
