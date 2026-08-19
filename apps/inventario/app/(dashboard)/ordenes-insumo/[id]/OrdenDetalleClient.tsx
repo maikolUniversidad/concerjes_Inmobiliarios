@@ -23,8 +23,11 @@ interface Item {
   cantidad_alistada: number
   alistado: boolean
   es_adicional?: boolean
-  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null } | null
+  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: { cantidad_disp: number } | null } | null
 }
+
+/** Disponible en bodega del producto del ítem (0 si no hay fila de stock). */
+const dispDe = (it: Item) => Number(it.producto?.stock?.cantidad_disp ?? 0)
 interface Orden {
   id: string
   numero: string
@@ -104,6 +107,11 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
 
   async function toggleAlistado(it: Item) {
     if (!editable) return
+    // Sin stock disponible no se puede alistar (y no saldrá en el despacho).
+    if (!it.alistado && dispDe(it) <= 0) {
+      toast.error('Sin stock disponible: este producto no se puede alistar.')
+      return
+    }
     setBusyItem(it.id)
     const nuevo = !it.alistado
     // Al chulear un ítem sin cantidad, se asume que se alista todo lo solicitado.
@@ -223,11 +231,15 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {items.map((it) => (
-                <tr key={it.id} className={it.alistado ? 'bg-green-50/40' : ''}>
+              {items.map((it) => {
+                const disp = dispDe(it)
+                const sinStock = disp <= 0
+                return (
+                <tr key={it.id} className={sinStock ? 'bg-gray-50/70 opacity-70' : it.alistado ? 'bg-green-50/40' : ''}>
                   <td className="px-3 py-2.5 text-center">
-                    <button onClick={() => toggleAlistado(it)} disabled={!editable || busyItem === it.id}
-                      className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-colors ${it.alistado ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'} disabled:opacity-60`}>
+                    <button onClick={() => toggleAlistado(it)} disabled={!editable || busyItem === it.id || (sinStock && !it.alistado)}
+                      title={sinStock ? 'Sin stock disponible' : undefined}
+                      className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-colors ${it.alistado ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'} disabled:opacity-40 disabled:cursor-not-allowed`}>
                       {busyItem === it.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" /> : it.alistado ? <Check className="w-3.5 h-3.5 text-white" /> : null}
                     </button>
                   </td>
@@ -237,24 +249,31 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
                       <div className="min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <p className="font-body text-sm text-gray-900 truncate max-w-[200px]">{it.producto?.nombre_estandar ?? '—'}</p>
+                          {sinStock && (
+                            <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Sin stock</span>
+                          )}
                           {it.es_adicional ? (
                             <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
                           ) : (
                             <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
                           )}
                         </div>
-                        {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
+                        <p className="font-body text-[11px] text-gray-400">
+                          {it.producto?.presentacion ? it.producto.presentacion + ' · ' : ''}
+                          <span className={sinStock ? 'text-red-500 font-semibold' : ''}>Disp: {disp}</span>
+                        </p>
                       </div>
                     </div>
                   </td>
                   <td className="px-3 py-2.5 text-center font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</td>
                   <td className="px-3 py-2.5">
-                    <input type="number" min={0} step="1" value={Number(it.cantidad_alistada)} disabled={!editable}
+                    <input type="number" min={0} step="1" value={Number(it.cantidad_alistada)} disabled={!editable || sinStock}
                       onChange={(e) => setCantAlistada(it, Number(e.target.value) || 0)} onBlur={() => guardarCant(it)}
                       className="w-full border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
                   </td>
                 </tr>
-              ))}
+                )
+              })}
               {items.length === 0 && (
                 <tr><td colSpan={4} className="py-10 text-center font-body text-sm text-gray-400">La orden no tiene ítems.</td></tr>
               )}
@@ -355,17 +374,18 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
 
             <button
               onClick={() => setShowVideo(true)}
-              disabled={!puedeAlistar || despachando || !despachoValido}
+              disabled={!puedeAlistar || despachando || !despachoValido || !hayAlistados}
               className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50">
               {despachando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
               Grabar video y despachar
             </button>
-            {!despachoValido && <p className="font-body text-xs text-gray-400">Indica si el pedido sale con conductor propio o con transportadora.</p>}
-            {despachoValido && !hayAlistados && (
+            {!hayAlistados ? (
               <p className="font-body text-xs text-amber-600">
-                Ningún ítem tiene cantidad alistada: se despachará con las cantidades solicitadas.
+                Marca al menos un ítem como alistado (con cantidad) para poder despachar. Solo sale lo alistado.
               </p>
-            )}
+            ) : !despachoValido ? (
+              <p className="font-body text-xs text-gray-400">Indica si el pedido sale con conductor propio o con transportadora.</p>
+            ) : null}
           </div>
         )}
       </div>

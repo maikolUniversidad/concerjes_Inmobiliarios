@@ -694,9 +694,12 @@ export async function despacharOrden(
     Number(it.cantidad_alistada) > 0 ? Number(it.cantidad_alistada) : Number(it.cantidad_solicitada)
 
   // Se despacha lo chuleado; si no se chuleó nada, sale la orden completa.
-  const marcados = lista.filter((it) => it.alistado)
-  const aDespachar = (marcados.length > 0 ? marcados : lista).filter((it) => cantDe(it) > 0)
-  if (aDespachar.length === 0) return { error: 'Los ítems no tienen cantidad para despachar.' }
+  // Solo se despacha lo ALISTADO (chuleado con cantidad). Lo no alistado —incluido
+  // lo que no tenía stock— NO sale en el despacho ni mueve inventario.
+  const aDespachar = lista.filter((it) => it.alistado && cantDe(it) > 0)
+  if (aDespachar.length === 0) {
+    return { error: 'No hay ítems alistados para despachar. Marca al menos un producto como alistado.' }
+  }
 
   // Registrar SALIDA de stock (traslado a la sede) por cada ítem alistado.
   let fallos = 0

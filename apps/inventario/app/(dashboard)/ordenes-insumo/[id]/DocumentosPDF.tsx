@@ -182,7 +182,10 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     const esRemision = tipo === 'REMISION'
     const cantLabel = esRemision ? 'DESPACHADO' : 'SOLICITADO'
     const cantOf = (i: DatosDoc['items'][number]) => (esRemision ? i.alistada : i.solicitada)
-    const total = datos.items.reduce((a, i) => a + cantOf(i), 0)
+    // La remisión de despacho SOLO lleva lo alistado (cantidad > 0). La orden de
+    // insumo lista todos los solicitados.
+    const itemsDoc = esRemision ? datos.items.filter((i) => Number(i.alistada) > 0) : datos.items
+    const total = itemsDoc.reduce((a, i) => a + cantOf(i), 0)
     const dir = (direccion || '').trim() || datos.direccion || null
 
     const doc = h(Document, { title: `${tipo}-${datos.numero}` },
@@ -218,7 +221,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
           h(Text, { style: s.cProd }, 'PRODUCTO'),
           h(Text, { style: s.cNum }, cantLabel),
         ),
-        ...datos.items.map((i, k) =>
+        ...itemsDoc.map((i, k) =>
           h(View, { style: s.tr, key: String(k), wrap: false },
             h(Text, { style: s.cCod }, i.codigo != null && i.codigo !== '' ? String(i.codigo) : '—'),
             h(View, { style: s.cProd },
@@ -230,7 +233,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
         ),
         h(View, { style: [s.tr, { borderBottomWidth: 0, backgroundColor: '#f9fafb' }] },
           h(Text, { style: s.cCod }, ''),
-          h(Text, { style: [s.cProd, { fontFamily: 'Helvetica-Bold' }] }, `TOTAL · ${datos.items.length} ítem(s)`),
+          h(Text, { style: [s.cProd, { fontFamily: 'Helvetica-Bold' }] }, `TOTAL · ${itemsDoc.length} ítem(s)`),
           h(Text, { style: [s.cNum, { fontFamily: 'Helvetica-Bold' }] }, String(total)),
         ),
         datos.observacion
