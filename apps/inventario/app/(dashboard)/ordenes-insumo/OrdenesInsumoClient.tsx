@@ -2,9 +2,12 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
+import { createClient } from '@/lib/supabase/client'
 import { calcularUrgencia, fmtFecha } from './urgencia'
+import { exportarOrdenesExcel, type ItemExport } from './exportarExcel'
 
 export interface OrdenRow {
   id: string
@@ -219,6 +222,49 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     })
   }, [tab, proceso, porEntregar, ordenes, filtroEstado, filtroCreador, q])
 
+  // ── Exportar a Excel lo que está filtrado en pantalla ──────────────────────
+  const [exportando, setExportando] = useState(false)
+  async function exportar() {
+    if (lista.length === 0) { toast.info('No hay órdenes para exportar con los filtros actuales.'); return }
+    setExportando(true)
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const sb = createClient() as any
+      const ids = lista.map((o) => o.id)
+      // Detalle de ítems de las órdenes filtradas (en lotes por si son muchas).
+      const items: ItemExport[] = []
+      for (let i = 0; i < ids.length; i += 120) {
+        const chunk = ids.slice(i, i + 120)
+        const { data, error } = await sb
+          .from('orden_insumo_items')
+          .select('orden_id, cantidad_solicitada, cantidad_alistada, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion )')
+          .in('orden_id', chunk)
+        if (error) throw error
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        for (const r of ((data ?? []) as any[])) {
+          items.push({
+            orden_id: r.orden_id,
+            codigo: r.producto?.codigo ?? null,
+            nombre: r.producto?.nombre_estandar ?? '—',
+            presentacion: r.producto?.presentacion ?? null,
+            es_adicional: !!r.es_adicional,
+            solicitado: Number(r.cantidad_solicitada ?? 0),
+            alistado: Number(r.cantidad_alistada ?? 0),
+          })
+        }
+      }
+      const ctxTab = tab === 'entregar' ? 'Por entregar' : tab === 'proceso' ? 'Por procesar' : 'Todas'
+      const ctxEstado = filtroEstado !== 'todos' ? ` · ${FILTROS_ESTADO.find((f) => f.value === filtroEstado)?.label ?? filtroEstado}` : ''
+      const ctxCreador = filtroCreador !== 'todos' ? ` · ${creadores.find((c) => c.id === filtroCreador)?.nombre ?? ''}` : ''
+      await exportarOrdenesExcel(lista, items, `${ctxTab}${ctxEstado}${ctxCreador} · ${lista.length} órdenes`)
+      toast.success(`Excel generado con ${lista.length} órdenes.`)
+    } catch {
+      toast.error('No se pudo generar el Excel.')
+    } finally {
+      setExportando(false)
+    }
+  }
+
   return (
     <div className="space-y-4">
       {/* Buscador inteligente por número o sede */}
@@ -259,7 +305,16 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
             Todas ({ordenes.length})
           </button>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* Exportar a Excel lo filtrado */}
+          <button
+            onClick={exportar}
+            disabled={exportando}
+            title="Descargar Excel con las órdenes filtradas (hojas: Órdenes, Ítems, Resumen)"
+            className="inline-flex items-center gap-2 font-body font-semibold text-sm px-3 py-2 rounded-xl border border-green-200 bg-green-50 text-green-700 hover:bg-green-100 transition-colors disabled:opacity-50">
+            {exportando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+            Excel ({lista.length})
+          </button>
           {/* Filtro por estado */}
           <div className="relative">
             <button
