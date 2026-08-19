@@ -44,3 +44,48 @@ export async function registrarMovimiento(_prev: ActionResult, formData: FormDat
   revalidatePath('/dashboard')
   redirect('/movimientos')
 }
+
+export interface MovItem {
+  tipo: TipoMovimiento
+  producto_id: string
+  cantidad: number
+  sede_id: string | null
+  ubicacion_id: string | null
+  observacion: string | null
+}
+
+/** Registra VARIOS movimientos en lote (uno por fila). */
+export async function registrarMovimientos(items: MovItem[]): Promise<{ error?: string; ok?: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const validos = items.filter(it =>
+    it.producto_id &&
+    ['ENTRADA', 'SALIDA', 'DEVOLUCION', 'AJUSTE', 'TRASLADO'].includes(it.tipo) &&
+    Number.isFinite(it.cantidad) && it.cantidad > 0,
+  )
+  if (validos.length === 0) return { error: 'Agrega al menos un movimiento válido (producto y cantidad > 0).' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  let ok = 0
+  for (const it of validos) {
+    const { error } = await sb.rpc('registrar_movimiento', {
+      p_producto: it.producto_id, p_tipo: it.tipo, p_cantidad: it.cantidad,
+      p_sede: it.sede_id, p_observacion: it.observacion, p_ubicacion: it.ubicacion_id,
+    })
+    if (error) {
+      const msg = error.message.includes('row-level security') || error.message.includes('permission')
+        ? 'No tienes permisos para registrar movimientos.'
+        : error.message
+      return { error: `Se registraron ${ok} de ${validos.length}. Falló en la fila ${ok + 1}: ${msg}`, ok }
+    }
+    ok++
+  }
+
+  revalidatePath('/movimientos')
+  revalidatePath('/stock')
+  revalidatePath('/dashboard')
+  return { ok }
+}

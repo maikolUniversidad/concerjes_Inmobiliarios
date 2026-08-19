@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { MovimientoForm } from './MovimientoForm'
+import { MovimientosBatchClient } from './MovimientosBatchClient'
 import type { TipoMovimiento } from '@/lib/types/database'
 
 export const metadata: Metadata = { title: 'Registrar movimiento' }
@@ -15,14 +15,19 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const { producto, tipo } = await searchParams
   const supabase = await createClient()
 
-  const [{ data: productos }, { data: sedes }, { data: ubicData }] = await Promise.all([
-    supabase.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true).order('nombre_estandar'),
+  const [{ data: productos }, { data: sedes }, { data: ubicData }, { data: ordData }] = await Promise.all([
+    supabase.from('productos').select('id, nombre_estandar, presentacion, codigo').eq('activo', true).order('nombre_estandar').limit(5000),
     supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre'),
     supabase.from('ubicaciones').select('id, codigo, nombre, bodega:bodegas ( nombre )').eq('activo', true).order('codigo'),
+    // Órdenes de insumo (para cargar devoluciones): recientes, no anuladas.
+    supabase.from('ordenes_insumo').select('id, numero, sede_id, sede:sedes ( nombre )').neq('estado', 'ANULADA').order('created_at', { ascending: false }).limit(150),
   ])
 
   const ubicaciones = ((ubicData as unknown as { id: string; codigo: string; nombre: string | null; bodega: { nombre: string } | null }[]) ?? [])
     .map(u => ({ id: u.id, label: `${u.bodega?.nombre ?? 'Bodega'} · ${u.codigo}${u.nombre ? ` (${u.nombre})` : ''}` }))
+
+  const ordenes = ((ordData as unknown as { id: string; numero: string; sede_id: string | null; sede: { nombre: string } | null }[]) ?? [])
+    .map(o => ({ id: o.id, numero: o.numero, sede_id: o.sede_id, sede_nombre: o.sede?.nombre ?? null }))
 
   const initialTipo = tipo && TIPOS_VALIDOS.includes(tipo as TipoMovimiento) ? (tipo as TipoMovimiento) : undefined
 
@@ -32,13 +37,13 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
         <Link href="/movimientos" className="inline-flex items-center gap-1.5 font-body text-sm text-gray-500 hover:text-brand-green mb-2">
           <ArrowLeft className="w-4 h-4" /> Volver a movimientos
         </Link>
-        <h1 className="font-heading font-bold text-2xl text-gray-900">Registrar movimiento</h1>
+        <h1 className="font-heading font-bold text-2xl text-gray-900">Registrar movimientos</h1>
         <p className="font-body text-sm text-gray-500 mt-0.5">
-          El stock se actualiza automáticamente según el tipo de movimiento
+          Registra varios movimientos a la vez. El stock se actualiza automáticamente según cada tipo.
         </p>
       </div>
 
-      <MovimientoForm productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} initialProducto={producto} initialTipo={initialTipo} />
+      <MovimientosBatchClient productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} ordenes={ordenes} initialProducto={producto} initialTipo={initialTipo} />
     </div>
   )
 }
