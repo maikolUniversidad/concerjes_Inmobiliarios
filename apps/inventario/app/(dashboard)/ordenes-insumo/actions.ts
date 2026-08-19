@@ -804,6 +804,27 @@ export async function anularOrden(ordenId: string): Promise<ActionResult> {
   return { ok: true }
 }
 
+/**
+ * Registra la dirección de despacho en la sede (sedes.direccion). Vía función
+ * SECURITY DEFINER, porque write_sedes solo deja a ADMIN pero quien despacha
+ * necesita poder registrarla cuando la sede aún no la tiene.
+ */
+export async function guardarDireccionSede(sedeId: string, direccion: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('alistar_ordenes_insumo') && !perm.puede('crear_ordenes_insumo')
+      && !perm.puede('aprobar_ordenes_insumo') && !perm.puede('editar_contratos')) {
+    return { error: 'No tienes permiso para registrar la dirección.' }
+  }
+  if (!sedeId) return { error: 'Sede no válida.' }
+  const sb = supabase as DB
+  const { error } = await sb.rpc('oi_set_direccion_sede', { p_sede: sedeId, p_direccion: direccion ?? '' })
+  if (error) return { error: error.message }
+  revalidatePath('/ordenes-insumo')
+  return { ok: true }
+}
+
 /** Fija/actualiza la urgencia y la fecha de entrega pactada de una orden. */
 export async function actualizarUrgencia(
   ordenId: string, patch: { urgente?: boolean; fechaEntrega?: string | null },

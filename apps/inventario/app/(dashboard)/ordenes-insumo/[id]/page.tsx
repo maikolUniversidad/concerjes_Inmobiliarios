@@ -25,11 +25,11 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       fecha_entrega_pactada, urgente,
       aprobado_solicitante_at, aprobado_coordinador_at, recibido_at, recibido_obs,
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
-      tipo_despacho, transportadora_nombre, transportadora_guia,
+      tipo_despacho, transportadora_nombre, transportadora_guia, sede_id,
       conductor:usuarios!ordenes_insumo_conductor_id_fkey ( nombre ),
-      sede:sedes ( nombre, grupo:grupos_contrato ( nombre ) ),
+      sede:sedes ( nombre, direccion, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_disp ) ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)
@@ -69,14 +69,17 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   const o = orden as any
   const datosDoc: DatosDoc = {
     ordenId: id,
+    sedeId: o.sede_id ?? '',
     numero: o.numero, estado, created_at: o.created_at,
     aprobado_at: o.aprobado_at ?? null, despachado_at: o.despachado_at ?? null,
     observacion: o.observacion ?? null,
     sede: o.sede?.nombre ?? 'Sin sede',
+    direccion: o.sede?.direccion ?? null,
     grupo: o.sede?.grupo?.nombre ?? null,
     bodega: o.bodega?.nombre ?? null,
     responsables: (o.responsables ?? []).map((r: any) => r.usuario?.nombre).filter(Boolean),
     items: (o.items ?? []).map((i: any) => ({
+      codigo: i.producto?.codigo ?? null,
       nombre: i.producto?.nombre_estandar ?? '—',
       presentacion: i.producto?.presentacion ?? null,
       solicitada: Number(i.cantidad_solicitada ?? 0),
