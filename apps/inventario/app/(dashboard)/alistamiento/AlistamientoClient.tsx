@@ -5,14 +5,26 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   MapPin, ArrowRight, Truck, Search, PackageCheck, X, LayoutGrid, List,
-  ClipboardCheck, Boxes, Clock, ListChecks, PackageOpen, User2,
+  ClipboardCheck, Boxes, Clock, ListChecks, PackageOpen, User2, AlertTriangle,
 } from 'lucide-react'
 
 export interface Fila {
   id: string; numero: string; estado: string; created_at: string; aprobado_at: string | null
   sede: { nombre: string } | null
-  items: { alistado: boolean }[]
+  items: { alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number }[]
 }
+
+/** Ítems y unidades que quedaron sin enviar (solicitado − alistado). */
+const pendienteEnvio = (o: Fila) => {
+  let unidades = 0; let items = 0
+  for (const i of o.items ?? []) {
+    const p = Math.max(0, Number(i.cantidad_solicitada) - Number(i.cantidad_alistada))
+    if (p > 0) { unidades += p; items++ }
+  }
+  return { unidades, items }
+}
+/** DESPACHADO pero se fue con productos pendientes. */
+const despachoIncompleto = (o: Fila) => o.estado === 'DESPACHADO' && pendienteEnvio(o).items > 0
 
 const META: Record<string, { label: string; color: string; chip: string }> = {
   APROBADA:        { label: 'Lista para alistar', color: 'bg-blue-100 text-blue-700',     chip: 'bg-blue-600' },
@@ -55,10 +67,11 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
   }, [ordenes])
 
   const conteos = useMemo(() => {
-    const c: Record<string, number> = { TODOS: ordenes.length, PENDIENTES: 0 }
+    const c: Record<string, number> = { TODOS: ordenes.length, PENDIENTES: 0, CON_PENDIENTE: 0 }
     for (const o of ordenes) {
       c[o.estado] = (c[o.estado] ?? 0) + 1
       if (o.estado !== 'DESPACHADO') c.PENDIENTES++
+      if (despachoIncompleto(o)) c.CON_PENDIENTE++
     }
     return c
   }, [ordenes])
@@ -67,7 +80,8 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
     const tokens = norm(q).split(/\s+/).filter(Boolean)
     return ordenes.filter((o) => {
       if (filtro === 'PENDIENTES' && o.estado === 'DESPACHADO') return false
-      if (filtro !== 'TODOS' && filtro !== 'PENDIENTES' && o.estado !== filtro) return false
+      if (filtro === 'CON_PENDIENTE' && !despachoIncompleto(o)) return false
+      if (filtro !== 'TODOS' && filtro !== 'PENDIENTES' && filtro !== 'CON_PENDIENTE' && o.estado !== filtro) return false
       if (tokens.length === 0) return true
       const heno = norm(`${o.numero} ${o.sede?.nombre ?? ''}`)
       return tokens.every((t) => heno.includes(t))
@@ -117,6 +131,13 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
       <div className="flex flex-wrap gap-2">
         {chip('PENDIENTES', 'Por trabajar')}
         {chip('TODOS', 'Todas')}
+        {(conteos.CON_PENDIENTE ?? 0) > 0 && (
+          <button onClick={() => setFiltro('CON_PENDIENTE')}
+            className={'inline-flex items-center gap-1 rounded-full px-3 py-1.5 font-body text-xs font-semibold transition-colors ' +
+              (filtro === 'CON_PENDIENTE' ? 'bg-amber-500 text-white' : 'bg-amber-100 text-amber-700 hover:bg-amber-200')}>
+            <AlertTriangle className="w-3.5 h-3.5" /> Con pendiente ({conteos.CON_PENDIENTE})
+          </button>
+        )}
         {ORDEN_ESTADOS.filter((e) => (conteos[e] ?? 0) > 0).map((e) => chip(e, META[e]?.label ?? e))}
       </div>
 
@@ -140,6 +161,7 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
                 <th className="px-4 py-3 text-right font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Falta</th>
                 <th className="px-4 py-3 text-right font-body text-xs font-semibold uppercase tracking-wide text-gray-500">Alistado</th>
                 <th className="px-4 py-3 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500 w-40">Avance</th>
+                <th className="px-4 py-3 text-center font-body text-xs font-semibold uppercase tracking-wide text-gray-500 w-28">Sin enviar</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -176,6 +198,18 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
                         <span className="w-9 text-right font-body text-xs text-gray-400">{c.pct}%</span>
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-center">
+                      {despachoIncompleto(o) ? (() => {
+                        const p = pendienteEnvio(o)
+                        return (
+                          <span onClick={(e) => { e.stopPropagation(); router.push(`/ordenes-insumo/${o.id}`) }}
+                            title="Se despachó con productos pendientes — clic para enviar lo restante"
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-body text-[11px] font-bold text-amber-700 cursor-pointer hover:bg-amber-200">
+                            <AlertTriangle className="w-3 h-3" /> {p.items} ítem · {p.unidades}
+                          </span>
+                        )
+                      })() : <span className="text-gray-200 text-xs">—</span>}
+                    </td>
                   </tr>
                 )
               })}
@@ -211,7 +245,15 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
                     <div className="h-full rounded-full bg-brand-green transition-all" style={{ width: `${c.pct}%` }} />
                   </div>
                 </div>
-                <span className="mt-3 inline-flex items-center gap-1 font-body text-xs font-semibold text-brand-green">
+                {despachoIncompleto(o) && (() => {
+                  const p = pendienteEnvio(o)
+                  return (
+                    <p className="mt-2 inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 font-body text-[11px] font-bold text-amber-700">
+                      <AlertTriangle className="w-3 h-3" /> Sin enviar: {p.items} ítem · {p.unidades} und
+                    </p>
+                  )
+                })()}
+                <span className="mt-3 flex items-center gap-1 font-body text-xs font-semibold text-brand-green">
                   {o.estado === 'DESPACHADO'
                     ? <><Truck className="h-3.5 w-3.5" /> Ver despacho</>
                     : <>Abrir alistamiento <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" /></>}

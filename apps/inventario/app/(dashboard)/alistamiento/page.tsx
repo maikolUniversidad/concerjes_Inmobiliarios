@@ -17,7 +17,7 @@ export default async function AlistamientoPage() {
 
   const { data } = await supabase
     .from('ordenes_insumo')
-    .select('id, numero, estado, created_at, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado )')
+    .select('id, numero, estado, created_at, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado, cantidad_solicitada, cantidad_alistada )')
     .in('estado', ESTADOS_ALISTAMIENTO)
     .order('aprobado_at', { ascending: false, nullsFirst: false })
 
