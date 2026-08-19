@@ -16,11 +16,12 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const supabase = await createClient()
 
   const [{ data: productos }, { data: sedes }, { data: ubicData }, { data: ordData }, { data: usuData }, { data: borrData }] = await Promise.all([
-    supabase.from('productos').select('id, nombre_estandar, presentacion, codigo').eq('activo', true).order('nombre_estandar').limit(5000),
+    supabase.from('productos').select('id, nombre_estandar, presentacion, codigo, imagen_url').eq('activo', true).order('nombre_estandar').limit(5000),
     supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre'),
     supabase.from('ubicaciones').select('id, codigo, nombre, bodega:bodegas ( nombre )').eq('activo', true).order('codigo'),
     // Órdenes de insumo (para cargar devoluciones): recientes, no anuladas.
-    supabase.from('ordenes_insumo').select('id, numero, sede_id, sede:sedes ( nombre )').neq('estado', 'ANULADA').order('created_at', { ascending: false }).limit(150),
+    // Se traen bastantes porque el selector busca en el cliente (número/sede/estado).
+    supabase.from('ordenes_insumo').select('id, numero, estado, created_at, sede_id, sede:sedes ( nombre )').neq('estado', 'ANULADA').order('created_at', { ascending: false }).limit(600),
     supabase.from('usuarios_opciones').select('id, nombre').order('nombre'),
     supabase.from('movimiento_borradores')
       .select('id, nombre, created_at, items:movimiento_borrador_items ( tipo, producto_id, cantidad, sede_id, ubicacion_id, observacion, orden ), responsables:movimiento_borrador_responsables ( usuario_id )')
@@ -30,8 +31,14 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const ubicaciones = ((ubicData as unknown as { id: string; codigo: string; nombre: string | null; bodega: { nombre: string } | null }[]) ?? [])
     .map(u => ({ id: u.id, label: `${u.bodega?.nombre ?? 'Bodega'} · ${u.codigo}${u.nombre ? ` (${u.nombre})` : ''}` }))
 
-  const ordenes = ((ordData as unknown as { id: string; numero: string; sede_id: string | null; sede: { nombre: string } | null }[]) ?? [])
-    .map(o => ({ id: o.id, numero: o.numero, sede_id: o.sede_id, sede_nombre: o.sede?.nombre ?? null }))
+  const ordenes = ((ordData as unknown as {
+    id: string; numero: string; estado: string; created_at: string
+    sede_id: string | null; sede: { nombre: string } | null
+  }[]) ?? [])
+    .map(o => ({
+      id: o.id, numero: o.numero, estado: o.estado, created_at: o.created_at,
+      sede_id: o.sede_id, sede_nombre: o.sede?.nombre ?? null,
+    }))
 
   const usuarios = ((usuData as unknown as { id: string; nombre: string }[]) ?? [])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

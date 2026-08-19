@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarMovimientos, guardarBorrador, eliminarBorrador, registrarDesdeBorrador } from '../actions'
 import { ProductoCombo, type ProductoComboItem } from '@/components/ui/ProductoCombo'
+import { ComboBuscador } from '@/components/ui/ComboBuscador'
 import type { TipoMovimiento } from '@/lib/types/database'
 
 export interface BorradorItem { tipo: TipoMovimiento; producto_id: string | null; cantidad: number | null; sede_id: string | null; ubicacion_id: string | null; observacion: string | null; orden: number }
@@ -35,7 +36,18 @@ interface Fila {
   ubicacion_id: string
   observacion: string
 }
-interface OrdenOpt { id: string; numero: string; sede_id: string | null; sede_nombre: string | null }
+interface OrdenOpt {
+  id: string; numero: string; sede_id: string | null; sede_nombre: string | null
+  estado?: string; created_at?: string
+}
+
+const ESTADO_ORDEN: Record<string, string> = {
+  BORRADOR: 'Borrador', EN_REVISION: 'En revisión', CAMBIOS_SOLICITADOS: 'Cambios solicitados',
+  APROBADA: 'Aprobada', PENDIENTE: 'Pendiente', EN_ALISTAMIENTO: 'En alistamiento', ALISTADO: 'Alistado',
+  DESPACHADO: 'Despachado', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado', RECIBIDO: 'Recibido',
+}
+const fechaCorta = (iso?: string) =>
+  iso ? new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: '2-digit' }) : ''
 
 const cellSel = 'w-full rounded-lg border border-gray-200 px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green bg-white'
 const cellInp = 'w-full rounded-lg border border-gray-200 px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green'
@@ -227,10 +239,34 @@ export function MovimientosBatchClient({
           </p>
           <p className="font-body text-xs text-gray-400 mt-0.5 mb-2">Elige una orden de insumo y se cargan sus ítems como filas de devolución.</p>
           <div className="flex flex-wrap items-center gap-2">
-            <select value={ordenSel} onChange={e => setOrdenSel(e.target.value)} className={cellSel + ' max-w-md'}>
-              <option value="">— Selecciona una orden —</option>
-              {ordenes.map(o => <option key={o.id} value={o.id}>{o.numero}{o.sede_nombre ? ` · ${o.sede_nombre}` : ''}</option>)}
-            </select>
+            <div className="w-full max-w-md">
+              <ComboBuscador
+                items={ordenes}
+                value={ordenSel}
+                onPick={o => setOrdenSel(o.id)}
+                getId={o => o.id}
+                textoBusqueda={o => `${o.numero} ${o.sede_nombre ?? ''} ${ESTADO_ORDEN[o.estado ?? ''] ?? o.estado ?? ''} ${fechaCorta(o.created_at)}`}
+                placeholder="— Busca la orden por número o sede —"
+                buscarPlaceholder="Número de orden, sede o estado…"
+                sinResultados="Ninguna orden coincide"
+                etiqueta={o => <span className="truncate">{o.numero}{o.sede_nombre ? ` · ${o.sede_nombre}` : ''}</span>}
+                fila={o => (
+                  <span className="min-w-0">
+                    <span className="flex items-center gap-2">
+                      <span className="font-body text-sm font-semibold text-gray-800">{o.numero}</span>
+                      {o.estado && (
+                        <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                          {ESTADO_ORDEN[o.estado] ?? o.estado}
+                        </span>
+                      )}
+                    </span>
+                    <span className="block font-body text-xs text-gray-400 truncate">
+                      {o.sede_nombre ?? 'Sin sede'}{o.created_at ? ` · ${fechaCorta(o.created_at)}` : ''}
+                    </span>
+                  </span>
+                )}
+              />
+            </div>
             <button onClick={traerOrden} disabled={!ordenSel || cargandoOrden}
               className="flex items-center gap-1.5 border border-brand-green text-brand-green font-body font-semibold text-xs px-3 py-2 rounded-lg hover:bg-green-50 disabled:opacity-50">
               {cargandoOrden ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />} Traer ítems
