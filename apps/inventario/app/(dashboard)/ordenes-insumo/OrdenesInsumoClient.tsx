@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X, AlertTriangle, CalendarClock } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown } from 'lucide-react'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { calcularUrgencia, fmtFecha } from './urgencia'
 
@@ -18,6 +18,8 @@ export interface OrdenRow {
   responsables: number
   fecha_entrega_pactada: string | null
   urgente: boolean
+  creador_id: string | null
+  creador_nombre: string | null
 }
 
 export const ESTADO_META: Record<EstadoOrdenInsumo, { label: string; cls: string }> = {
@@ -70,6 +72,97 @@ const FILTROS_ESTADO: { value: EstadoOrdenInsumo | 'todos'; label: string }[] = 
   { value: 'ANULADA',          label: 'Anulada'          },
 ]
 
+// ── Reporte de órdenes por quién la creó (estado + conteo) ───────────────────
+interface FilaReporte { id: string; nombre: string; total: number; porEstado: Record<string, number> }
+
+function ReportePorCreador({ ordenes }: { ordenes: OrdenRow[] }) {
+  const [abierto, setAbierto] = useState(false)
+
+  const { filas, estadosPresentes } = useMemo(() => {
+    const mapa = new Map<string, FilaReporte>()
+    const estados = new Set<string>()
+    for (const o of ordenes) {
+      const id = o.creador_id ?? 'sin'
+      const nombre = o.creador_nombre ?? 'Sin usuario'
+      if (!mapa.has(id)) mapa.set(id, { id, nombre, total: 0, porEstado: {} })
+      const f = mapa.get(id)!
+      f.total += 1
+      f.porEstado[o.estado] = (f.porEstado[o.estado] ?? 0) + 1
+      estados.add(o.estado)
+    }
+    const filas = [...mapa.values()].sort((a, b) => b.total - a.total)
+    // Estados ordenados según el orden lógico del catálogo.
+    const orden = Object.keys(ESTADO_META)
+    const estadosPresentes = [...estados].sort((a, b) => orden.indexOf(a) - orden.indexOf(b))
+    return { filas, estadosPresentes }
+  }, [ordenes])
+
+  if (ordenes.length === 0) return null
+
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+      <button onClick={() => setAbierto(v => !v)} className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+        <div className="flex items-center gap-2">
+          <BarChart3 className="w-4 h-4 text-brand-green" />
+          <h2 className="font-heading font-semibold text-sm text-gray-900">Reporte por creador</h2>
+          <span className="font-body text-xs text-gray-400">{filas.length} usuario(s) · {ordenes.length} órdenes</span>
+        </div>
+        {abierto ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
+      </button>
+
+      {abierto && (
+        <div className="border-t border-gray-100 overflow-x-auto">
+          <table className="w-full min-w-[560px]">
+            <thead>
+              <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Creado por</th>
+                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-20">Total</th>
+                {estadosPresentes.map((e) => (
+                  <th key={e} className="text-center font-body font-semibold text-[10px] text-gray-500 uppercase px-2 py-2.5 whitespace-nowrap">
+                    {metaEstado(e).label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {filas.map((f) => (
+                <tr key={f.id} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-2.5">
+                    <span className="inline-flex items-center gap-1.5 font-body text-sm text-gray-800">
+                      <UserCircle2 className="w-4 h-4 text-gray-300 shrink-0" /> {f.nombre}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2.5 text-center">
+                    <span className="font-heading font-bold text-sm text-brand-green">{f.total}</span>
+                  </td>
+                  {estadosPresentes.map((e) => (
+                    <td key={e} className="px-2 py-2.5 text-center">
+                      {f.porEstado[e]
+                        ? <span className={`inline-block min-w-[22px] font-body text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${metaEstado(e).cls}`}>{f.porEstado[e]}</span>
+                        : <span className="font-body text-xs text-gray-200">·</span>}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="bg-gray-50/70 border-t border-gray-100">
+                <td className="px-4 py-2.5 font-body font-semibold text-sm text-gray-700">Total</td>
+                <td className="px-3 py-2.5 text-center font-heading font-bold text-sm text-gray-900">{ordenes.length}</td>
+                {estadosPresentes.map((e) => (
+                  <td key={e} className="px-2 py-2.5 text-center font-body text-xs font-semibold text-gray-600">
+                    {filas.reduce((s, f) => s + (f.porEstado[e] ?? 0), 0)}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   ordenes: OrdenRow[]; puedeCrear: boolean; estadoInicial?: string
 }) {
@@ -79,7 +172,16 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   const [tab, setTab] = useState<Tab>('entregar')
   const [filtroEstado, setFiltroEstado] = useState<EstadoOrdenInsumo | 'todos'>(estadoValido)
   const [showFiltro, setShowFiltro] = useState(false)
+  const [filtroCreador, setFiltroCreador] = useState<string>('todos')
+  const [showCreador, setShowCreador] = useState(false)
   const [q, setQ] = useState('')
+
+  // Lista de creadores presentes (para el filtro "creado por").
+  const creadores = useMemo(() => {
+    const mapa = new Map<string, string>()
+    for (const o of ordenes) mapa.set(o.creador_id ?? 'sin', o.creador_nombre ?? 'Sin usuario')
+    return [...mapa.entries()].map(([id, nombre]) => ({ id, nombre })).sort((a, b) => a.nombre.localeCompare(b.nombre))
+  }, [ordenes])
 
   const proceso = useMemo(
     () => ordenes.filter((o) => (ESTADOS_PROCESO as string[]).includes(o.estado)),
@@ -98,9 +200,10 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   const lista = useMemo(() => {
     const base = tab === 'proceso' ? proceso : tab === 'entregar' ? porEntregar : ordenes
     const porEstado = filtroEstado === 'todos' ? base : base.filter((o) => o.estado === filtroEstado)
+    const porCreador = filtroCreador === 'todos' ? porEstado : porEstado.filter((o) => (o.creador_id ?? 'sin') === filtroCreador)
     const tokens = norm(q).split(/\s+/).filter(Boolean)
-    const filtrada = tokens.length === 0 ? porEstado : porEstado.filter((o) => {
-      const heno = norm(`${o.numero} ${o.sede}`)
+    const filtrada = tokens.length === 0 ? porCreador : porCreador.filter((o) => {
+      const heno = norm(`${o.numero} ${o.sede} ${o.creador_nombre ?? ''}`)
       return tokens.every((t) => heno.includes(t))
     })
     // En "Por entregar" se ordena por urgencia (vencidas primero), luego por
@@ -114,7 +217,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       if (fa !== fb) return fa < fb ? -1 : 1
       return a.created_at < b.created_at ? 1 : -1
     })
-  }, [tab, proceso, porEntregar, ordenes, filtroEstado, q])
+  }, [tab, proceso, porEntregar, ordenes, filtroEstado, filtroCreador, q])
 
   return (
     <div className="space-y-4">
@@ -132,6 +235,9 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
           </button>
         )}
       </div>
+
+      {/* Reporte de órdenes por quién la creó (estado + conteo) */}
+      <ReportePorCreador ordenes={ordenes} />
 
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div className="flex gap-2 flex-wrap">
@@ -174,6 +280,32 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
               </div>
             )}
           </div>
+          {/* Filtro por creador (quién creó la orden) */}
+          {creadores.length > 1 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowCreador(v => !v)}
+                className={`inline-flex items-center gap-2 font-body font-semibold text-sm px-3 py-2 rounded-xl border transition-colors ${filtroCreador !== 'todos' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+                <UserCircle2 className="w-3.5 h-3.5" />
+                <span className="max-w-[140px] truncate">{filtroCreador === 'todos' ? 'Creado por' : (creadores.find(c => c.id === filtroCreador)?.nombre ?? 'Creado por')}</span>
+              </button>
+              {showCreador && (
+                <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[200px] max-h-72 overflow-y-auto">
+                  <button onClick={() => { setFiltroCreador('todos'); setShowCreador(false) }}
+                    className={`w-full text-left font-body text-sm px-4 py-2 hover:bg-gray-50 ${filtroCreador === 'todos' ? 'text-brand-green font-semibold' : 'text-gray-700'}`}>
+                    Todos
+                  </button>
+                  {creadores.map(c => (
+                    <button key={c.id}
+                      onClick={() => { setFiltroCreador(c.id); setShowCreador(false) }}
+                      className={`w-full text-left font-body text-sm px-4 py-2 hover:bg-gray-50 transition-colors ${filtroCreador === c.id ? 'text-brand-green font-semibold' : 'text-gray-700'}`}>
+                      {c.nombre}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           {puedeCrear && (
             <Link href="/ordenes-insumo/nuevo"
               className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-4 py-2 rounded-xl shadow-sm transition-colors">
@@ -231,6 +363,9 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
                   </span>
                   {o.fecha_entrega_pactada && (
                     <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Entrega {fmtFecha(o.fecha_entrega_pactada)}</span>
+                  )}
+                  {o.creador_nombre && (
+                    <span className="inline-flex items-center gap-1" title="Creada por"><UserCircle2 className="w-3.5 h-3.5" /> {o.creador_nombre}</span>
                   )}
                 </div>
 

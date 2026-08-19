@@ -34,7 +34,7 @@ export default async function OrdenesInsumoPage({
     .from('ordenes_insumo')
     .select(`
       id, numero, estado, periodo, created_at, despachado_at, observacion,
-      fecha_entrega_pactada, urgente,
+      fecha_entrega_pactada, urgente, creado_por,
       sede:sedes ( nombre ),
       items:orden_insumo_items ( id, alistado ),
       responsables:orden_insumo_responsables ( usuario_id )
@@ -65,6 +65,12 @@ export default async function OrdenesInsumoPage({
     cargarEtiquetas(supabase),
   ])
 
+  // Nombres de los usuarios (para resolver "creado por"): la vista usuarios_opciones
+  // evita la RLS de `usuarios`, así que cualquier autenticado puede resolver el nombre.
+  const { data: usuariosData } = await supabase.from('usuarios_opciones').select('id, nombre')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const nombrePorUsuario = new Map(((usuariosData ?? []) as any[]).map((u) => [u.id, u.nombre]))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ordenes: OrdenRow[] = ((data ?? []) as any[]).map((o) => ({
     id: o.id,
@@ -78,6 +84,8 @@ export default async function OrdenesInsumoPage({
     responsables: o.responsables?.length ?? 0,
     fecha_entrega_pactada: o.fecha_entrega_pactada ?? null,
     urgente: !!o.urgente,
+    creador_id: o.creado_por ?? null,
+    creador_nombre: (o.creado_por && nombrePorUsuario.get(o.creado_por)) || null,
   }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
