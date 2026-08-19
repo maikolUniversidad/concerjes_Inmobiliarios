@@ -7,6 +7,7 @@ import { usePathname } from 'next/navigation'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { NotificationBell } from '@/components/layout/NotificationBell'
+import { TopSearch } from '@/components/layout/TopSearch'
 import { PanelLeft, Search } from 'lucide-react'
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -50,24 +51,18 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <PanelLeft className="w-5 h-5 text-gray-600" />
           </button>
 
-          {/* Search — oculto en pantallas pequeñas */}
-          <div className="flex-1 max-w-xs hidden sm:flex items-center gap-2 bg-gray-100 rounded-lg px-3 py-2">
-            <Search className="w-4 h-4 text-gray-400 shrink-0" />
-            <input
-              placeholder="Buscar..."
-              className="bg-transparent font-body text-sm text-gray-700 placeholder:text-gray-400 flex-1 outline-none w-0"
-            />
-          </div>
+          {/* Buscador inteligente — oculto en pantallas pequeñas */}
+          <TopSearch />
 
           {/* Spacer */}
           <div className="flex-1 sm:flex-none" />
 
           {/* Actions */}
           <div className="flex items-center gap-1.5">
-            {/* Search icon on mobile */}
-            <button className="sm:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar">
+            {/* Buscar en móvil → Asistente IA */}
+            <Link href="/ia/asistente" className="sm:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar / Asistente IA">
               <Search className="w-5 h-5 text-gray-500" />
-            </button>
+            </Link>
 
             {/* Notifications */}
             <NotificationBell />

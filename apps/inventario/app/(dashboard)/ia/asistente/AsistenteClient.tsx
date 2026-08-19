@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Menu, Sparkles, ChevronDown, Plus, X, UserSearch, Search, User } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -245,6 +245,22 @@ export function AsistenteClient({ userId, carpetasIniciales, conversacionesInici
   }, [activaId, mensajes, modelo, streaming, parsing, attachments, personaCtx, userId, persistInsertConv, persistMensaje])
 
   const detener = useCallback(() => abortRef.current?.abort(), [])
+
+  // Pregunta inicial desde el buscador superior (…/ia/asistente?q=): se autoenvía
+  // una sola vez y se limpia el parámetro de la URL.
+  const preguntaInicialRef = useRef(false)
+  useEffect(() => {
+    if (preguntaInicialRef.current) return
+    const params = new URLSearchParams(window.location.search)
+    const q = params.get('q')
+    if (q && q.trim()) {
+      preguntaInicialRef.current = true
+      const url = new URL(window.location.href)
+      url.searchParams.delete('q')
+      window.history.replaceState({}, '', url.toString())
+      void enviar(q)
+    }
+  }, [enviar])
 
   // ── CRUD carpetas / conversaciones ──────────────────────────────────────────
   const crearCarpeta = useCallback(async () => {
