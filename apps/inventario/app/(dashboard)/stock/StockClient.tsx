@@ -28,24 +28,48 @@ function estado(real: number, minimo: number) {
   return { key: 'normal', label: 'Normal', cls: 'bg-green-100 text-green-700' }
 }
 
+// Búsqueda inteligente: sin tildes, minúsculas.
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+
 export function StockClient({ rows }: { rows: StockRow[] }) {
   const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState('')
   const [cceFilter, setCceFilter] = useState('')
 
-  const filtered = useMemo(() => rows.filter(r => {
-    const q = search.toLowerCase()
-    const matchSearch = !q || r.nombre.toLowerCase().includes(q) || String(r.ref).includes(q)
-    const e = estado(r.real, r.minimo).key
-    const matchFiltro = !filtro || (filtro === 'alerta' ? (e === 'critico' || e === 'bajo') : e === filtro)
-    const matchCce = !cceFilter || (
-      cceFilter === 'propio'      ? r.cceTipo === 'PROPIO' :
-      cceFilter === 'compartido'  ? r.cceTipo === 'COMPARTIDO' :
-      cceFilter === 'cce'         ? r.cceTipo !== null :
-      cceFilter === 'sin_cce'     ? r.cceTipo === null : true
-    )
-    return matchSearch && matchFiltro && matchCce
-  }), [rows, search, filtro, cceFilter])
+  // "Heno" por fila: todos los datos visibles de la tabla, normalizados, para
+  // que el buscador filtre por cualquier columna (ref, nombre, presentación,
+  // categoría, cantidades, estado, CCE…).
+  const haystacks = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const r of rows) {
+      const est = estado(r.real, r.minimo).label
+      const catLabel = (CATEGORIA_LABELS[r.cat] as { nombre?: string })?.nombre ?? ''
+      const cce = r.cceTipo === 'PROPIO' ? 'propio cce' : r.cceTipo === 'COMPARTIDO' ? 'compartido cce' : 'sin cce'
+      m.set(r.id, norm([
+        r.ref ?? '', r.nombre, r.presentacion ?? '', r.cat, catLabel,
+        r.real, r.disp, r.entrante, r.saliente, r.minimo, est, cce,
+        r.cceReal ?? '', r.cceDisp ?? '',
+      ].join(' ')))
+    }
+    return m
+  }, [rows])
+
+  const filtered = useMemo(() => {
+    const tokens = norm(search.trim()).split(/\s+/).filter(Boolean)
+    return rows.filter(r => {
+      const hay = haystacks.get(r.id) ?? ''
+      const matchSearch = tokens.every(t => hay.includes(t))
+      const e = estado(r.real, r.minimo).key
+      const matchFiltro = !filtro || (filtro === 'alerta' ? (e === 'critico' || e === 'bajo') : e === filtro)
+      const matchCce = !cceFilter || (
+        cceFilter === 'propio'      ? r.cceTipo === 'PROPIO' :
+        cceFilter === 'compartido'  ? r.cceTipo === 'COMPARTIDO' :
+        cceFilter === 'cce'         ? r.cceTipo !== null :
+        cceFilter === 'sin_cce'     ? r.cceTipo === null : true
+      )
+      return matchSearch && matchFiltro && matchCce
+    })
+  }, [rows, haystacks, search, filtro, cceFilter])
 
   const totalReal = rows.reduce((a, s) => a + s.real, 0)
   const totalEntrante = rows.reduce((a, s) => a + s.entrante, 0)
@@ -78,7 +102,7 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
       <div className="bg-white border border-gray-100 rounded-xl p-4 flex flex-wrap gap-3 shadow-sm items-center">
         <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
           <Search className="w-4 h-4 text-gray-400 shrink-0" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre o REF..."
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por cualquier dato: nombre, ref, categoría, estado, cantidad, CCE…"
             className="font-body text-sm flex-1 outline-none placeholder:text-gray-400" />
         </div>
         <select value={filtro} onChange={e => setFiltro(e.target.value)}
