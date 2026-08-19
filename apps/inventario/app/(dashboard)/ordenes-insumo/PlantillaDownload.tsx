@@ -161,7 +161,7 @@ export function PlantillaDownload({ sedes, misSedes }: { sedes: SedeItem[]; misS
                 : <><Download className="w-4 h-4" /> Descargar Excel</>}
             </button>
             <p className="font-body text-[11px] text-gray-400 text-center mt-2">
-              Hoja «Mensual» con productos y cantidades · Hoja «Productos» con stock actual
+              Hoja «Todos» con todas juntas + una hoja por contrato · Hoja «Productos» con stock
             </p>
           </div>
         </div>
