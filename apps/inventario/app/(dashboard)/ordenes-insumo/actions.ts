@@ -933,3 +933,62 @@ export async function registrarDevolucion(ordenId: string, input: DevolucionInpu
   revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento'); revalidatePath('/movimientos')
   return { ok: true, id: (data as string) ?? undefined }
 }
+
+// ── Envío restante: despachar lo que quedó pendiente de una orden ya despachada ─
+export async function registrarEnvioRestante(
+  ordenId: string, envios: { itemId: string; cantidad: number }[],
+): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('alistar_ordenes_insumo')) return { error: 'No tienes permiso para despachar.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('id, numero, estado, sede_id').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(orden.estado)) {
+    return { error: 'El envío restante solo aplica a órdenes ya despachadas.' }
+  }
+
+  const { data: items } = await sb.from('orden_insumo_items')
+    .select('id, producto_id, cantidad_solicitada, cantidad_alistada, producto:productos ( nombre_estandar )')
+    .eq('orden_id', ordenId)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const mapItems = new Map(((items ?? []) as any[]).map((it) => [it.id, it]))
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const detalle: any[] = []
+  let totalUnidades = 0
+  for (const e of envios) {
+    const it = mapItems.get(e.itemId)
+    if (!it) continue
+    const pendiente = Math.max(0, Number(it.cantidad_solicitada) - Number(it.cantidad_alistada))
+    const add = Math.max(0, Math.min(pendiente, Number(e.cantidad) || 0))
+    if (add <= 0) continue
+    const { error: movErr } = await sb.rpc('registrar_movimiento', {
+      p_producto: it.producto_id, p_tipo: 'SALIDA', p_cantidad: add,
+      p_sede: orden.sede_id, p_observacion: `Envío restante orden ${orden.numero}`, p_ubicacion: null,
+    })
+    if (movErr) {
+      return { error: movErr.message.includes('row-level security')
+        ? 'No tienes permiso para descontar del inventario.'
+        : 'No se pudo registrar la salida: ' + movErr.message }
+    }
+    await sb.from('orden_insumo_items').update({ cantidad_alistada: Number(it.cantidad_alistada) + add }).eq('id', it.id)
+    it.cantidad_alistada = Number(it.cantidad_alistada) + add
+    totalUnidades += add
+    detalle.push({ producto: it.producto?.nombre_estandar ?? '?', cantidad: add })
+  }
+
+  if (totalUnidades === 0) return { error: 'No hay cantidades para enviar (todo lo pendiente ya está en 0).' }
+
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'ENVIO_RESTANTE',
+    p_mensaje: `Envío restante: ${totalUnidades} unidad(es) en ${detalle.length} producto(s).`,
+    p_detalle: { items: detalle, total: totalUnidades },
+  })
+
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento'); revalidatePath('/stock')
+  return { ok: true }
+}

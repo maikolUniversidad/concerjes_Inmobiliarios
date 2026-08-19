@@ -9,6 +9,7 @@ import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
 import { BorrarOrdenBtn } from './BorrarOrdenBtn'
 import { UrgenciaEditor } from './UrgenciaEditor'
 import { DevolucionOrden } from './DevolucionOrden'
+import { EnvioRestante } from './EnvioRestante'
 
 export const metadata: Metadata = { title: 'Orden de insumo' }
 export const dynamic = 'force-dynamic'
@@ -137,6 +138,15 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         <OrdenDetalleClient
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           orden={orden as any}
+          puedeAlistar={perm.puede('alistar_ordenes_insumo')}
+        />
+      )}
+      {/* Envío restante: si salió con productos pendientes, despachar lo que falta. */}
+      {despachada && (
+        <EnvioRestante
+          ordenId={id}
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          items={(o.items ?? []) as any}
           puedeAlistar={perm.puede('alistar_ordenes_insumo')}
         />
       )}
