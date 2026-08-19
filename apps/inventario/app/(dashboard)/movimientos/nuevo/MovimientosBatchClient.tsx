@@ -74,6 +74,8 @@ export function MovimientosBatchClient({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sb] = useState<any>(() => createClient())
   const [filas, setFilas] = useState<Fila[]>([nuevaFila(initialTipo ?? 'ENTRADA', initialProducto ? { producto_id: initialProducto } : {})])
+  // Acordeón de tarjetas: solo una expandida a la vez (la que se está editando).
+  const [abierta, setAbierta] = useState<number | null>(filas[0]?.key ?? null)
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
   // La devolución desde una orden va plegada: solo se abre si van a devolver.
@@ -93,12 +95,18 @@ export function MovimientosBatchClient({
     if (typeof window !== 'undefined' && window.innerWidth >= 1024) setVista('tabla')
   }, [])
   const usuariosMap = useMemo(() => new Map(usuarios.map(u => [u.id, u.nombre])), [usuarios])
+  const productosMap = useMemo(() => new Map(productos.map(p => [p.id, p])), [productos])
 
   function set(key: number, patch: Partial<Fila>) {
     setFilas(fs => fs.map(f => f.key === key ? { ...f, ...patch } : f))
   }
-  function addFila() { setFilas(fs => [...fs, nuevaFila()]) }
-  function quitar(key: number) { setFilas(fs => fs.length > 1 ? fs.filter(f => f.key !== key) : fs) }
+  function addFila() { const nf = nuevaFila(); setFilas(fs => [...fs, nf]); setAbierta(nf.key) }
+  function quitar(key: number) {
+    if (filas.length <= 1) return
+    const rest = filas.filter(f => f.key !== key)
+    setFilas(rest)
+    if (key === abierta) setAbierta(rest[0]?.key ?? null)
+  }
 
   /** Devolución: trae los ítems de una orden de insumo como filas DEVOLUCION. */
   async function traerOrden() {
@@ -123,6 +131,7 @@ export function MovimientosBatchClient({
         const conDatos = fs.filter(f => f.producto_id || f.cantidad)
         return [...conDatos, ...nuevas]
       })
+      setAbierta(null) // colapsa todas: se ve la lista de productos traídos
       toast.success(`${items.length} ítem(s) de ${orden?.numero ?? 'la orden'} cargados como devolución.`)
       setOrdenSel('')
     } finally { setCargandoOrden(false) }
@@ -161,6 +170,7 @@ export function MovimientosBatchClient({
       sede_id: it.sede_id ?? '', ubicacion_id: it.ubicacion_id ?? '', observacion: it.observacion ?? '',
     }))
     setFilas(fs.length ? fs : [nuevaFila()])
+    setAbierta(null) // colapsa todas al cargar un borrador
     setBorradorId(b.id); setNombreBorr(b.nombre ?? ''); setRespSel(b.responsableIds)
     toast.message(`Borrador «${b.nombre || 'sin nombre'}» cargado. Ajusta y registra o vuelve a guardar.`)
   }
@@ -359,45 +369,69 @@ export function MovimientosBatchClient({
             </button>
           </div>
         </div>
-        {/* Tarjetas: una por movimiento (campos apilados) */}
+        {/* Tarjetas: acordeón — solo la que se edita queda expandida; las demás
+            se colapsan mostrando el nombre del producto. Tocar una la expande. */}
         <div className={(vista === 'tarjetas' ? 'block' : 'hidden') + ' divide-y divide-gray-100'}>
-          {filas.map((f, i) => (
-            <div key={f.key} className="p-4 space-y-3">
-              <div className="flex items-center justify-between gap-2">
-                <span className="font-heading font-bold text-sm text-gray-900">Movimiento {i + 1}</span>
-                {btnQuitar(f)}
-              </div>
-              <div>
-                <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Tipo</label>
-                {campoTipo(f)}
-                <p className="mt-0.5 font-body text-[11px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
-              </div>
-              <div>
-                <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Producto</label>
-                {campoProducto(f)}
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Cantidad</label>
-                  {campoCantidad(f)}
+          {filas.map((f, i) => {
+            const open = abierta === f.key
+            const p = productosMap.get(f.producto_id)
+            const resumen = p ? `${p.nombre_estandar}${p.presentacion ? ` · ${p.presentacion}` : ''}` : 'Sin producto'
+            return (
+              <div key={f.key}>
+                <div className="flex items-center">
+                  <button type="button" onClick={() => setAbierta(open ? null : f.key)}
+                    className="flex flex-1 items-center gap-2 px-4 py-3 text-left min-w-0">
+                    <span className="font-heading font-bold text-sm text-gray-900 shrink-0">Mov. {i + 1}</span>
+                    {!open ? (
+                      <>
+                        <span className={`min-w-0 flex-1 truncate font-body text-sm ${p ? 'text-gray-700' : 'text-gray-400'}`}>{resumen}</span>
+                        {Number(f.cantidad) > 0 && (
+                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 font-body text-[11px] font-semibold text-gray-600">
+                            {TIPOS.find(t => t.value === f.tipo)?.label} · {f.cantidad}
+                          </span>
+                        )}
+                      </>
+                    ) : <span className="flex-1" />}
+                    <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                  </button>
+                  <div className="pr-3 shrink-0">{btnQuitar(f)}</div>
                 </div>
-                <div>
-                  <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Sede</label>
-                  {campoSede(f)}
-                </div>
+                {open && (
+                  <div className="px-4 pb-4 space-y-3">
+                    <div>
+                      <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Tipo</label>
+                      {campoTipo(f)}
+                      <p className="mt-0.5 font-body text-[11px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
+                    </div>
+                    <div>
+                      <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Producto</label>
+                      {campoProducto(f)}
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Cantidad</label>
+                        {campoCantidad(f)}
+                      </div>
+                      <div>
+                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Sede</label>
+                        {campoSede(f)}
+                      </div>
+                    </div>
+                    {ubicaciones.length > 0 && (
+                      <div>
+                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Ubicación</label>
+                        {campoUbicacion(f)}
+                      </div>
+                    )}
+                    <div>
+                      <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Observación</label>
+                      {campoObservacion(f)}
+                    </div>
+                  </div>
+                )}
               </div>
-              {ubicaciones.length > 0 && (
-                <div>
-                  <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Ubicación</label>
-                  {campoUbicacion(f)}
-                </div>
-              )}
-              <div>
-                <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Observación</label>
-                {campoObservacion(f)}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {/* Tabla (con scroll horizontal si la pantalla es angosta) */}
