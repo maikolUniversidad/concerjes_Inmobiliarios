@@ -170,3 +170,27 @@ export async function registrarDesdeBorrador(id: string): Promise<{ error?: stri
   revalidatePath('/movimientos/nuevo')
   return { ok: r.ok }
 }
+
+/**
+ * Elimina un movimiento registrado por error y deshace su efecto en el stock.
+ * La lógica vive en el RPC `eliminar_movimiento` para que borrado y stock vayan
+ * en la misma transacción. El AJUSTE no se puede revertir solo (fijaba un valor
+ * absoluto): se borra el registro y el RPC lo avisa en el mensaje.
+ */
+export async function eliminarMovimiento(id: string, revertirStock = true): Promise<{ error?: string; mensaje?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  if (!id) return { error: 'Movimiento no indicado.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data, error } = await (supabase as any).rpc('eliminar_movimiento', {
+    p_mov: id, p_revertir: revertirStock,
+  })
+  if (error) {
+    return { error: error.message.includes('permiso') ? error.message : 'No se pudo eliminar el movimiento: ' + error.message }
+  }
+
+  revalidatePath('/movimientos'); revalidatePath('/stock'); revalidatePath('/dashboard')
+  return { mensaje: (data as string) ?? 'Movimiento eliminado.' }
+}
