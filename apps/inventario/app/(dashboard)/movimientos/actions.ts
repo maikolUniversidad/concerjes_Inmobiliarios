@@ -89,3 +89,84 @@ export async function registrarMovimientos(items: MovItem[]): Promise<{ error?: 
   revalidatePath('/dashboard')
   return { ok }
 }
+
+// ── Borradores de movimientos ────────────────────────────────────────────────
+export interface BorradorInput {
+  id?: string
+  nombre: string
+  items: MovItem[]
+  responsables: string[]
+}
+
+/** Crea o actualiza un borrador de movimientos con sus ítems y responsables. */
+export async function guardarBorrador(input: BorradorInput): Promise<{ error?: string; id?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+
+  let borradorId = input.id
+  if (borradorId) {
+    const { error } = await sb.from('movimiento_borradores').update({ nombre: input.nombre.trim() || null }).eq('id', borradorId)
+    if (error) return { error: 'No se pudo guardar: ' + error.message }
+  } else {
+    const { data, error } = await sb.from('movimiento_borradores')
+      .insert({ nombre: input.nombre.trim() || null, creado_por: user.id }).select('id').single()
+    if (error) return { error: 'No se pudo crear el borrador: ' + error.message }
+    borradorId = data.id
+  }
+
+  // Reemplaza ítems
+  await sb.from('movimiento_borrador_items').delete().eq('borrador_id', borradorId)
+  const itemsRows = input.items.map((it, i) => ({
+    borrador_id: borradorId, tipo: it.tipo, producto_id: it.producto_id || null,
+    cantidad: it.cantidad, sede_id: it.sede_id, ubicacion_id: it.ubicacion_id, observacion: it.observacion, orden: i,
+  }))
+  if (itemsRows.length) {
+    const { error } = await sb.from('movimiento_borrador_items').insert(itemsRows)
+    if (error) return { error: 'No se pudieron guardar los ítems: ' + error.message }
+  }
+
+  // Reemplaza responsables
+  await sb.from('movimiento_borrador_responsables').delete().eq('borrador_id', borradorId)
+  const resp = [...new Set(input.responsables.filter(Boolean))]
+  if (resp.length) {
+    await sb.from('movimiento_borrador_responsables').insert(resp.map(usuario_id => ({ borrador_id: borradorId, usuario_id })))
+  }
+
+  revalidatePath('/movimientos/nuevo')
+  return { id: borradorId }
+}
+
+export async function eliminarBorrador(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { error } = await (supabase as any).from('movimiento_borradores').delete().eq('id', id)
+  if (error) return { error: error.message }
+  revalidatePath('/movimientos/nuevo')
+  return {}
+}
+
+/** Registra todos los ítems del borrador como movimientos y lo elimina. */
+export async function registrarDesdeBorrador(id: string): Promise<{ error?: string; ok?: number }> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const { data: items } = await sb.from('movimiento_borrador_items')
+    .select('tipo, producto_id, cantidad, sede_id, ubicacion_id, observacion').eq('borrador_id', id).order('orden')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const payload: MovItem[] = ((items ?? []) as any[]).map(it => ({
+    tipo: it.tipo, producto_id: it.producto_id, cantidad: Number(it.cantidad),
+    sede_id: it.sede_id, ubicacion_id: it.ubicacion_id, observacion: it.observacion,
+  }))
+  const r = await registrarMovimientos(payload)
+  if (r.error) return r
+  await sb.from('movimiento_borradores').delete().eq('id', id)
+  revalidatePath('/movimientos/nuevo')
+  return { ok: r.ok }
+}

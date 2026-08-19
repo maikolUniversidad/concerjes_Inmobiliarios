@@ -1,14 +1,18 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine } from 'lucide-react'
+import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, FileStack, Users, X, Check, PlayCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
-import { registrarMovimientos } from '../actions'
+import { registrarMovimientos, guardarBorrador, eliminarBorrador, registrarDesdeBorrador } from '../actions'
 import { ProductoCombo, type ProductoComboItem } from '@/components/ui/ProductoCombo'
 import type { TipoMovimiento } from '@/lib/types/database'
+
+export interface BorradorItem { tipo: TipoMovimiento; producto_id: string | null; cantidad: number | null; sede_id: string | null; ubicacion_id: string | null; observacion: string | null; orden: number }
+export interface Borrador { id: string; nombre: string | null; created_at: string; items: BorradorItem[]; responsableIds: string[] }
+export interface UsuarioOpt { id: string; nombre: string }
 
 const TIPOS: { value: TipoMovimiento; label: string }[] = [
   { value: 'ENTRADA', label: 'Entrada' },
@@ -41,12 +45,14 @@ const nuevaFila = (tipo: TipoMovimiento = 'ENTRADA', patch: Partial<Fila> = {}):
   ({ key: uid++, tipo, producto_id: '', cantidad: '', sede_id: '', ubicacion_id: '', observacion: '', ...patch })
 
 export function MovimientosBatchClient({
-  productos, sedes, ubicaciones = [], ordenes = [], initialProducto, initialTipo,
+  productos, sedes, ubicaciones = [], ordenes = [], usuarios = [], borradores = [], initialProducto, initialTipo,
 }: {
   productos: ProductoComboItem[]
   sedes: { id: string; nombre: string }[]
   ubicaciones?: { id: string; label: string }[]
   ordenes?: OrdenOpt[]
+  usuarios?: UsuarioOpt[]
+  borradores?: Borrador[]
   initialProducto?: string
   initialTipo?: TipoMovimiento
 }) {
@@ -58,6 +64,13 @@ export function MovimientosBatchClient({
   const [error, setError] = useState<string | null>(null)
   const [ordenSel, setOrdenSel] = useState('')
   const [cargandoOrden, setCargandoOrden] = useState(false)
+  // Borradores
+  const [borradorId, setBorradorId] = useState<string | null>(null)
+  const [modalBorr, setModalBorr] = useState(false)
+  const [nombreBorr, setNombreBorr] = useState('')
+  const [respSel, setRespSel] = useState<string[]>([])
+  const [respBuscar, setRespBuscar] = useState('')
+  const usuariosMap = useMemo(() => new Map(usuarios.map(u => [u.id, u.nombre])), [usuarios])
 
   function set(key: number, patch: Partial<Fila>) {
     setFilas(fs => fs.map(f => f.key === key ? { ...f, ...patch } : f))
@@ -111,6 +124,57 @@ export function MovimientosBatchClient({
     })
   }
 
+  // ── Borradores ──
+  function payloadActual() {
+    return filas
+      .filter(f => f.producto_id && Number(f.cantidad) > 0)
+      .map(f => ({
+        tipo: f.tipo, producto_id: f.producto_id, cantidad: Number(f.cantidad),
+        sede_id: f.sede_id || null, ubicacion_id: f.ubicacion_id || null, observacion: f.observacion.trim() || null,
+      }))
+  }
+  function cargarBorrador(b: Borrador) {
+    const fs = [...b.items].sort((a, z) => a.orden - z.orden).map(it => nuevaFila(it.tipo, {
+      producto_id: it.producto_id ?? '', cantidad: it.cantidad != null ? String(it.cantidad) : '',
+      sede_id: it.sede_id ?? '', ubicacion_id: it.ubicacion_id ?? '', observacion: it.observacion ?? '',
+    }))
+    setFilas(fs.length ? fs : [nuevaFila()])
+    setBorradorId(b.id); setNombreBorr(b.nombre ?? ''); setRespSel(b.responsableIds)
+    toast.message(`Borrador «${b.nombre || 'sin nombre'}» cargado. Ajusta y registra o vuelve a guardar.`)
+  }
+  function aplicarBorrador(b: Borrador) {
+    if (!window.confirm(`¿Registrar los ${b.items.length} movimiento(s) del borrador «${b.nombre || 'sin nombre'}»?`)) return
+    start(async () => {
+      const r = await registrarDesdeBorrador(b.id)
+      if (r.error) { toast.error(r.error); return }
+      toast.success(`${r.ok} movimiento(s) registrado(s).`); router.refresh()
+    })
+  }
+  function borrarBorrador(b: Borrador) {
+    if (!window.confirm(`¿Eliminar el borrador «${b.nombre || 'sin nombre'}»?`)) return
+    start(async () => {
+      const r = await eliminarBorrador(b.id)
+      if (r.error) { toast.error(r.error); return }
+      if (borradorId === b.id) setBorradorId(null)
+      toast.success('Borrador eliminado.'); router.refresh()
+    })
+  }
+  function guardarBorr() {
+    const items = payloadActual()
+    if (items.length === 0) { toast.error('Agrega al menos una fila con producto y cantidad.'); return }
+    start(async () => {
+      const r = await guardarBorrador({ id: borradorId ?? undefined, nombre: nombreBorr, items, responsables: respSel })
+      if (r.error) { toast.error(r.error); return }
+      setBorradorId(r.id ?? null); setModalBorr(false)
+      toast.success('Borrador guardado.'); router.refresh()
+    })
+  }
+  const usuariosFiltrados = useMemo(() => {
+    const q = respBuscar.trim().toLowerCase()
+    const base = q ? usuarios.filter(u => u.nombre.toLowerCase().includes(q)) : usuarios
+    return base.slice(0, 40)
+  }, [usuarios, respBuscar])
+
   const validas = filas.filter(f => f.producto_id && Number(f.cantidad) > 0).length
 
   return (
@@ -119,6 +183,39 @@ export function MovimientosBatchClient({
         <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <p className="font-body text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Borradores guardados */}
+      {borradores.length > 0 && (
+        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
+          <p className="flex items-center gap-1.5 font-body font-semibold text-sm text-gray-700 mb-2">
+            <FileStack className="w-4 h-4 text-brand-green" /> Borradores guardados ({borradores.length})
+          </p>
+          <div className="space-y-2">
+            {borradores.map(b => (
+              <div key={b.id} className={`flex items-center gap-2 rounded-xl border px-3 py-2 flex-wrap ${borradorId === b.id ? 'border-brand-green bg-green-50/40' : 'border-gray-100'}`}>
+                <div className="min-w-0 flex-1">
+                  <p className="font-body text-sm font-medium text-gray-800 truncate">
+                    {b.nombre || 'Sin nombre'} <span className="font-normal text-gray-400">· {b.items.length} ítem(s)</span>
+                  </p>
+                  {b.responsableIds.length > 0 && (
+                    <p className="flex items-center gap-1 font-body text-[11px] text-gray-400 truncate">
+                      <Users className="w-3 h-3 shrink-0" /> {b.responsableIds.map(id => usuariosMap.get(id) ?? '—').join(', ')}
+                    </p>
+                  )}
+                </div>
+                <button onClick={() => cargarBorrador(b)} disabled={pending}
+                  className="rounded-lg border border-gray-200 px-2.5 py-1 font-body text-xs font-semibold text-gray-600 hover:border-brand-green hover:text-brand-green disabled:opacity-50">Cargar</button>
+                <button onClick={() => aplicarBorrador(b)} disabled={pending}
+                  className="flex items-center gap-1 rounded-lg bg-brand-green px-2.5 py-1 font-body text-xs font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
+                  <PlayCircle className="w-3.5 h-3.5" /> Registrar
+                </button>
+                <button onClick={() => borrarBorrador(b)} disabled={pending}
+                  className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50"><Trash2 className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -211,14 +308,76 @@ export function MovimientosBatchClient({
         </div>
       </div>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <button onClick={registrar} disabled={pending || validas === 0}
           className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-brand-green-dark transition-colors disabled:opacity-50">
           {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
           Registrar movimientos ({validas})
         </button>
+        <button onClick={() => setModalBorr(true)} disabled={pending}
+          className="flex items-center gap-2 border border-gray-200 text-gray-700 font-body font-semibold text-sm px-4 py-2.5 rounded-lg hover:bg-gray-50 disabled:opacity-50">
+          <FileStack className="w-4 h-4" /> {borradorId ? 'Actualizar borrador' : 'Guardar como borrador'}
+        </button>
         <Link href="/movimientos" className="font-body text-sm text-gray-500 hover:text-gray-700 px-4 py-2.5">Cancelar</Link>
       </div>
+
+      {/* Modal guardar borrador */}
+      {modalBorr && (
+        <>
+          <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setModalBorr(false)} />
+          <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-2xl bg-white shadow-2xl sm:inset-0 sm:m-auto sm:h-fit sm:rounded-2xl">
+            <div className="p-5 space-y-4">
+              <div className="flex items-start justify-between gap-2">
+                <h2 className="font-heading font-bold text-gray-900">{borradorId ? 'Actualizar borrador' : 'Guardar como borrador'}</h2>
+                <button onClick={() => setModalBorr(false)} className="p-1 rounded-lg text-gray-400 hover:bg-gray-100"><X className="w-5 h-5" /></button>
+              </div>
+              <div>
+                <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Nombre del borrador</label>
+                <input value={nombreBorr} onChange={e => setNombreBorr(e.target.value)} placeholder="Ej: Recepción bodega lunes"
+                  className="w-full rounded-lg border border-gray-200 px-3 py-2 font-body text-sm outline-none focus:border-brand-green" />
+              </div>
+              <div>
+                <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Responsables</label>
+                {respSel.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-1">
+                    {respSel.map(id => (
+                      <span key={id} className="inline-flex items-center gap-1 rounded-full bg-brand-green/10 text-brand-green px-2 py-0.5 font-body text-[11px] font-medium">
+                        {usuariosMap.get(id) ?? '—'}
+                        <button onClick={() => setRespSel(s => s.filter(x => x !== id))}><X className="w-3 h-3" /></button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="flex items-center gap-2 rounded-lg border border-gray-200 px-2.5 py-1.5">
+                  <Search className="w-4 h-4 text-gray-400 shrink-0" />
+                  <input value={respBuscar} onChange={e => setRespBuscar(e.target.value)} placeholder="Buscar persona…"
+                    className="flex-1 bg-transparent font-body text-sm outline-none" />
+                </div>
+                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-50">
+                  {usuariosFiltrados.map(u => {
+                    const on = respSel.includes(u.id)
+                    return (
+                      <button key={u.id} onClick={() => setRespSel(s => on ? s.filter(x => x !== u.id) : [...s, u.id])}
+                        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left hover:bg-green-50">
+                        <span className="font-body text-sm text-gray-700 truncate">{u.nombre}</span>
+                        {on && <Check className="w-4 h-4 text-brand-green shrink-0" />}
+                      </button>
+                    )
+                  })}
+                  {usuariosFiltrados.length === 0 && <p className="px-3 py-2 font-body text-xs text-gray-400">Sin resultados.</p>}
+                </div>
+              </div>
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button onClick={() => setModalBorr(false)} className="font-body text-sm text-gray-500 px-3 py-2">Cancelar</button>
+                <button onClick={guardarBorr} disabled={pending}
+                  className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-50">
+                  {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

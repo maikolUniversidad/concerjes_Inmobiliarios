@@ -15,12 +15,16 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const { producto, tipo } = await searchParams
   const supabase = await createClient()
 
-  const [{ data: productos }, { data: sedes }, { data: ubicData }, { data: ordData }] = await Promise.all([
+  const [{ data: productos }, { data: sedes }, { data: ubicData }, { data: ordData }, { data: usuData }, { data: borrData }] = await Promise.all([
     supabase.from('productos').select('id, nombre_estandar, presentacion, codigo').eq('activo', true).order('nombre_estandar').limit(5000),
     supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre'),
     supabase.from('ubicaciones').select('id, codigo, nombre, bodega:bodegas ( nombre )').eq('activo', true).order('codigo'),
     // Órdenes de insumo (para cargar devoluciones): recientes, no anuladas.
     supabase.from('ordenes_insumo').select('id, numero, sede_id, sede:sedes ( nombre )').neq('estado', 'ANULADA').order('created_at', { ascending: false }).limit(150),
+    supabase.from('usuarios_opciones').select('id, nombre').order('nombre'),
+    supabase.from('movimiento_borradores')
+      .select('id, nombre, created_at, items:movimiento_borrador_items ( tipo, producto_id, cantidad, sede_id, ubicacion_id, observacion, orden ), responsables:movimiento_borrador_responsables ( usuario_id )')
+      .order('created_at', { ascending: false }).limit(50),
   ])
 
   const ubicaciones = ((ubicData as unknown as { id: string; codigo: string; nombre: string | null; bodega: { nombre: string } | null }[]) ?? [])
@@ -28,6 +32,19 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
 
   const ordenes = ((ordData as unknown as { id: string; numero: string; sede_id: string | null; sede: { nombre: string } | null }[]) ?? [])
     .map(o => ({ id: o.id, numero: o.numero, sede_id: o.sede_id, sede_nombre: o.sede?.nombre ?? null }))
+
+  const usuarios = ((usuData as unknown as { id: string; nombre: string }[]) ?? [])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const borradores = ((borrData as unknown as any[]) ?? []).map(b => ({
+    id: b.id, nombre: b.nombre, created_at: b.created_at,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    items: (b.items ?? []).map((it: any) => ({
+      tipo: it.tipo, producto_id: it.producto_id, cantidad: it.cantidad != null ? Number(it.cantidad) : null,
+      sede_id: it.sede_id, ubicacion_id: it.ubicacion_id, observacion: it.observacion, orden: it.orden ?? 0,
+    })),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    responsableIds: (b.responsables ?? []).map((r: any) => r.usuario_id),
+  }))
 
   const initialTipo = tipo && TIPOS_VALIDOS.includes(tipo as TipoMovimiento) ? (tipo as TipoMovimiento) : undefined
 
@@ -43,7 +60,7 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
         </p>
       </div>
 
-      <MovimientosBatchClient productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} ordenes={ordenes} initialProducto={producto} initialTipo={initialTipo} />
+      <MovimientosBatchClient productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} ordenes={ordenes} usuarios={usuarios} borradores={borradores} initialProducto={producto} initialTipo={initialTipo} />
     </div>
   )
 }
