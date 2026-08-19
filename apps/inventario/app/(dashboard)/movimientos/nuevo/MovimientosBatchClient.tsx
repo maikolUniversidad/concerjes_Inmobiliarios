@@ -1,9 +1,9 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, FileStack, Users, X, Check, PlayCircle, Search } from 'lucide-react'
+import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, FileStack, Users, X, Check, PlayCircle, Search, ChevronDown, List, LayoutGrid } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarMovimientos, guardarBorrador, eliminarBorrador, registrarDesdeBorrador } from '../actions'
@@ -49,6 +49,8 @@ const ESTADO_ORDEN: Record<string, string> = {
 const fechaCorta = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: '2-digit' }) : ''
 
+const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+
 const cellSel = 'w-full rounded-lg border border-gray-200 px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green bg-white'
 const cellInp = 'w-full rounded-lg border border-gray-200 px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green'
 
@@ -74,6 +76,8 @@ export function MovimientosBatchClient({
   const [filas, setFilas] = useState<Fila[]>([nuevaFila(initialTipo ?? 'ENTRADA', initialProducto ? { producto_id: initialProducto } : {})])
   const [pending, start] = useTransition()
   const [error, setError] = useState<string | null>(null)
+  // La devolución desde una orden va plegada: solo se abre si van a devolver.
+  const [modoDevolucion, setModoDevolucion] = useState(false)
   const [ordenSel, setOrdenSel] = useState('')
   const [cargandoOrden, setCargandoOrden] = useState(false)
   // Borradores
@@ -82,6 +86,12 @@ export function MovimientosBatchClient({
   const [nombreBorr, setNombreBorr] = useState('')
   const [respSel, setRespSel] = useState<string[]>([])
   const [respBuscar, setRespBuscar] = useState('')
+  // Vista de la lista: tarjetas (móvil) o tabla. Arranca en tarjetas (mobile-first)
+  // y pasa a tabla automáticamente en pantallas grandes; el usuario puede cambiarla.
+  const [vista, setVista] = useState<'tarjetas' | 'tabla'>('tarjetas')
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth >= 1024) setVista('tabla')
+  }, [])
   const usuariosMap = useMemo(() => new Map(usuarios.map(u => [u.id, u.nombre])), [usuarios])
 
   function set(key: number, patch: Partial<Fila>) {
@@ -181,13 +191,63 @@ export function MovimientosBatchClient({
       toast.success('Borrador guardado.'); router.refresh()
     })
   }
+  // Lista de personas del modal. Sin buscar solo se muestran unas pocas (más los
+  // ya elegidos) para que la lista no se coma el alto del modal en el celular.
+  const usuariosUnicos = useMemo(() => {
+    const vistos = new Set<string>()
+    return usuarios.filter(u => (vistos.has(u.id) ? false : (vistos.add(u.id), true)))
+  }, [usuarios])
+
   const usuariosFiltrados = useMemo(() => {
-    const q = respBuscar.trim().toLowerCase()
-    const base = q ? usuarios.filter(u => u.nombre.toLowerCase().includes(q)) : usuarios
-    return base.slice(0, 40)
-  }, [usuarios, respBuscar])
+    const q = norm(respBuscar.trim())
+    if (q) {
+      const tokens = q.split(/\s+/)
+      return usuariosUnicos.filter(u => tokens.every(t => norm(u.nombre).includes(t))).slice(0, 40)
+    }
+    const elegidos = usuariosUnicos.filter(u => respSel.includes(u.id))
+    const resto = usuariosUnicos.filter(u => !respSel.includes(u.id)).slice(0, 8)
+    return [...elegidos, ...resto]
+  }, [usuariosUnicos, respBuscar, respSel])
 
   const validas = filas.filter(f => f.producto_id && Number(f.cantidad) > 0).length
+
+  // Campos de una fila. Se comparten entre la tabla (escritorio) y las tarjetas
+  // (móvil) para que no se desincronicen dos copias del mismo formulario.
+  const campoTipo = (f: Fila) => (
+    <select value={f.tipo} onChange={e => set(f.key, { tipo: e.target.value as TipoMovimiento })} className={cellSel}>
+      {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+    </select>
+  )
+  const campoProducto = (f: Fila) => (
+    <ProductoCombo productos={productos} value={f.producto_id} onPick={p => set(f.key, { producto_id: p.id })} />
+  )
+  const campoCantidad = (f: Fila) => (
+    <input type="number" min="0" step="0.01" inputMode="decimal" value={f.cantidad}
+      onChange={e => set(f.key, { cantidad: e.target.value })} placeholder="0"
+      className={cellInp + ' text-center'} />
+  )
+  const campoSede = (f: Fila) => (
+    <select value={f.sede_id} onChange={e => set(f.key, { sede_id: e.target.value })} className={cellSel}>
+      <option value="">— Sin sede —</option>
+      {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
+    </select>
+  )
+  const campoUbicacion = (f: Fila) => (
+    <select value={f.ubicacion_id} onChange={e => set(f.key, { ubicacion_id: e.target.value })} className={cellSel}>
+      <option value="">— Sin ubicación —</option>
+      {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
+    </select>
+  )
+  const campoObservacion = (f: Fila) => (
+    <input value={f.observacion} onChange={e => set(f.key, { observacion: e.target.value })}
+      placeholder="Opcional" className={cellInp} />
+  )
+  const btnQuitar = (f: Fila) => (
+    <button onClick={() => quitar(f.key)} title="Quitar" disabled={filas.length === 1}
+      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400">
+      <Trash2 className="w-4 h-4" />
+    </button>
+  )
 
   return (
     <div className="space-y-4">
@@ -231,14 +291,22 @@ export function MovimientosBatchClient({
         </div>
       )}
 
-      {/* Devolución desde una orden */}
+      {/* Devolución desde una orden — plegada; se abre solo si van a devolver */}
       {ordenes.length > 0 && (
-        <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm">
-          <p className="flex items-center gap-1.5 font-body font-semibold text-sm text-gray-700">
-            <RotateCcw className="w-4 h-4 text-brand-green" /> Devolución desde una orden
-          </p>
-          <p className="font-body text-xs text-gray-400 mt-0.5 mb-2">Elige una orden de insumo y se cargan sus ítems como filas de devolución.</p>
-          <div className="flex flex-wrap items-center gap-2">
+        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm">
+          <button type="button" onClick={() => setModoDevolucion(v => !v)}
+            className="flex w-full items-center gap-2 px-4 py-3 text-left">
+            <RotateCcw className="w-4 h-4 text-brand-green shrink-0" />
+            <span className="min-w-0 flex-1">
+              <span className="block font-body font-semibold text-sm text-gray-700">¿Vas a registrar una devolución?</span>
+              <span className="block font-body text-xs text-gray-400">
+                Trae los ítems de una orden de insumo y los carga como filas de devolución.
+              </span>
+            </span>
+            <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${modoDevolucion ? 'rotate-180' : ''}`} />
+          </button>
+          {modoDevolucion && (
+          <div className="flex flex-wrap items-center gap-2 border-t border-gray-100 px-4 py-3">
             <div className="w-full max-w-md">
               <ComboBuscador
                 items={ordenes}
@@ -272,12 +340,68 @@ export function MovimientosBatchClient({
               {cargandoOrden ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ArrowDownToLine className="w-3.5 h-3.5" />} Traer ítems
             </button>
           </div>
+          )}
         </div>
       )}
 
-      {/* Tabla de movimientos */}
+      {/* Movimientos — toggle de vista (tarjetas / tabla) */}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
+          <span className="font-heading font-semibold text-sm text-gray-900">Movimientos ({filas.length})</span>
+          <div className="flex rounded-lg border border-gray-200 p-0.5">
+            <button type="button" onClick={() => setVista('tarjetas')} title="Vista tarjetas"
+              className={'rounded-md p-1.5 transition-colors ' + (vista === 'tarjetas' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-100')}>
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => setVista('tabla')} title="Vista tabla"
+              className={'rounded-md p-1.5 transition-colors ' + (vista === 'tabla' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-100')}>
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+        {/* Tarjetas: una por movimiento (campos apilados) */}
+        <div className={(vista === 'tarjetas' ? 'block' : 'hidden') + ' divide-y divide-gray-100'}>
+          {filas.map((f, i) => (
+            <div key={f.key} className="p-4 space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-heading font-bold text-sm text-gray-900">Movimiento {i + 1}</span>
+                {btnQuitar(f)}
+              </div>
+              <div>
+                <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Tipo</label>
+                {campoTipo(f)}
+                <p className="mt-0.5 font-body text-[11px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
+              </div>
+              <div>
+                <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Producto</label>
+                {campoProducto(f)}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Cantidad</label>
+                  {campoCantidad(f)}
+                </div>
+                <div>
+                  <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Sede</label>
+                  {campoSede(f)}
+                </div>
+              </div>
+              {ubicaciones.length > 0 && (
+                <div>
+                  <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Ubicación</label>
+                  {campoUbicacion(f)}
+                </div>
+              )}
+              <div>
+                <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Observación</label>
+                {campoObservacion(f)}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Tabla (con scroll horizontal si la pantalla es angosta) */}
+        <div className={(vista === 'tabla' ? 'block' : 'hidden') + ' overflow-x-auto'}>
           <table className="w-full min-w-[900px]">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100 text-left">
@@ -294,44 +418,15 @@ export function MovimientosBatchClient({
               {filas.map(f => (
                 <tr key={f.key} className="align-top">
                   <td className="px-3 py-2">
-                    <select value={f.tipo} onChange={e => set(f.key, { tipo: e.target.value as TipoMovimiento })} className={cellSel}>
-                      {TIPOS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
+                    {campoTipo(f)}
                     <p className="mt-0.5 font-body text-[10px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
                   </td>
-                  <td className="px-3 py-2">
-                    <ProductoCombo productos={productos} value={f.producto_id}
-                      onPick={p => set(f.key, { producto_id: p.id })} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input type="number" min="0" step="0.01" value={f.cantidad}
-                      onChange={e => set(f.key, { cantidad: e.target.value })} placeholder="0"
-                      className={cellInp + ' text-center'} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <select value={f.sede_id} onChange={e => set(f.key, { sede_id: e.target.value })} className={cellSel}>
-                      <option value="">— Sin sede —</option>
-                      {sedes.map(s => <option key={s.id} value={s.id}>{s.nombre}</option>)}
-                    </select>
-                  </td>
-                  {ubicaciones.length > 0 && (
-                    <td className="px-3 py-2">
-                      <select value={f.ubicacion_id} onChange={e => set(f.key, { ubicacion_id: e.target.value })} className={cellSel}>
-                        <option value="">— Sin ubicación —</option>
-                        {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.label}</option>)}
-                      </select>
-                    </td>
-                  )}
-                  <td className="px-3 py-2">
-                    <input value={f.observacion} onChange={e => set(f.key, { observacion: e.target.value })}
-                      placeholder="Opcional" className={cellInp} />
-                  </td>
-                  <td className="px-2 py-2 text-center">
-                    <button onClick={() => quitar(f.key)} title="Quitar fila"
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50">
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </td>
+                  <td className="px-3 py-2">{campoProducto(f)}</td>
+                  <td className="px-3 py-2">{campoCantidad(f)}</td>
+                  <td className="px-3 py-2">{campoSede(f)}</td>
+                  {ubicaciones.length > 0 && <td className="px-3 py-2">{campoUbicacion(f)}</td>}
+                  <td className="px-3 py-2">{campoObservacion(f)}</td>
+                  <td className="px-2 py-2 text-center">{btnQuitar(f)}</td>
                 </tr>
               ))}
             </tbody>
@@ -361,12 +456,14 @@ export function MovimientosBatchClient({
       {modalBorr && (
         <>
           <div className="fixed inset-0 z-40 bg-black/40" onClick={() => setModalBorr(false)} />
-          <div className="fixed inset-x-0 bottom-0 z-50 mx-auto max-w-md rounded-t-2xl bg-white shadow-2xl sm:inset-0 sm:m-auto sm:h-fit sm:rounded-2xl">
-            <div className="p-5 space-y-4">
-              <div className="flex items-start justify-between gap-2">
-                <h2 className="font-heading font-bold text-gray-900">{borradorId ? 'Actualizar borrador' : 'Guardar como borrador'}</h2>
-                <button onClick={() => setModalBorr(false)} className="p-1 rounded-lg text-gray-400 hover:bg-gray-100"><X className="w-5 h-5" /></button>
-              </div>
+          {/* Alto acotado + scroll propio: en el celular la lista de personas
+              empujaba los botones fuera de la pantalla. */}
+          <div className="fixed inset-x-0 bottom-0 z-50 mx-auto flex max-h-[88svh] w-full max-w-md flex-col rounded-t-2xl bg-white shadow-2xl sm:inset-0 sm:m-auto sm:h-fit sm:max-h-[85vh] sm:rounded-2xl">
+            <div className="flex items-start justify-between gap-2 border-b border-gray-100 px-5 py-4">
+              <h2 className="font-heading font-bold text-gray-900">{borradorId ? 'Actualizar borrador' : 'Guardar como borrador'}</h2>
+              <button onClick={() => setModalBorr(false)} className="p-1 rounded-lg text-gray-400 hover:bg-gray-100"><X className="w-5 h-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               <div>
                 <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Nombre del borrador</label>
                 <input value={nombreBorr} onChange={e => setNombreBorr(e.target.value)} placeholder="Ej: Recepción bodega lunes"
@@ -389,12 +486,13 @@ export function MovimientosBatchClient({
                   <input value={respBuscar} onChange={e => setRespBuscar(e.target.value)} placeholder="Buscar persona…"
                     className="flex-1 bg-transparent font-body text-sm outline-none" />
                 </div>
-                <div className="mt-1 max-h-40 overflow-y-auto rounded-lg border border-gray-100 divide-y divide-gray-50">
+                <div className="mt-1 rounded-lg border border-gray-100 divide-y divide-gray-50">
                   {usuariosFiltrados.map(u => {
                     const on = respSel.includes(u.id)
                     return (
-                      <button key={u.id} onClick={() => setRespSel(s => on ? s.filter(x => x !== u.id) : [...s, u.id])}
-                        className="flex w-full items-center justify-between gap-2 px-3 py-1.5 text-left hover:bg-green-50">
+                      <button key={u.id} type="button"
+                        onClick={() => setRespSel(s => on ? s.filter(x => x !== u.id) : [...s, u.id])}
+                        className={`flex w-full items-center justify-between gap-2 px-3 py-2 text-left ${on ? 'bg-green-50/60' : 'hover:bg-green-50'}`}>
                         <span className="font-body text-sm text-gray-700 truncate">{u.nombre}</span>
                         {on && <Check className="w-4 h-4 text-brand-green shrink-0" />}
                       </button>
@@ -402,14 +500,19 @@ export function MovimientosBatchClient({
                   })}
                   {usuariosFiltrados.length === 0 && <p className="px-3 py-2 font-body text-xs text-gray-400">Sin resultados.</p>}
                 </div>
+                {!respBuscar.trim() && usuariosUnicos.length > usuariosFiltrados.length && (
+                  <p className="mt-1 font-body text-[11px] text-gray-400">
+                    Mostrando {usuariosFiltrados.length} de {usuariosUnicos.length}. Escribe arriba para encontrar a alguien más.
+                  </p>
+                )}
               </div>
-              <div className="flex items-center justify-end gap-2 pt-1">
-                <button onClick={() => setModalBorr(false)} className="font-body text-sm text-gray-500 px-3 py-2">Cancelar</button>
-                <button onClick={guardarBorr} disabled={pending}
-                  className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-50">
-                  {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar
-                </button>
-              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 px-5 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <button onClick={() => setModalBorr(false)} className="font-body text-sm text-gray-500 px-3 py-2">Cancelar</button>
+              <button onClick={guardarBorr} disabled={pending}
+                className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-50">
+                {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />} Guardar
+              </button>
             </div>
           </div>
         </>
