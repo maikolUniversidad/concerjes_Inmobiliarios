@@ -1,34 +1,16 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import Link from 'next/link'
-import { Plus, ArrowDownToLine, ArrowUpFromLine, RefreshCw, Settings2, ArrowLeftRight } from 'lucide-react'
+import { Plus, ArrowLeftRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { requirePermiso } from '@/lib/permisos-server'
-import type { TipoMovimiento } from '@/lib/types/database'
+import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import type { Categoria, Etiqueta } from '@/lib/clasificacion'
 import { sedesPorClasificacion, leerFiltroClasif, cargarEtiquetas } from '@/lib/clasificacion-server'
 import { FiltroClasificacion } from '@/components/clasificacion/FiltroClasificacion'
+import { MovimientosClient, type MovRow } from './MovimientosClient'
 
 export const metadata: Metadata = { title: 'Movimientos' }
 export const dynamic = 'force-dynamic'
-
-const TIPO_META: Record<TipoMovimiento, { label: string; cls: string; icon: typeof ArrowDownToLine }> = {
-  ENTRADA: { label: 'Entrada', cls: 'bg-green-100 text-green-700', icon: ArrowDownToLine },
-  SALIDA: { label: 'Salida', cls: 'bg-orange-100 text-orange-700', icon: ArrowUpFromLine },
-  DEVOLUCION: { label: 'Devolución', cls: 'bg-blue-100 text-blue-700', icon: RefreshCw },
-  AJUSTE: { label: 'Ajuste', cls: 'bg-purple-100 text-purple-700', icon: Settings2 },
-  TRASLADO: { label: 'Traslado', cls: 'bg-gray-100 text-gray-600', icon: ArrowLeftRight },
-}
-
-interface MovRow {
-  id: string
-  tipo: TipoMovimiento
-  cantidad: number
-  observacion: string | null
-  created_at: string
-  producto: { nombre_estandar: string; presentacion: string | null } | null
-  sede: { nombre: string } | null
-}
 
 export default async function MovimientosPage({
   searchParams,
@@ -38,6 +20,7 @@ export default async function MovimientosPage({
   await requirePermiso('ver_movimientos')
   const supabase = await createClient()
   const sp = await searchParams
+  const perm = await getPermisosUsuario()
 
   const filtro = leerFiltroClasif(sp)
   const [sedeIds, { categorias, etiquetas }] = await Promise.all([
@@ -91,47 +74,7 @@ export default async function MovimientosPage({
           </Link>
         </div>
       ) : (
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Tipo</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Producto</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Sede</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Cantidad</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Observación</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Fecha</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {movs.map(m => {
-                  const meta = TIPO_META[m.tipo]
-                  const Icon = meta.icon
-                  return (
-                    <tr key={m.id} className="hover:bg-gray-50/50">
-                      <td className="px-4 py-3">
-                        <span className={`inline-flex items-center gap-1.5 font-body font-medium text-xs px-2.5 py-1 rounded-full ${meta.cls}`}>
-                          <Icon className="w-3.5 h-3.5" /> {meta.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <p className="font-body font-medium text-sm text-gray-900">{m.producto?.nombre_estandar ?? '—'}</p>
-                        <p className="font-body text-xs text-gray-400">{m.producto?.presentacion}</p>
-                      </td>
-                      <td className="px-4 py-3 font-body text-sm text-gray-500">{m.sede?.nombre ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-heading font-bold text-base text-gray-900">{m.cantidad}</td>
-                      <td className="px-4 py-3 font-body text-sm text-gray-500 max-w-[260px] truncate">{m.observacion ?? '—'}</td>
-                      <td className="px-4 py-3 text-right font-body text-xs text-gray-400">
-                        {new Date(m.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
+        <MovimientosClient movs={movs} puedeEliminar={perm.puede('eliminar_movimientos')} />
       )}
     </div>
   )

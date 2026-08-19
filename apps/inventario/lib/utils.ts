@@ -13,11 +13,35 @@ export function formatCOP(value: number): string {
   }).format(value)
 }
 
+/**
+ * Zona horaria de la operación. Sin fijarla, lo que se pinta en el servidor
+ * (Vercel corre en UTC) sale corrido 5 horas: un movimiento de las 9 p.m. se
+ * veía como las 2 a.m. del día siguiente.
+ */
+export const TZ_CO = 'America/Bogota'
+
 export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('es-CO', {
     day: '2-digit',
     month: '2-digit',
     year: 'numeric',
+    timeZone: TZ_CO,
+  }).format(new Date(date))
+}
+
+/** Fecha + hora en hora de Colombia (ej.: 18/08/2026, 9:10 p. m.). */
+export function formatFechaHora(date: string | Date): string {
+  return new Intl.DateTimeFormat('es-CO', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: 'numeric', minute: '2-digit',
+    timeZone: TZ_CO,
+  }).format(new Date(date))
+}
+
+/** Solo la hora, en hora de Colombia (ej.: 9:10 p. m.). */
+export function formatHora(date: string | Date): string {
+  return new Intl.DateTimeFormat('es-CO', {
+    hour: 'numeric', minute: '2-digit', timeZone: TZ_CO,
   }).format(new Date(date))
 }
 
