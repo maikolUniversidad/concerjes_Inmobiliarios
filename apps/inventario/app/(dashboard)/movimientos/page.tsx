@@ -30,7 +30,7 @@ export default async function MovimientosPage({
 
   let query = supabase
     .from('movimientos')
-    .select('id, tipo, cantidad, observacion, created_at, producto:productos ( nombre_estandar, presentacion ), sede:sedes ( nombre )')
+    .select('id, tipo, cantidad, observacion, created_at, usuario_id, producto:productos ( nombre_estandar, presentacion ), sede:sedes ( nombre )')
     .order('created_at', { ascending: false })
     .limit(100)
   // Filtro por clasificación de contrato: sólo movimientos de esas sedes.
@@ -38,6 +38,15 @@ export default async function MovimientosPage({
 
   const { data, error } = await query
   const movs = (data as unknown as MovRow[]) ?? []
+
+  // Quién registró cada movimiento. Se resuelve por la vista `usuarios_opciones`
+  // porque la RLS de `usuarios` no deja leer el nombre de otras personas.
+  const idsUsuarios = [...new Set(movs.map(m => m.usuario_id).filter(Boolean))] as string[]
+  if (idsUsuarios.length > 0) {
+    const { data: usus } = await supabase.from('usuarios_opciones').select('id, nombre').in('id', idsUsuarios)
+    const nombres = new Map(((usus ?? []) as { id: string; nombre: string }[]).map(u => [u.id, u.nombre]))
+    for (const m of movs) m.responsable = m.usuario_id ? nombres.get(m.usuario_id) ?? null : null
+  }
 
   return (
     <div className="p-4 sm:p-6 space-y-5">

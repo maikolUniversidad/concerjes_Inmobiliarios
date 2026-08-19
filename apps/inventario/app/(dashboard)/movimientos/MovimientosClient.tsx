@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ArrowDownToLine, ArrowUpFromLine, RefreshCw, Settings2, ArrowLeftRight,
-  Search, X, List, LayoutGrid, Trash2, Loader2, MapPin, Calendar,
+  Search, X, List, LayoutGrid, Trash2, Loader2, MapPin, Calendar, User2,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { eliminarMovimiento } from './actions'
@@ -17,6 +17,9 @@ export interface MovRow {
   cantidad: number
   observacion: string | null
   created_at: string
+  usuario_id?: string | null
+  /** Quién registró el movimiento (resuelto en el servidor). */
+  responsable?: string | null
   producto: { nombre_estandar: string; presentacion: string | null } | null
   sede: { nombre: string } | null
 }
@@ -58,7 +61,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
     return movs.filter(m => {
       if (tipo !== 'TODOS' && m.tipo !== tipo) return false
       if (tokens.length === 0) return true
-      const heno = norm(`${m.producto?.nombre_estandar ?? ''} ${m.producto?.presentacion ?? ''} ${m.sede?.nombre ?? ''} ${m.observacion ?? ''} ${TIPO_META[m.tipo].label}`)
+      const heno = norm(`${m.producto?.nombre_estandar ?? ''} ${m.producto?.presentacion ?? ''} ${m.sede?.nombre ?? ''} ${m.observacion ?? ''} ${m.responsable ?? ''} ${TIPO_META[m.tipo].label}`)
       return tokens.every(t => heno.includes(t))
     })
   }, [movs, q, tipo])
@@ -108,7 +111,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
       <div className="flex items-center gap-3 flex-wrap">
         <div className="relative flex-1 min-w-[180px] max-w-md">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por producto, sede u observación…"
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar por producto, sede, responsable u observación…"
             className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-9 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20" />
           {q && (
             <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
@@ -169,6 +172,10 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
                   <p className="flex items-center gap-1.5 font-body text-xs text-gray-500">
                     <MapPin className="w-3.5 h-3.5 shrink-0 text-gray-300" /> {m.sede?.nombre ?? 'Sin sede'}
                   </p>
+                  <p className="flex items-center gap-1.5 font-body text-xs text-gray-500">
+                    <User2 className="w-3.5 h-3.5 shrink-0 text-gray-300" />
+                    <span className="truncate">{m.responsable ?? 'Sin responsable'}</span>
+                  </p>
                   <p className="flex items-center gap-1.5 font-body text-xs text-gray-400">
                     <Calendar className="w-3.5 h-3.5 shrink-0 text-gray-300" /> {formatFechaHora(m.created_at)}
                   </p>
@@ -186,7 +193,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
         /* ── Tabla ── */
         <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px]">
+            <table className="w-full min-w-[900px]">
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Tipo</th>
@@ -194,6 +201,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Sede</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Cantidad</th>
                   <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Observación</th>
+                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Responsable</th>
                   <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Fecha</th>
                   {puedeEliminar && <th className="w-12 px-2" />}
                 </tr>
@@ -216,6 +224,14 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
                       <td className="px-4 py-3 font-body text-sm text-gray-500">{m.sede?.nombre ?? '—'}</td>
                       <td className="px-4 py-3 text-right font-heading font-bold text-base text-gray-900">{m.cantidad}</td>
                       <td className="px-4 py-3 font-body text-sm text-gray-500 max-w-[260px] truncate">{m.observacion ?? '—'}</td>
+                      <td className="px-4 py-3">
+                        {m.responsable ? (
+                          <span className="flex items-center gap-1.5 font-body text-sm text-gray-600">
+                            <User2 className="w-3.5 h-3.5 shrink-0 text-gray-300" />
+                            <span className="max-w-[160px] truncate">{m.responsable}</span>
+                          </span>
+                        ) : <span className="font-body text-sm text-gray-300">—</span>}
+                      </td>
                       <td className="px-4 py-3 text-right font-body text-xs text-gray-400 whitespace-nowrap">
                         {formatFechaHora(m.created_at)}
                       </td>
