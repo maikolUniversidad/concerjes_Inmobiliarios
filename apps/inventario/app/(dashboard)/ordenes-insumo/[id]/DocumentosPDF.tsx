@@ -174,8 +174,15 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       th: { flexDirection: 'row', backgroundColor: '#f3f4f6', paddingVertical: 5, paddingHorizontal: 4, fontFamily: 'Helvetica-Bold' },
       tr: { flexDirection: 'row', paddingVertical: 5, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: '#f3f4f6' },
       cCod: { width: 66 }, cProd: { flex: 1 }, cNum: { width: 66, textAlign: 'right' },
-      firma: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 34 },
-      firmaBox: { width: '45%', borderTopWidth: 1, borderTopColor: '#111827', paddingTop: 4, fontSize: 8, textAlign: 'center' },
+      // Columna en blanco de la remisión: la sede anota a mano lo que devuelve.
+      cDev: { width: 62, paddingRight: 6 },
+      cDevLinea: { height: 11, borderBottomWidth: 1, borderBottomColor: '#9ca3af' },
+      // Empuja las firmas al pie de la página cuando sobra espacio.
+      relleno: { flexGrow: 1, minHeight: 24 },
+      firma: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 26, marginBottom: 26 },
+      firmaBox: { width: '45%' },
+      firmaEspacio: { height: 40 },
+      firmaLinea: { borderTopWidth: 1, borderTopColor: '#111827', paddingTop: 4, fontSize: 8, textAlign: 'center' },
       pie: { position: 'absolute', bottom: 22, left: 34, right: 34, fontSize: 7, color: '#9ca3af', textAlign: 'center' },
     })
 
@@ -217,12 +224,15 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             : null,
         ),
         h(View, { style: s.th },
+          esRemision ? h(Text, { style: s.cDev }, 'DEVUELTO') : null,
           h(Text, { style: s.cCod }, 'CÓDIGO'),
           h(Text, { style: s.cProd }, 'PRODUCTO'),
           h(Text, { style: s.cNum }, cantLabel),
         ),
         ...itemsDoc.map((i, k) =>
           h(View, { style: s.tr, key: String(k), wrap: false },
+            // Casilla en blanco para anotar a mano las unidades devueltas.
+            esRemision ? h(View, { style: s.cDev }, h(View, { style: s.cDevLinea })) : null,
             h(Text, { style: s.cCod }, i.codigo != null && i.codigo !== '' ? String(i.codigo) : '—'),
             h(View, { style: s.cProd },
               h(Text, null, i.nombre),
@@ -232,19 +242,32 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
           ),
         ),
         h(View, { style: [s.tr, { borderBottomWidth: 0, backgroundColor: '#f9fafb' }] },
+          esRemision ? h(Text, { style: s.cDev }, '') : null,
           h(Text, { style: s.cCod }, ''),
           h(Text, { style: [s.cProd, { fontFamily: 'Helvetica-Bold' }] }, `TOTAL · ${itemsDoc.length} ítem(s)`),
           h(Text, { style: [s.cNum, { fontFamily: 'Helvetica-Bold' }] }, String(total)),
         ),
+        esRemision
+          ? h(Text, { style: [s.sub, { marginTop: 6 }] },
+              'Si la sede regresa producto, anote las unidades en la columna DEVUELTO y déjelo firmado.')
+          : null,
         datos.observacion
           ? h(View, { style: [s.box, { marginTop: 10 }] },
               h(Text, { style: s.sub }, 'Observaciones'),
               h(Text, null, datos.observacion),
             )
           : null,
+        // Espaciador: si la página tiene sitio, las firmas bajan al pie.
+        h(View, { style: s.relleno }),
         h(View, { style: s.firma },
-          h(Text, { style: s.firmaBox }, esRemision ? 'Entregado por (bodega)' : 'Solicitado por (coordinador)'),
-          h(Text, { style: s.firmaBox }, esRemision ? 'Recibido por (sede) — nombre, C.C. y fecha' : 'Aprobado por (central)'),
+          h(View, { style: s.firmaBox },
+            h(View, { style: s.firmaEspacio }),
+            h(Text, { style: s.firmaLinea }, esRemision ? 'Entregado por (bodega)' : 'Solicitado por (coordinador)'),
+          ),
+          h(View, { style: s.firmaBox },
+            h(View, { style: s.firmaEspacio }),
+            h(Text, { style: s.firmaLinea }, esRemision ? 'Recibido por (sede) — nombre, C.C. y fecha' : 'Aprobado por (central)'),
+          ),
         ),
         h(Text, { style: s.pie }, `${emisor.nombre} · Documento generado por la plataforma · ${new Date().toLocaleString('es-CO')}`),
       ),
