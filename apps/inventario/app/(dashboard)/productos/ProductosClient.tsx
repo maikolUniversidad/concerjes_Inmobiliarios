@@ -25,10 +25,15 @@ interface Producto {
   sku: string | null
   codigo_barras: string | null
   cce_tipo: 'PROPIO' | 'COMPARTIDO' | null
+  inventario_periodo: string | null
+  inventario_encontrado: boolean | null
   stock: { cantidad_real: number; cantidad_disp: number } | null
   cce: CceBien | null
   stock_cce: { cantidad_real: number; cantidad_disp: number } | null
 }
+
+/** true = el producto no aparecio en el ultimo inventario fisico cruzado */
+const noHallado = (p: Producto) => p.inventario_encontrado === false
 
 function getStockStatus(real: number, minimo: number) {
   if (real === 0)          return { label: 'Agotado', cls: 'bg-red-100 text-red-700' }
@@ -43,6 +48,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [tipoFilter, setTipo]   = useState('')
   const [stockFilter, setStock] = useState('')
   const [cceFilter, setCce]     = useState('')
+  const [invFilter, setInv]     = useState('')
   const [view, setView]         = useState<'grid' | 'list'>('grid')
   const [scannerOpen, setScannerOpen] = useState(false)
 
@@ -67,7 +73,11 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         cceFilter === 'compartido' ? p.cce_tipo === 'COMPARTIDO' :
         cceFilter === 'sin_cce'    ? p.cce === null : true
       )
-      return matchCat && matchTipo && matchStock && matchCce
+      const matchInv = !invFilter || (
+        invFilter === 'no_hallado' ? noHallado(p) :
+        invFilter === 'hallado'    ? p.inventario_encontrado === true : true
+      )
+      return matchCat && matchTipo && matchStock && matchCce && matchInv
     }
 
     const evaluados = productos.map(p => {
@@ -95,7 +105,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
     // Con búsqueda, ordena por relevancia (coincidencia exacta de código primero)
     if (q) res.sort((a, b) => b.score - a.score)
     return res.map(x => x.p)
-  }, [productos, search, catFilter, tipoFilter, stockFilter, cceFilter])
+  }, [productos, search, catFilter, tipoFilter, stockFilter, cceFilter, invFilter])
 
   // Stats
   const stats = useMemo(() => ({
@@ -106,17 +116,25 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       return r <= (p.stock_minimo_def ?? 0)
     }).length,
     conCce: productos.filter(p => p.cce !== null).length,
+    noHallado: productos.filter(noHallado).length,
   }), [productos])
+
+  // Periodo del último inventario físico cruzado (para rotular la etiqueta)
+  const periodo = useMemo(
+    () => productos.find(p => p.inventario_periodo)?.inventario_periodo ?? null,
+    [productos]
+  )
 
   return (
     <>
       {/* Stats chips */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: 'Total productos',  value: stats.total,   color: 'bg-blue-50 text-blue-700 border-blue-100' },
           { label: 'Cat. A alta rot.', value: stats.catA,    color: 'bg-green-50 text-green-700 border-green-100' },
           { label: 'Stock crítico',    value: stats.critico, color: 'bg-red-50 text-red-700 border-red-100' },
           { label: '🏛 Colombia Compra', value: stats.conCce, color: 'bg-purple-50 text-purple-700 border-purple-100' },
+          { label: periodo ? `🏷 No hallados · ${periodo}` : '🏷 No hallados', value: stats.noHallado, color: 'bg-orange-50 text-orange-700 border-orange-100' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-3 ${s.color}`}>
             <p className="font-heading font-bold text-xl">{s.value}</p>
@@ -180,6 +198,12 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           <option value="compartido">↔ Compartido</option>
           <option value="sin_cce">Sin CCE</option>
         </select>
+        <select value={invFilter} onChange={e => setInv(e.target.value)}
+          className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none focus:border-brand-green bg-white">
+          <option value="">🏷 Último inventario</option>
+          <option value="no_hallado">No hallado en el último inventario</option>
+          <option value="hallado">Sí apareció en el último inventario</option>
+        </select>
 
         {/* View toggle */}
         <div className="flex border border-gray-200 rounded-lg overflow-hidden ml-auto">
@@ -197,7 +221,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       {/* Results count */}
       <p className="font-body text-xs text-gray-400">
         {filtered.length} de {total} productos
-        {(search || catFilter || tipoFilter || stockFilter || cceFilter) ? ' (filtrado)' : ''}
+        {(search || catFilter || tipoFilter || stockFilter || cceFilter || invFilter) ? ' (filtrado)' : ''}
       </p>
 
       {/* GRID view */}
@@ -242,6 +266,12 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                       {p.nombre_estandar}
                     </p>
                     <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
+                    {noHallado(p) && (
+                      <span className="inline-flex items-center gap-1 font-body text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5"
+                        title={`No se encontró en el inventario físico de ${p.inventario_periodo}`}>
+                        🏷 No hallado{p.inventario_periodo ? ` · ${p.inventario_periodo}` : ''}
+                      </span>
+                    )}
                     {p.cce && (
                       <div className="flex items-center gap-1 flex-wrap">
                         <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate flex-1 min-w-0" title={p.cce.bien}>
@@ -340,6 +370,12 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                       <td className="px-4 py-2.5 max-w-[250px]">
                         <p className="font-body font-medium text-sm text-gray-900 truncate">{p.nombre_estandar}</p>
                         <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
+                        {noHallado(p) && (
+                          <span className="inline-flex items-center gap-1 font-body text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5 mt-0.5"
+                            title={`No se encontró en el inventario físico de ${p.inventario_periodo}`}>
+                            🏷 No hallado{p.inventario_periodo ? ` · ${p.inventario_periodo}` : ''}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         <span className={`font-body font-bold text-xs px-2 py-1 rounded-full ${cat.bg} ${cat.color}`}>

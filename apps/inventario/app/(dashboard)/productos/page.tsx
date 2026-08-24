@@ -17,6 +17,7 @@ export default async function ProductosPage() {
     id, ref, codigo, nombre_estandar, presentacion,
     tipo_insumo, cat_rotacion, stock_minimo_def, imagen_url, activo,
     sku, codigo_barras, cce_tipo,
+    inventario_periodo, inventario_encontrado,
     stock ( cantidad_real, cantidad_disp ),
     cce:cce_bien_id ( id, bien ),
     stock_cce ( cantidad_real, cantidad_disp )

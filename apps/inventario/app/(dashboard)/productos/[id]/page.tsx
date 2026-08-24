@@ -57,6 +57,7 @@ export default async function ProductoPage({ params }: Props) {
       ind_rot_general, ind_rot_mes, precio_lista, precio_lista2, imagen_url, activo,
       sku, ubicacion_bodega, bodega_descripcion,
       codigo_barras, codigo_barras_formato, codigo_barras_origen,
+      inventario_periodo, inventario_encontrado, inventario_fecha,
       created_at, updated_at,
       stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal, updated_at ),
       proveedor:proveedor_id ( nombre, telefono, email ),

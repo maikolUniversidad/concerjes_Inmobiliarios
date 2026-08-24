@@ -54,6 +54,9 @@ interface Props {
     codigo_barras: string | null
     codigo_barras_formato: string | null
     codigo_barras_origen: string | null
+    inventario_periodo?: string | null
+    inventario_encontrado?: boolean | null
+    inventario_fecha?: string | null
     created_at?: string | null
     updated_at?: string | null
     stock: { cantidad_real: number; cantidad_disp: number; cantidad_entr: number; cantidad_sal: number } | null
@@ -206,6 +209,12 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
                 <span className={`font-body font-bold text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.color}`}>
                   Cat. {initial.cat_rotacion} · {cat.label}
                 </span>
+                {initial.inventario_encontrado === false && (
+                  <span className="font-body font-bold text-xs px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200"
+                    title={`Este producto no se encontró en el inventario físico de ${initial.inventario_periodo}. Se conserva en el catálogo con su stock anterior.`}>
+                    🏷 No hallado{initial.inventario_periodo ? ` · ${initial.inventario_periodo}` : ''}
+                  </span>
+                )}
               </div>
               <h1 className="font-heading font-bold text-xl text-gray-900">{initial.nombre_estandar}</h1>
               {initial.presentacion && (
@@ -241,6 +250,16 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
             <Campo label="Precio lista" value={initial.precio_lista ? formatCOP(initial.precio_lista) : SIN} />
             <Campo label="Precio lista 2" value={initial.precio_lista2 ? formatCOP(initial.precio_lista2) : SIN} />
             <Campo label="Estado" value={initial.activo ? 'Activo' : 'Inactivo'} />
+            <Campo
+              label="Último inventario físico"
+              value={
+                initial.inventario_periodo
+                  ? initial.inventario_encontrado === false
+                    ? <span className="text-orange-700">No hallado · {initial.inventario_periodo}</span>
+                    : <span className="text-brand-green">Hallado · {initial.inventario_periodo}</span>
+                  : SIN
+              }
+            />
             <Campo label="Índice rot. general" value={val(initial.ind_rot_general)} />
             <Campo label="Índice rot. mes" value={val(initial.ind_rot_mes)} />
             <Campo label="Stock mín. definido" value={val(initial.stock_minimo_def)} />

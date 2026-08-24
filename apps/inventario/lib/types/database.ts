@@ -39,6 +39,11 @@ export interface Producto {
   bodega_descripcion: string | null
   ubicacion_id: string | null
   activo: boolean
+  /** Periodo del último inventario físico cruzado (ej. "AGOSTO 2025") */
+  inventario_periodo: string | null
+  /** false = no se encontró en ese inventario (se conserva, etiquetado) */
+  inventario_encontrado: boolean | null
+  inventario_fecha: string | null
   created_at: string
   updated_at: string
   // relations
