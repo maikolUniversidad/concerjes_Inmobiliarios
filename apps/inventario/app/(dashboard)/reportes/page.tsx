@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
 import { ReportesExport } from './ReportesExport'
+import { InformesInventario } from './InformesInventario'
 
 export const metadata: Metadata = { title: 'Reportes' }
 export const revalidate = 0
@@ -132,6 +133,9 @@ export default async function ReportesPage() {
           </p>
         </div>
       </div>
+
+      {/* Informes de inventario (lista de selección) */}
+      <InformesInventario />
 
       {/* Exportar a Excel + Grafo de relaciones */}
       <div className="grid lg:grid-cols-[2fr,1fr] gap-5">
