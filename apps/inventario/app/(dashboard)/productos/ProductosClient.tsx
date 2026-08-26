@@ -8,6 +8,7 @@ import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 
 interface CceBien {
   id: string
+  item: number
   bien: string
 }
 
@@ -86,8 +87,8 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         .filter(v => v !== null && v !== undefined && String(v).trim() !== '')
         .map(v => String(v).toLowerCase())
       const codigosDigits = codigos.map(c => c.replace(/\D/g, '')).filter(Boolean)
-      // Incluye el nombre del bien CCE en la búsqueda de texto
-      const cceBien = p.cce?.bien.toLowerCase() ?? ''
+      // Incluye el ítem y el nombre del bien CCE en la búsqueda de texto
+      const cceBien = p.cce ? `${p.cce.item} ${p.cce.bien.toLowerCase()}` : ''
       const texto = `${p.nombre_estandar.toLowerCase()} ${codigos.join(' ')} ${cceBien}`
 
       let score = 0
@@ -274,8 +275,8 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                     )}
                     {p.cce && (
                       <div className="flex items-center gap-1 flex-wrap">
-                        <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate flex-1 min-w-0" title={p.cce.bien}>
-                          🏛 {p.cce.bien}
+                        <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate flex-1 min-w-0" title={`#${p.cce.item} · ${p.cce.bien}`}>
+                          🏛 #{p.cce.item} · {p.cce.bien}
                         </p>
                         {p.cce_tipo === 'PROPIO' && (
                           <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1 py-0.5 shrink-0">PROPIO</span>
@@ -385,8 +386,8 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                       <td className="px-4 py-2.5 max-w-[220px]">
                         {p.cce ? (
                           <div className="space-y-0.5">
-                            <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={p.cce.bien}>
-                              🏛 {p.cce.bien}
+                            <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={`#${p.cce.item} · ${p.cce.bien}`}>
+                              🏛 #{p.cce.item} · {p.cce.bien}
                             </span>
                             {p.cce_tipo === 'PROPIO' && (
                               <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 inline-block">

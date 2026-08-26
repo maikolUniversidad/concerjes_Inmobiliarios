@@ -21,11 +21,10 @@ type UbicacionRel = {
 
 type CceBienRel = {
   id: string
+  item: number
   bien: string
   especificacion: string | null
   presentacion: string | null
-  cantidad_mensual: string | null
-  precio_piso: boolean
 }
 
 type ProductoConRelaciones = Producto & {
@@ -63,7 +62,7 @@ export default async function ProductoPage({ params }: Props) {
       proveedor:proveedor_id ( nombre, telefono, email ),
       proveedor2:proveedor2_id ( nombre ),
       ubicacion:ubicacion_id ( codigo, nombre, tipo, foto_url, pos_x, pos_y, bodega:bodega_id ( nombre, plano_url ) ),
-      cce:cce_bien_id ( id, bien, especificacion, presentacion, cantidad_mensual, precio_piso ),
+      cce:cce_bien_id ( id, item, bien, especificacion, presentacion ),
       stock_cce ( cantidad_real, cantidad_disp )
     `)
     .eq('id', id)

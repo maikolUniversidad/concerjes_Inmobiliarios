@@ -18,11 +18,10 @@ interface Movimiento {
 
 interface CceBien {
   id: string
+  item: number
   bien: string
   especificacion: string | null
   presentacion: string | null
-  cantidad_mensual: string | null
-  precio_piso: boolean
 }
 
 type CceTipo = 'PROPIO' | 'COMPARTIDO' | null
@@ -416,7 +415,7 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
               <h3 className="font-heading font-semibold text-sm text-gray-700 shrink-0">Colombia Compra Eficiente</h3>
               {initial.cce ? (
                 <span className="font-body text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 truncate">
-                  {initial.cce.bien}
+                  #{initial.cce.item} · {initial.cce.bien}
                 </span>
               ) : (
                 <span className="font-body text-xs text-gray-400">Sin categoría asignada</span>
@@ -563,9 +562,9 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
                 <div className="px-5 pb-5 pt-1 space-y-3 border-t border-gray-100">
                   <p className="font-body text-xs text-gray-500 font-semibold uppercase tracking-wide pt-3">Ficha del bien CCE</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
-                    <div className="sm:col-span-2">
-                      <p className="font-body text-xs text-gray-400">Nombre de bien</p>
-                      <p className="font-body font-semibold text-sm text-gray-900 mt-0.5">{initial.cce.bien}</p>
+                    <div>
+                      <p className="font-body text-xs text-gray-400">Ítem CCE</p>
+                      <p className="font-body font-semibold text-sm text-gray-900 mt-0.5">#{initial.cce.item}</p>
                     </div>
                     {initial.cce.presentacion && (
                       <div>
@@ -573,19 +572,9 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
                         <p className="font-body text-sm text-gray-700 mt-0.5">{initial.cce.presentacion}</p>
                       </div>
                     )}
-                    {initial.cce.cantidad_mensual && (
-                      <div>
-                        <p className="font-body text-xs text-gray-400">Cantidad mensual referencia</p>
-                        <p className="font-body text-sm text-gray-700 mt-0.5">{initial.cce.cantidad_mensual}</p>
-                      </div>
-                    )}
-                    <div>
-                      <p className="font-body text-xs text-gray-400">Precio piso</p>
-                      <p className="font-body text-sm mt-0.5">
-                        {initial.cce.precio_piso
-                          ? <span className="text-green-700 font-semibold">Sí aplica</span>
-                          : <span className="text-gray-400">No aplica</span>}
-                      </p>
+                    <div className="sm:col-span-2">
+                      <p className="font-body text-xs text-gray-400">Nombre de bien</p>
+                      <p className="font-body font-semibold text-sm text-gray-900 mt-0.5">{initial.cce.bien}</p>
                     </div>
                   </div>
                   {initial.cce.especificacion && (
