@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { CTASection } from '@/components/sections/CTASection'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 export const metadata: Metadata = {
   title: 'Nosotros',
@@ -21,7 +22,9 @@ export default function NosotrosPage() {
   return (
     <>
       {/* Hero */}
-      <div className="pt-28 pb-16 gradient-brand relative overflow-hidden">
+      <div className="relative isolate overflow-hidden pt-28 pb-16">
+        <FotoFondo src="/images/nosotros/equipo.jpg" posicion="center 30%" />
+        <Velo />
         <div className="absolute inset-0 opacity-5"
           style={{ backgroundImage: `radial-gradient(circle at 25px 25px, white 2px, transparent 0)`, backgroundSize: '50px 50px' }}
         />

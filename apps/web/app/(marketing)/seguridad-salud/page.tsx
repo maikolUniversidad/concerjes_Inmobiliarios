@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { CheckCircle, Shield, Award, FileText } from 'lucide-react'
 import { CTASection } from '@/components/sections/CTASection'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 export const metadata: Metadata = {
   title: 'Seguridad y Salud',
@@ -30,8 +31,10 @@ export default function SeguridadSaludPage() {
   return (
     <>
       {/* Hero */}
-      <div className="pt-28 pb-16 gradient-brand">
-        <div className="container-max px-4 sm:px-6 lg:px-8 text-center">
+      <div className="relative isolate overflow-hidden pt-28 pb-16">
+        <FotoFondo src="/images/seguridad-salud/capacitacion.jpg" posicion="center 35%" />
+        <Velo />
+        <div className="container-max relative z-10 px-4 text-center sm:px-6 lg:px-8">
           <h1 className="font-heading font-bold text-5xl sm:text-6xl text-white mb-4">
             Seguridad y Salud
           </h1>
