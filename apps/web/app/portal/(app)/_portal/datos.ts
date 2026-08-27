@@ -52,3 +52,37 @@ export function fmtPrecio(p: number | null): string {
   if (p === null || p === undefined) return 'A consultar'
   return `$${Number(p).toLocaleString('es-CO')}`
 }
+
+// ── Pagos ────────────────────────────────────────────────────────────────────
+
+export const ESTADOS_COBRO: Record<string, { label: string; bg: string; texto: string }> = {
+  EMITIDO: { label: 'Por pagar',  bg: 'bg-amber-50 border-amber-200',  texto: 'text-amber-700' },
+  PARCIAL: { label: 'Abonado',    bg: 'bg-blue-50 border-blue-200',    texto: 'text-blue-700' },
+  PAGADO:  { label: 'Pagado',     bg: 'bg-green-50 border-green-200',  texto: 'text-brand-green' },
+  ANULADO: { label: 'Anulado',    bg: 'bg-gray-50 border-gray-200',    texto: 'text-gray-500' },
+  VENCIDO: { label: 'Vencido',    bg: 'bg-red-50 border-red-200',      texto: 'text-red-700' },
+}
+
+export const ESTADOS_PAGO: Record<string, { label: string; bg: string; texto: string }> = {
+  REPORTADO:  { label: 'En verificación', bg: 'bg-amber-50 border-amber-200', texto: 'text-amber-700' },
+  VERIFICADO: { label: 'Verificado',      bg: 'bg-green-50 border-green-200', texto: 'text-brand-green' },
+  RECHAZADO:  { label: 'Rechazado',       bg: 'bg-red-50 border-red-200',     texto: 'text-red-700' },
+}
+
+/** Un cobro con saldo cuya fecha de vencimiento ya pasó se muestra VENCIDO. */
+export function estadoCobro(estado: string, vencimiento: string | null, saldo: number): string {
+  if (estado === 'EMITIDO' || estado === 'PARCIAL') {
+    if (saldo > 0 && vencimiento && vencimiento < new Date().toISOString().slice(0, 10)) return 'VENCIDO'
+  }
+  return estado
+}
+
+export function fmtMoneda(v: number | null | undefined): string {
+  if (v === null || v === undefined) return '$0'
+  return `$${Number(v).toLocaleString('es-CO', { maximumFractionDigits: 0 })}`
+}
+
+export function fmtFechaHora(iso: string | null): string {
+  if (!iso) return '—'
+  return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}

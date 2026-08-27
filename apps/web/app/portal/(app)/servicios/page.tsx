@@ -3,14 +3,18 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import {
-  Loader2, CalendarPlus, MapPin, Clock, ChevronDown, Star, X, CheckCircle2, Circle,
+  Loader2, CalendarPlus, MapPin, Clock, ChevronDown, Star, X, CheckCircle2, Circle, Wallet,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getPortalSupabase } from '@/lib/supabase/portal'
 import { usePortal } from '../_portal/PortalProvider'
-import { ESTADOS, ICONO_SERVICIO, PROGRESO, fmtFecha, fmtHora, fmtPrecio } from '../_portal/datos'
+import { ESTADOS, ESTADOS_COBRO, ICONO_SERVICIO, estadoCobro, fmtFecha, fmtHora, fmtPrecio, fmtMoneda } from '../_portal/datos'
 
 interface Sesion { id: string; fecha: string; hora_inicio: string; hora_fin: string; estado: string }
+interface Cobro {
+  id: string; numero: string; solicitud_id: string | null
+  total: number; saldo: number; estado: string; fecha_vencimiento: string | null
+}
 interface Solicitud {
   id: string; numero: string; estado: string; frecuencia: string; tipo_id: string | null
   cliente_direccion: string; cliente_barrio: string | null; cliente_ciudad: string
@@ -38,6 +42,7 @@ const FLUJO_LABEL: Record<string, string> = {
 export default function MisServiciosPage() {
   const { session, cliente } = usePortal()
   const [items, setItems] = useState<Solicitud[]>([])
+  const [cobros, setCobros] = useState<Record<string, Cobro>>({})
   const [cargando, setCargando] = useState(true)
   const [abierto, setAbierto] = useState<string | null>(null)
   const [filtro, setFiltro] = useState<'activos' | 'todos'>('activos')
@@ -50,6 +55,19 @@ export default function MisServiciosPage() {
       .eq('cliente_id', session.user.id)
       .order('created_at', { ascending: false })
     setItems((data as unknown as Solicitud[]) ?? [])
+
+    // Cuenta de cobro asociada a cada servicio (la más reciente por solicitud).
+    const { data: cbs } = await sb
+      .from('cobros_servicio_hogar')
+      .select('id, numero, solicitud_id, total, saldo, estado, fecha_vencimiento')
+      .eq('cliente_id', session.user.id)
+      .neq('estado', 'BORRADOR')
+      .order('created_at', { ascending: false })
+    const mapa: Record<string, Cobro> = {}
+    for (const c of (cbs as unknown as Cobro[]) ?? []) {
+      if (c.solicitud_id && !mapa[c.solicitud_id]) mapa[c.solicitud_id] = c
+    }
+    setCobros(mapa)
     setCargando(false)
   }
   useEffect(() => { cargar() }, [session.user.id])
@@ -165,6 +183,25 @@ export default function MisServiciosPage() {
                         </div>
                       </div>
                     )}
+
+                    {cobros[s.id] && (() => {
+                      const c = cobros[s.id]
+                      const e = estadoCobro(c.estado, c.fecha_vencimiento, Number(c.saldo))
+                      const b = ESTADOS_COBRO[e] ?? ESTADOS_COBRO.EMITIDO
+                      return (
+                        <Link href={`/portal/pagos/${c.id}`}
+                          className="mt-4 flex items-center gap-3 rounded-xl border border-gray-200 p-3.5 transition-colors hover:border-brand-green/40 hover:bg-brand-green/5">
+                          <Wallet className="h-5 w-5 shrink-0 text-brand-green" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-sm font-semibold text-gray-800">Cuenta de cobro {c.numero}</p>
+                            <p className="text-xs text-gray-400">
+                              {Number(c.saldo) > 0 ? `Saldo ${fmtMoneda(c.saldo)}` : `Total ${fmtMoneda(c.total)}`}
+                            </p>
+                          </div>
+                          <span className={`shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold ${b.bg} ${b.texto}`}>{b.label}</span>
+                        </Link>
+                      )
+                    })()}
 
                     {s.calificacion && (
                       <div className="mt-4 flex items-center gap-1">

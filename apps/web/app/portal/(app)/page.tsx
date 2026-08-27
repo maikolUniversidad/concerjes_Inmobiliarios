@@ -2,10 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { CalendarPlus, ClipboardList, CalendarDays, ArrowRight, Clock, MapPin, Loader2, Sparkles } from 'lucide-react'
+import { CalendarPlus, ClipboardList, CalendarDays, ArrowRight, Clock, MapPin, Loader2, Sparkles, Wallet } from 'lucide-react'
 import { getPortalSupabase } from '@/lib/supabase/portal'
 import { usePortal } from './_portal/PortalProvider'
-import { ESTADOS, ICONO_SERVICIO, fmtFechaCorta, fmtHora } from './_portal/datos'
+import { ESTADOS, ICONO_SERVICIO, fmtFechaCorta, fmtHora, fmtMoneda } from './_portal/datos'
 
 interface Solicitud {
   id: string; numero: string; estado: string
@@ -18,9 +18,22 @@ export default function PortalInicioPage() {
   const { cliente, session } = usePortal()
   const [solicitudes, setSolicitudes] = useState<Solicitud[]>([])
   const [cargando, setCargando] = useState(true)
+  const [porPagar, setPorPagar] = useState<{ cuentas: number; saldo: number }>({ cuentas: 0, saldo: 0 })
 
   useEffect(() => {
     const sb = getPortalSupabase()
+    sb.from('cobros_servicio_hogar')
+      .select('saldo')
+      .eq('cliente_id', session.user.id)
+      .in('estado', ['EMITIDO', 'PARCIAL'])
+      .then(({ data }) => {
+        const filas = (data as { saldo: number }[]) ?? []
+        setPorPagar({
+          cuentas: filas.length,
+          saldo: filas.reduce((a, c) => a + Number(c.saldo ?? 0), 0),
+        })
+      })
+
     sb.from('solicitudes_servicio_hogar')
       .select('id, numero, estado, cliente_direccion, cliente_barrio, fecha_deseada, hora_inicio, tipos_servicio_hogar(nombre)')
       .eq('cliente_id', session.user.id)
@@ -79,10 +92,27 @@ export default function PortalInicioPage() {
         </div>
       )}
 
+      {/* Saldo pendiente */}
+      {porPagar.cuentas > 0 && (
+        <Link href="/portal/pagos" className="flex items-center gap-4 rounded-2xl border border-amber-200 bg-amber-50 p-5 transition-colors hover:border-amber-300">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+            <Wallet className="h-5 w-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="font-heading font-bold text-gray-900">Tienes {fmtMoneda(porPagar.saldo)} por pagar</p>
+            <p className="text-sm text-gray-600">
+              {porPagar.cuentas} cuenta{porPagar.cuentas === 1 ? '' : 's'} de cobro pendiente{porPagar.cuentas === 1 ? '' : 's'}.
+            </p>
+          </div>
+          <ArrowRight className="h-5 w-5 shrink-0 text-amber-600" />
+        </Link>
+      )}
+
       {/* Accesos rápidos */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Accion href="/portal/solicitar" icon={<CalendarPlus className="h-5 w-5" />} titulo="Agendar servicio" desc="Solicita un nuevo servicio" />
         <Accion href="/portal/servicios" icon={<ClipboardList className="h-5 w-5" />} titulo="Mis servicios" desc={`${activos.length} activo${activos.length === 1 ? '' : 's'}`} />
+        <Accion href="/portal/pagos" icon={<Wallet className="h-5 w-5" />} titulo="Mis pagos" desc={porPagar.cuentas > 0 ? `${fmtMoneda(porPagar.saldo)} pendiente` : 'Estás al día'} />
         <Accion href="/portal/agenda" icon={<CalendarDays className="h-5 w-5" />} titulo="Disponibilidad" desc="Consulta horarios libres" />
       </div>
 

@@ -1,6 +1,7 @@
 import Link from 'next/link'
-import { ClipboardList, CalendarDays, Star, DollarSign, Clock, CheckCircle2, AlertCircle, TrendingUp } from 'lucide-react'
+import { ClipboardList, CalendarDays, Star, DollarSign, Clock, CheckCircle2, AlertCircle, TrendingUp, Wallet, SlidersHorizontal, FileText } from 'lucide-react'
 import { getResumenServiciosHogar, getSolicitudesRecientes } from './actions'
+import { getResumenPagos } from './pagos-actions'
 
 const ESTADOS: Record<string, { label: string; cls: string }> = {
   PENDIENTE:   { label: 'Pendiente',   cls: 'bg-yellow-100 text-yellow-700' },
@@ -11,16 +12,26 @@ const ESTADOS: Record<string, { label: string; cls: string }> = {
 }
 
 export default async function ServiciosHogarPage() {
-  const [resumen, recientes] = await Promise.all([
+  const [resumen, recientes, pagos] = await Promise.all([
     getResumenServiciosHogar().catch(() => ({ pendientes: 0, confirmadas: 0, hoy: 0, completadas: 0 })),
     getSolicitudesRecientes().catch(() => []),
+    getResumenPagos().catch(() => ({ porCobrar: 0, saldoPendiente: 0, vencidos: 0, porVerificar: 0, recaudado: 0 })),
   ])
+
+  const moneda = (v: number) => `$${Number(v ?? 0).toLocaleString('es-CO', { maximumFractionDigits: 0 })}`
 
   const tarjetas = [
     { label: 'Pendientes',  value: resumen.pendientes, icon: AlertCircle,    cls: 'text-yellow-600', bg: 'bg-yellow-50',  href: '/servicios-hogar/solicitudes?estado=PENDIENTE' },
     { label: 'Confirmadas', value: resumen.confirmadas, icon: CheckCircle2,  cls: 'text-blue-600',   bg: 'bg-blue-50',    href: '/servicios-hogar/solicitudes?estado=CONFIRMADA' },
     { label: 'Hoy',         value: resumen.hoy,          icon: Clock,         cls: 'text-purple-600', bg: 'bg-purple-50',  href: '/servicios-hogar/agenda' },
     { label: 'Completadas', value: resumen.completadas,  icon: TrendingUp,    cls: 'text-green-600',  bg: 'bg-green-50',   href: '/servicios-hogar/solicitudes?estado=COMPLETADA' },
+  ]
+
+  const tarjetasPago = [
+    { label: 'Por cobrar',    value: moneda(pagos.saldoPendiente),   sub: `${pagos.porCobrar} cuenta(s)`, icon: Wallet,        cls: 'text-yellow-600', bg: 'bg-yellow-50', href: '/servicios-hogar/pagos?estado=EMITIDO' },
+    { label: 'Vencidas',      value: String(pagos.vencidos),          sub: 'cuentas sin pagar',            icon: AlertCircle,   cls: 'text-red-600',    bg: 'bg-red-50',    href: '/servicios-hogar/pagos?estado=EMITIDO' },
+    { label: 'Por verificar', value: String(pagos.porVerificar),       sub: 'pagos reportados',             icon: FileText,      cls: 'text-blue-600',   bg: 'bg-blue-50',   href: '/servicios-hogar/pagos' },
+    { label: 'Recaudado',     value: moneda(pagos.recaudado),          sub: 'cuentas pagadas',              icon: CheckCircle2,  cls: 'text-green-600',  bg: 'bg-green-50',  href: '/servicios-hogar/pagos?estado=PAGADO' },
   ]
 
   return (
@@ -49,6 +60,29 @@ export default async function ServiciosHogarPage() {
         })}
       </div>
 
+      {/* Cartera y pagos */}
+      <div>
+        <h2 className="font-semibold text-gray-900 mb-3">Cartera y pagos</h2>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {tarjetasPago.map((t) => {
+            const Icon = t.icon
+            return (
+              <Link key={t.label} href={t.href}
+                className={`${t.bg} rounded-2xl p-5 flex flex-col gap-3 hover:shadow-md transition-shadow`}>
+                <div className="w-10 h-10 rounded-xl bg-white/70 flex items-center justify-center shadow-sm">
+                  <Icon className={`w-5 h-5 ${t.cls}`} />
+                </div>
+                <div>
+                  <p className="text-xl font-bold text-gray-900">{t.value}</p>
+                  <p className="text-sm text-gray-500">{t.label}</p>
+                  <p className="text-xs text-gray-400 mt-0.5">{t.sub}</p>
+                </div>
+              </Link>
+            )
+          })}
+        </div>
+      </div>
+
       {/* Accesos rápidos */}
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {[
@@ -56,6 +90,8 @@ export default async function ServiciosHogarPage() {
           { href: '/servicios-hogar/agenda',      icon: CalendarDays,  label: 'Agenda',              desc: 'Calendario semanal de servicios' },
           { href: '/servicios-hogar/tipos',       icon: Star,          label: 'Tipos de servicio',   desc: 'Catálogo y descripción de servicios' },
           { href: '/servicios-hogar/precios',     icon: DollarSign,    label: 'Precios y tarifas',   desc: 'Gestionar precios por duración y frecuencia' },
+          { href: '/servicios-hogar/pagos',       icon: Wallet,        label: 'Pagos',               desc: 'Cuentas de cobro, verificación y cartera' },
+          { href: '/servicios-hogar/parametros-pago', icon: SlidersHorizontal, label: 'Parámetros de pago', desc: 'IVA, plazos, anticipos y formas de pago' },
         ].map((a) => {
           const Icon = a.icon
           return (

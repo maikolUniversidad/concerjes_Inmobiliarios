@@ -111,7 +111,7 @@ export function TiendaClient() {
   return (
     <div className="pt-16">
       {/* Barra sticky: buscar + categorías */}
-      <div className="sticky top-0 z-40 border-b border-gray-100 bg-white/95 backdrop-blur-md">
+      <div className="sticky top-14 z-30 border-b border-gray-100 bg-white/95 backdrop-blur-md">
         <div className="container-max px-4 py-3">
           <div className="relative mb-3">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />

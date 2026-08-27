@@ -7,17 +7,29 @@ import Image from 'next/image'
 import type { Session } from '@supabase/supabase-js'
 import {
   Loader2, LayoutDashboard, CalendarPlus, ClipboardList, CalendarDays, UserRound,
-  LogOut, Menu, X,
+  LogOut, Menu, X, Wallet, Bell,
 } from 'lucide-react'
 import { getPortalSupabase, asegurarCliente, cerrarSesionPortal } from '@/lib/supabase/portal'
 import { PortalProvider } from './_portal/PortalProvider'
 
-const NAV = [
-  { href: '/portal',            label: 'Inicio',        icon: LayoutDashboard },
-  { href: '/portal/solicitar',  label: 'Agendar',       icon: CalendarPlus },
-  { href: '/portal/servicios',  label: 'Mis servicios', icon: ClipboardList },
-  { href: '/portal/agenda',     label: 'Disponibilidad', icon: CalendarDays },
-  { href: '/portal/perfil',     label: 'Mi perfil',     icon: UserRound },
+interface Contadores { cobros: number; avisos: number }
+
+interface ItemNav {
+  href: string
+  label: string
+  icon: React.ElementType
+  /** Badge del ítem: de qué contador se alimenta. */
+  contador?: keyof Contadores
+}
+
+const NAV: ItemNav[] = [
+  { href: '/portal',                label: 'Inicio',         icon: LayoutDashboard },
+  { href: '/portal/solicitar',      label: 'Agendar',        icon: CalendarPlus },
+  { href: '/portal/servicios',      label: 'Mis servicios',  icon: ClipboardList },
+  { href: '/portal/pagos',          label: 'Mis pagos',      icon: Wallet,       contador: 'cobros' },
+  { href: '/portal/agenda',         label: 'Disponibilidad', icon: CalendarDays },
+  { href: '/portal/notificaciones', label: 'Avisos',         icon: Bell,         contador: 'avisos' },
+  { href: '/portal/perfil',         label: 'Mi perfil',      icon: UserRound },
 ]
 
 export default function PortalAppLayout({ children }: { children: React.ReactNode }) {
@@ -26,6 +38,7 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
   const [session, setSession] = useState<Session | null>(null)
   const [estado, setEstado] = useState<'cargando' | 'ok' | 'no-auth'>('cargando')
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [contadores, setContadores] = useState<Contadores>({ cobros: 0, avisos: 0 })
 
   useEffect(() => {
     const sb = getPortalSupabase()
@@ -52,6 +65,24 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
     return () => { activo = false; sub.subscription.unsubscribe() }
   }, [router, pathname])
 
+  // Badges: cobros por pagar y avisos sin leer. Se recalculan al navegar.
+  useEffect(() => {
+    const uid = session?.user.id
+    if (!uid) return
+    let activo = true
+    const sb = getPortalSupabase()
+    Promise.all([
+      sb.from('cobros_servicio_hogar').select('id', { count: 'exact', head: true })
+        .eq('cliente_id', uid).in('estado', ['EMITIDO', 'PARCIAL']),
+      sb.from('notificaciones_cliente').select('id', { count: 'exact', head: true })
+        .eq('cliente_id', uid).eq('leida', false),
+    ]).then(([cobros, avisos]) => {
+      if (!activo) return
+      setContadores({ cobros: cobros.count ?? 0, avisos: avisos.count ?? 0 })
+    })
+    return () => { activo = false }
+  }, [session?.user.id, pathname])
+
   async function salir() {
     await cerrarSesionPortal()
     router.replace('/portal/ingresar')
@@ -76,7 +107,9 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
           </Link>
           <nav className="flex-1 space-y-1 px-3 py-4">
             {NAV.map((n) => (
-              <NavLink key={n.href} {...n} activo={esActivo(pathname, n.href)} />
+              <NavLink key={n.href} href={n.href} label={n.label} icon={n.icon}
+                activo={esActivo(pathname, n.href)}
+                badge={n.contador ? contadores[n.contador] : 0} />
             ))}
           </nav>
           <button onClick={salir} className="m-3 flex items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-red-600">
@@ -101,7 +134,9 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
             <nav className="space-y-1 border-b border-gray-200 bg-white px-3 py-3 lg:hidden">
               {NAV.map((n) => (
                 <div key={n.href} onClick={() => setMenuAbierto(false)}>
-                  <NavLink {...n} activo={esActivo(pathname, n.href)} />
+                  <NavLink href={n.href} label={n.label} icon={n.icon}
+                    activo={esActivo(pathname, n.href)}
+                    badge={n.contador ? contadores[n.contador] : 0} />
                 </div>
               ))}
               <button onClick={salir} className="flex w-full items-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-gray-500 hover:bg-gray-50 hover:text-red-600">
@@ -117,7 +152,9 @@ export default function PortalAppLayout({ children }: { children: React.ReactNod
   )
 }
 
-function NavLink({ href, label, icon: Icon, activo }: { href: string; label: string; icon: React.ElementType; activo: boolean }) {
+function NavLink({ href, label, icon: Icon, activo, badge = 0 }: {
+  href: string; label: string; icon: React.ElementType; activo: boolean; badge?: number
+}) {
   return (
     <Link
       href={href}
@@ -125,7 +162,15 @@ function NavLink({ href, label, icon: Icon, activo }: { href: string; label: str
         activo ? 'bg-brand-green text-white' : 'text-gray-600 hover:bg-brand-green/5 hover:text-brand-green'
       }`}
     >
-      <Icon className="h-4 w-4" /> {label}
+      <Icon className="h-4 w-4" />
+      <span className="flex-1">{label}</span>
+      {badge > 0 && (
+        <span className={`min-w-5 rounded-full px-1.5 py-0.5 text-center text-xs font-bold ${
+          activo ? 'bg-white text-brand-green' : 'bg-brand-green text-white'
+        }`}>
+          {badge > 9 ? '9+' : badge}
+        </span>
+      )}
     </Link>
   )
 }

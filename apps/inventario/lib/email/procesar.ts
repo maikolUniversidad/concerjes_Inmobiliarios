@@ -43,7 +43,10 @@ export async function procesarCorreoSaliente(
   let enviados = 0, errores = 0
   for (const m of lista) {
     try {
-      const link = m.enlace ? `<p style="margin-top:12px"><a href="${BASE_URL}${m.enlace}">Ver en la plataforma</a></p>` : ''
+      // El enlace puede venir absoluto (p. ej. avisos del portal de clientes,
+      // que vive en otro dominio); sólo se antepone la base si es relativo.
+      const href = m.enlace ? (/^https?:\/\//.test(m.enlace) ? m.enlace : `${BASE_URL}${m.enlace}`) : ''
+      const link = href ? `<p style="margin-top:12px"><a href="${href}">Ver en la plataforma</a></p>` : ''
       await transport.sendMail({
         from, to: m.para,
         subject: m.asunto || 'Notificación · Conserjes Inmobiliarios',

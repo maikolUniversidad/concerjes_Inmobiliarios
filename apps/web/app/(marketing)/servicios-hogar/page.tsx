@@ -3,9 +3,11 @@ import Link from 'next/link'
 import { CheckCircle2, Star, Phone, Clock, Shield, Award, ChevronRight, Users, UserRound, CalendarCheck, Bell, MapPin } from 'lucide-react'
 import { GaleriaServicios } from '@/components/servicios-hogar/GaleriaServicios'
 import { ResenasClientes } from '@/components/servicios-hogar/ResenasClientes'
+import { Reveal, RevealGrupo, RevealItem } from '@/components/ui/Reveal'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 export const metadata: Metadata = {
-  title: 'Servicios del Hogar | Conserjes Inmobiliarios',
+  title: 'Servicios del Hogar',
   description: 'Contrata servicios de aseo, limpieza profunda, atención en eventos y más. Personal capacitado y de confianza directamente en tu hogar.',
 }
 
@@ -13,6 +15,7 @@ const SERVICIOS = [
   {
     icono: '🧹',
     nombre: 'Aseo Regular',
+    foto: '/images/servicios-hogar/aseo-regular.jpg',
     descripcion: 'Limpieza general del hogar: salas, habitaciones, baños y cocina.',
     color: 'from-green-500 to-emerald-600',
     bg: 'bg-green-50',
@@ -27,6 +30,7 @@ const SERVICIOS = [
   {
     icono: '✨',
     nombre: 'Limpieza Profunda',
+    foto: '/images/servicios-hogar/limpieza-profunda.jpg',
     descripcion: 'Limpieza detallada con productos especializados, áreas de difícil acceso y electrodomésticos.',
     color: 'from-blue-500 to-indigo-600',
     bg: 'bg-blue-50',
@@ -41,6 +45,7 @@ const SERVICIOS = [
   {
     icono: '🏗️',
     nombre: 'Post-Obra',
+    foto: '/images/servicios-hogar/post-obra.jpg',
     descripcion: 'Limpieza especializada después de remodelaciones: polvo fino, residuos y acabados.',
     color: 'from-orange-500 to-amber-600',
     bg: 'bg-orange-50',
@@ -53,6 +58,7 @@ const SERVICIOS = [
   {
     icono: '🎉',
     nombre: 'Atención en Eventos',
+    foto: '/images/servicios-hogar/eventos.jpg',
     descripcion: 'Personal capacitado para atender invitados: servicio de mesa, copas y limpieza durante el evento.',
     color: 'from-purple-500 to-violet-600',
     bg: 'bg-purple-50',
@@ -67,6 +73,7 @@ const SERVICIOS = [
   {
     icono: '🍳',
     nombre: 'Servicio de Cocina',
+    foto: '/images/servicios-hogar/cocina.jpg',
     descripcion: 'Preparación y servicio de alimentos para el hogar o pequeñas reuniones.',
     color: 'from-amber-500 to-yellow-600',
     bg: 'bg-amber-50',
@@ -80,6 +87,7 @@ const SERVICIOS = [
   {
     icono: '🌿',
     nombre: 'Jardín y Exteriores',
+    foto: '/images/servicios-hogar/jardin.jpg',
     descripcion: 'Cuidado de plantas, poda, limpieza de terrazas, balcones y áreas exteriores.',
     color: 'from-emerald-500 to-teal-600',
     bg: 'bg-emerald-50',
@@ -112,91 +120,125 @@ function fmt(p: number | null) {
 
 export default function ServiciosHogarPage() {
   return (
-    <div className="pt-20">
-      {/* Hero */}
-      <section className="gradient-hero text-white py-24 px-4 relative overflow-hidden">
-        <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '60px 60px' }} />
+    <div>
+      {/*
+        El hero arranca en el borde superior de la ventana (sin `pt` en el
+        contenedor): el header transparente se superpone sobre él. Antes había
+        un `pt-20` que dejaba una franja BLANCA arriba y el logo y el menú
+        blancos del header quedaban invisibles hasta hacer scroll.
+      */}
+      <section className="relative isolate overflow-hidden px-4 pb-24 pt-32 text-white sm:pt-36">
+        <FotoFondo src="/images/servicios-hogar/hero.jpg" posicion="center 35%" />
+        <Velo />
+        <div
+          className="absolute inset-0 opacity-[0.07]"
+          style={{ backgroundImage: 'radial-gradient(circle at 20% 50%, white 1px, transparent 1px), radial-gradient(circle at 80% 20%, white 1px, transparent 1px)', backgroundSize: '60px 60px' }}
+          aria-hidden="true"
+        />
+
         <div className="container-max relative text-center">
-          <span className="inline-block bg-white/15 backdrop-blur-sm text-white text-sm font-body font-semibold px-4 py-1.5 rounded-full mb-6">
-            🏠 Servicios del Hogar
-          </span>
-          <h1 className="font-heading font-bold text-4xl sm:text-5xl lg:text-6xl mb-6 leading-tight">
-            Tu hogar impecable,<br />
-            <span className="text-green-300">sin preocupaciones</span>
-          </h1>
-          <p className="text-white/80 text-lg sm:text-xl max-w-2xl mx-auto mb-10 font-body">
-            Contrata servicios de aseo, limpieza profunda, atención en eventos y más.
-            Personal capacitado, verificado y de confianza de <strong className="text-white">Conserjes Inmobiliarios</strong>.
-          </p>
-          <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link
-              href="/servicios-hogar/tienda"
-              className="inline-flex items-center justify-center gap-2 bg-white text-brand-green font-body font-bold text-base px-8 py-4 rounded-xl shadow-lg hover:shadow-xl hover:bg-green-50 transition-all"
-            >
-              🛒 Explorar la tienda <ChevronRight className="w-5 h-5" />
-            </Link>
-            <Link
-              href="/servicios-hogar/solicitar"
-              className="inline-flex items-center justify-center gap-2 bg-white/10 hover:bg-white/20 border border-white/30 text-white font-body font-semibold text-base px-8 py-4 rounded-xl transition-all"
-            >
-              Solicitar servicio
-            </Link>
-          </div>
-          <div className="mt-12 flex flex-wrap justify-center gap-8 text-white/80 font-body text-sm">
-            <div className="flex items-center gap-2"><Users className="w-4 h-4" /> +1.069 concerjes</div>
-            <div className="flex items-center gap-2"><Shield className="w-4 h-4" /> Personal verificado</div>
-            <div className="flex items-center gap-2"><Star className="w-4 h-4" /> 36 años de experiencia</div>
-          </div>
+          <Reveal direccion="escala">
+            <span className="mb-6 inline-block rounded-full border border-white/20 bg-white/10 px-4 py-1.5 font-body text-sm font-semibold text-white backdrop-blur-sm">
+              🏠 Servicios del Hogar
+            </span>
+          </Reveal>
+
+          <Reveal retraso={0.05}>
+            <h1 className="mb-6 font-heading text-4xl font-bold leading-[1.08] tracking-tight sm:text-5xl lg:text-[4.25rem]">
+              Tu hogar impecable,<br />
+              <span className="text-green-300">sin preocupaciones</span>
+            </h1>
+          </Reveal>
+
+          <Reveal retraso={0.12}>
+            <p className="mx-auto mb-10 max-w-2xl font-body text-lg text-white/85 sm:text-xl">
+              Contrata servicios de aseo, limpieza profunda, atención en eventos y más.
+              Personal capacitado, verificado y de confianza de <strong className="font-semibold text-white">Conserjes Inmobiliarios</strong>.
+            </p>
+          </Reveal>
+
+          <Reveal retraso={0.2}>
+            <div className="flex flex-col justify-center gap-4 sm:flex-row">
+              <Link
+                href="/servicios-hogar/tienda"
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-8 py-4 font-body text-base font-bold text-brand-green shadow-lg transition-all hover:-translate-y-0.5 hover:bg-green-50 hover:shadow-xl"
+              >
+                🛒 Explorar la tienda <ChevronRight className="h-5 w-5" />
+              </Link>
+              <Link
+                href="/servicios-hogar/solicitar"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/30 bg-white/10 px-8 py-4 font-body text-base font-semibold text-white transition-all hover:-translate-y-0.5 hover:bg-white/20"
+              >
+                Solicitar servicio
+              </Link>
+            </div>
+          </Reveal>
+
+          <Reveal retraso={0.3}>
+            <div className="mt-12 flex flex-wrap justify-center gap-x-8 gap-y-3 font-body text-sm text-white/80">
+              <div className="flex items-center gap-2"><Users className="h-4 w-4" /> +1.069 concerjes</div>
+              <div className="flex items-center gap-2"><Shield className="h-4 w-4" /> Personal verificado</div>
+              <div className="flex items-center gap-2"><Star className="h-4 w-4" /> 36 años de experiencia</div>
+            </div>
+          </Reveal>
         </div>
       </section>
 
       {/* Cómo funciona */}
       <section className="py-20 px-4 bg-gray-50">
         <div className="container-max">
-          <div className="text-center mb-14">
+          <Reveal className="text-center mb-14">
             <h2 className="font-heading font-bold text-3xl sm:text-4xl text-gray-900 mb-4">
               ¿Cómo funciona?
             </h2>
             <p className="text-gray-500 font-body text-lg max-w-xl mx-auto">
               Agenda tu servicio en 3 simples pasos
             </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-8">
+          </Reveal>
+          <RevealGrupo className="grid gap-8 md:grid-cols-3" escalon={0.12}>
             {PASOS.map((p) => (
-              <div key={p.num} className="text-center">
+              <RevealItem key={p.num} className="text-center">
                 <div className="w-16 h-16 bg-brand-green rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-green-200">
                   <span className="text-white font-heading font-bold text-2xl">{p.num}</span>
                 </div>
                 <h3 className="font-heading font-bold text-xl text-gray-900 mb-3">{p.titulo}</h3>
                 <p className="text-gray-500 font-body leading-relaxed">{p.desc}</p>
-              </div>
+              </RevealItem>
             ))}
-          </div>
+          </RevealGrupo>
         </div>
       </section>
 
       {/* Catálogo de servicios */}
       <section id="servicios" className="py-20 px-4">
         <div className="container-max">
-          <div className="text-center mb-14">
+          <Reveal className="text-center mb-14">
             <h2 className="font-heading font-bold text-3xl sm:text-4xl text-gray-900 mb-4">
               Nuestros servicios
             </h2>
             <p className="text-gray-500 font-body text-lg max-w-xl mx-auto">
               Escoge el servicio que necesitas y el horario que más te convenga
             </p>
-          </div>
+          </Reveal>
 
-          <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-6">
+          <RevealGrupo className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
             {SERVICIOS.map((s) => (
-              <div key={s.nombre} className={`rounded-2xl border ${s.border} ${s.bg} overflow-hidden flex flex-col`}>
-                {/* Card header */}
-                <div className={`bg-gradient-to-r ${s.color} p-5`}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-4xl">{s.icono}</span>
-                    <div>
-                      <h3 className="font-heading font-bold text-white text-xl">{s.nombre}</h3>
-                      <p className="text-white/80 text-sm font-body mt-0.5">{s.descripcion}</p>
+              <RevealItem key={s.nombre} className={`group flex flex-col overflow-hidden rounded-2xl border ${s.border} ${s.bg} shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl`}>
+                {/* Foto del servicio (si falta el archivo queda el degradado) */}
+                <div className="relative aspect-[16/9] overflow-hidden">
+                  <div className="absolute inset-0 transition-transform duration-500 group-hover:scale-105">
+                    <FotoFondo
+                      src={s.foto}
+                      degradado={null}
+                      className={`bg-gradient-to-br ${s.color}`}
+                    />
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/25 to-transparent" />
+                  <div className="absolute inset-x-0 bottom-0 flex items-end gap-3 p-5">
+                    <span className="text-4xl drop-shadow-lg">{s.icono}</span>
+                    <div className="min-w-0">
+                      <h3 className="font-heading text-xl font-bold text-white drop-shadow">{s.nombre}</h3>
+                      <p className="mt-0.5 font-body text-sm text-white/85 drop-shadow">{s.descripcion}</p>
                     </div>
                   </div>
                 </div>
@@ -228,14 +270,14 @@ export default function ServiciosHogarPage() {
                 <div className="px-5 pb-5">
                   <Link
                     href={`/servicios-hogar/solicitar?servicio=${encodeURIComponent(s.nombre)}`}
-                    className={`w-full flex items-center justify-center gap-2 bg-gradient-to-r ${s.color} text-white font-body font-semibold py-3 rounded-xl hover:opacity-90 transition-opacity shadow-md`}
+                    className={`flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r ${s.color} py-3 font-body font-semibold text-white shadow-md transition-opacity hover:opacity-90`}
                   >
-                    Solicitar {s.nombre} <ChevronRight className="w-4 h-4" />
+                    Solicitar {s.nombre} <ChevronRight className="h-4 w-4" />
                   </Link>
                 </div>
-              </div>
+              </RevealItem>
             ))}
-          </div>
+          </RevealGrupo>
         </div>
       </section>
 
@@ -248,22 +290,22 @@ export default function ServiciosHogarPage() {
       {/* Garantías */}
       <section className="py-20 px-4 bg-gray-50">
         <div className="container-max">
-          <div className="text-center mb-14">
+          <Reveal className="text-center mb-14">
             <h2 className="font-heading font-bold text-3xl sm:text-4xl text-gray-900 mb-4">
               ¿Por qué elegirnos?
             </h2>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          </Reveal>
+          <RevealGrupo className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {GARANTIAS.map((g) => (
-              <div key={g.titulo} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm text-center">
+              <RevealItem key={g.titulo} className="rounded-2xl border border-gray-100 bg-white p-6 text-center shadow-sm transition-shadow hover:shadow-md">
                 <div className="w-12 h-12 bg-brand-green/10 rounded-xl flex items-center justify-center text-brand-green mx-auto mb-4">
                   {g.icono}
                 </div>
                 <h3 className="font-heading font-bold text-gray-900 mb-2">{g.titulo}</h3>
                 <p className="text-gray-500 font-body text-sm leading-relaxed">{g.desc}</p>
-              </div>
+              </RevealItem>
             ))}
-          </div>
+          </RevealGrupo>
         </div>
       </section>
 

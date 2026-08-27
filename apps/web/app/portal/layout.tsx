@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Portal de Clientes | Conserjes Inmobiliarios',
+  title: 'Portal de Clientes',
   description: 'Agenda servicios del hogar, haz seguimiento y gestiona tu perfil.',
   robots: { index: false, follow: false },
 }

@@ -5,7 +5,7 @@ import { ChevronLeft, Loader2 } from 'lucide-react'
 import SolicitudWizard from './SolicitudWizard'
 
 export const metadata: Metadata = {
-  title: 'Solicitar Servicio del Hogar | Conserjes Inmobiliarios',
+  title: 'Solicitar servicio del hogar',
   description: 'Agenda tu servicio de limpieza, eventos o cocina en pocos pasos. Respuesta en menos de 30 minutos.',
 }
 

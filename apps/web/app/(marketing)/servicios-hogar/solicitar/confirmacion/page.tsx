@@ -3,7 +3,7 @@ import Link from 'next/link'
 import { CheckCircle2, Phone, MessageCircle, Clock, Home } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Solicitud Recibida | Conserjes Inmobiliarios',
+  title: 'Solicitud recibida',
 }
 
 export default function ConfirmacionPage() {
