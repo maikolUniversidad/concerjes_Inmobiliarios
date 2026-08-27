@@ -384,7 +384,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                         </span>
                       </td>
                       <td className="px-4 py-2.5 max-w-[220px]">
-                        {p.cce ? (
+                        {p.cce && (
                           <div className="space-y-0.5">
                             <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={`#${p.cce.item} · ${p.cce.bien}`}>
                               🏛 #{p.cce.item} · {p.cce.bien}
@@ -400,8 +400,6 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                               </span>
                             )}
                           </div>
-                        ) : (
-                          <span className="font-body text-xs text-gray-300">—</span>
                         )}
                       </td>
                       <td className="px-4 py-2.5 text-right whitespace-nowrap">

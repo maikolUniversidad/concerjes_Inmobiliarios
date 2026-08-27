@@ -402,163 +402,159 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
           </div>
         </div>
 
-        {/* Colombia Compra Eficiente */}
-        <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-          {/* Header colapsable */}
-          <button
-            type="button"
-            onClick={() => setCceOpen(o => !o)}
-            className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-gray-50/50 transition-colors"
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
-              <h3 className="font-heading font-semibold text-sm text-gray-700 shrink-0">Colombia Compra Eficiente</h3>
-              {initial.cce ? (
+        {/* Colombia Compra Eficiente — solo para productos con bien CCE asignado */}
+        {initial.cce && (
+          <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
+            {/* Header colapsable */}
+            <button
+              type="button"
+              onClick={() => setCceOpen(o => !o)}
+              className="w-full flex items-center justify-between gap-3 px-5 py-4 hover:bg-gray-50/50 transition-colors"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Building2 className="w-4 h-4 text-blue-600 shrink-0" />
+                <h3 className="font-heading font-semibold text-sm text-gray-700 shrink-0">Colombia Compra Eficiente</h3>
                 <span className="font-body text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-full px-2 py-0.5 truncate">
                   #{initial.cce.item} · {initial.cce.bien}
                 </span>
-              ) : (
-                <span className="font-body text-xs text-gray-400">Sin categoría asignada</span>
-              )}
-              {cceTipo === 'PROPIO' && (
-                <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded-full px-2 py-0.5 shrink-0">
-                  PROPIO
-                </span>
-              )}
-              {cceTipo === 'COMPARTIDO' && (
-                <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 shrink-0">
-                  COMPARTIDO
-                </span>
-              )}
-            </div>
-            {cceOpen
-              ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
-              : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
-          </button>
-
-          {cceOpen && (
-            <div className="border-t border-gray-100">
-              {/* ── Tipo de inventario CCE ── */}
-              <div className="px-5 pt-4 pb-3 space-y-3">
-                <p className="font-body text-xs text-gray-500 font-semibold uppercase tracking-wide">Tipo de inventario CCE</p>
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                  {([
-                    { val: null,          icon: null,    label: 'Sin inventario CCE',       desc: 'Este producto no participa en el inventario CCE',       cls: 'border-gray-200 bg-white',           sel: 'border-gray-400 bg-gray-50' },
-                    { val: 'COMPARTIDO',  icon: Share2,  label: 'Compartido con Conserjes',  desc: 'CCE y Conserjes usan el mismo pool de stock',           cls: 'border-teal-200 bg-white',           sel: 'border-teal-500 bg-teal-50' },
-                    { val: 'PROPIO',      icon: Lock,    label: 'Inventario propio CCE',     desc: 'CCE tiene sus propias unidades, separadas de Conserjes', cls: 'border-purple-200 bg-white',         sel: 'border-purple-500 bg-purple-50' },
-                  ] as const).map(opt => {
-                    const isSelected = cceTipo === opt.val
-                    return (
-                      <button
-                        key={String(opt.val)}
-                        type="button"
-                        disabled={tipoSaving}
-                        onClick={() => handleTipoChange(opt.val)}
-                        className={`text-left border rounded-xl px-3 py-2.5 transition-all ${isSelected ? opt.sel + ' ring-1 ring-offset-1 ' + (opt.val === 'PROPIO' ? 'ring-purple-400' : opt.val === 'COMPARTIDO' ? 'ring-teal-400' : 'ring-gray-400') : opt.cls + ' hover:bg-gray-50'}`}
-                      >
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          {opt.icon && <opt.icon className={`w-3.5 h-3.5 ${opt.val === 'PROPIO' ? 'text-purple-600' : 'text-teal-600'}`} />}
-                          <span className={`font-body font-semibold text-xs ${isSelected ? (opt.val === 'PROPIO' ? 'text-purple-800' : opt.val === 'COMPARTIDO' ? 'text-teal-800' : 'text-gray-800') : 'text-gray-700'}`}>
-                            {opt.label}
-                          </span>
-                        </div>
-                        <p className="font-body text-[10px] text-gray-500 leading-tight">{opt.desc}</p>
-                      </button>
-                    )
-                  })}
-                </div>
-                {tipoSaving && (
-                  <div className="flex items-center gap-2 text-gray-400">
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span className="font-body text-xs">Guardando…</span>
-                  </div>
+                {cceTipo === 'PROPIO' && (
+                  <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded-full px-2 py-0.5 shrink-0">
+                    PROPIO
+                  </span>
                 )}
-                {tipoError && <p className="font-body text-xs text-red-600">{tipoError}</p>}
+                {cceTipo === 'COMPARTIDO' && (
+                  <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded-full px-2 py-0.5 shrink-0">
+                    COMPARTIDO
+                  </span>
+                )}
               </div>
+              {cceOpen
+                ? <ChevronUp className="w-4 h-4 text-gray-400 shrink-0" />
+                : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
+            </button>
 
-              {/* ── Stock propio CCE (solo si PROPIO) ── */}
-              {cceTipo === 'PROPIO' && (
-                <div className="mx-5 mb-4 bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <p className="font-body text-xs font-semibold text-purple-700 uppercase tracking-wide">Stock propio CCE</p>
-                    {!editingStock && (
-                      <button type="button" onClick={() => setEditingStock(true)}
-                        className="font-body text-xs text-purple-600 hover:underline">
-                        Ajustar
-                      </button>
-                    )}
+            {cceOpen && (
+              <div className="border-t border-gray-100">
+                {/* ── Tipo de inventario CCE ── */}
+                <div className="px-5 pt-4 pb-3 space-y-3">
+                  <p className="font-body text-xs text-gray-500 font-semibold uppercase tracking-wide">Tipo de inventario CCE</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {([
+                      { val: null,          icon: null,    label: 'Sin inventario CCE',       desc: 'Este producto no participa en el inventario CCE',       cls: 'border-gray-200 bg-white',           sel: 'border-gray-400 bg-gray-50' },
+                      { val: 'COMPARTIDO',  icon: Share2,  label: 'Compartido con Conserjes',  desc: 'CCE y Conserjes usan el mismo pool de stock',           cls: 'border-teal-200 bg-white',           sel: 'border-teal-500 bg-teal-50' },
+                      { val: 'PROPIO',      icon: Lock,    label: 'Inventario propio CCE',     desc: 'CCE tiene sus propias unidades, separadas de Conserjes', cls: 'border-purple-200 bg-white',         sel: 'border-purple-500 bg-purple-50' },
+                    ] as const).map(opt => {
+                      const isSelected = cceTipo === opt.val
+                      return (
+                        <button
+                          key={String(opt.val)}
+                          type="button"
+                          disabled={tipoSaving}
+                          onClick={() => handleTipoChange(opt.val)}
+                          className={`text-left border rounded-xl px-3 py-2.5 transition-all ${isSelected ? opt.sel + ' ring-1 ring-offset-1 ' + (opt.val === 'PROPIO' ? 'ring-purple-400' : opt.val === 'COMPARTIDO' ? 'ring-teal-400' : 'ring-gray-400') : opt.cls + ' hover:bg-gray-50'}`}
+                        >
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            {opt.icon && <opt.icon className={`w-3.5 h-3.5 ${opt.val === 'PROPIO' ? 'text-purple-600' : 'text-teal-600'}`} />}
+                            <span className={`font-body font-semibold text-xs ${isSelected ? (opt.val === 'PROPIO' ? 'text-purple-800' : opt.val === 'COMPARTIDO' ? 'text-teal-800' : 'text-gray-800') : 'text-gray-700'}`}>
+                              {opt.label}
+                            </span>
+                          </div>
+                          <p className="font-body text-[10px] text-gray-500 leading-tight">{opt.desc}</p>
+                        </button>
+                      )
+                    })}
                   </div>
-                  {!editingStock ? (
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <p className="font-body text-[10px] text-purple-500">Cantidad real</p>
-                        <p className="font-heading font-bold text-xl text-purple-900">{stockCce?.cantidad_real ?? 0}</p>
-                      </div>
-                      <div>
-                        <p className="font-body text-[10px] text-purple-500">Cantidad disponible</p>
-                        <p className="font-heading font-bold text-xl text-purple-900">{stockCce?.cantidad_disp ?? 0}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="font-body text-[10px] text-purple-600 block mb-0.5">Cantidad real</label>
-                          <input
-                            type="number" min="0" step="1"
-                            value={stockReal}
-                            onChange={e => setStockReal(Number(e.target.value))}
-                            className="w-full border border-purple-200 rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-purple-400 bg-white"
-                          />
-                        </div>
-                        <div>
-                          <label className="font-body text-[10px] text-purple-600 block mb-0.5">Disponible</label>
-                          <input
-                            type="number" min="0" step="1"
-                            value={stockDisp}
-                            onChange={e => setStockDisp(Number(e.target.value))}
-                            className="w-full border border-purple-200 rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-purple-400 bg-white"
-                          />
-                        </div>
-                      </div>
-                      <div className="flex gap-2">
-                        <button type="button" disabled={stockSaving} onClick={handleStockSave}
-                          className="flex items-center gap-1.5 bg-purple-600 text-white font-body text-xs px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50">
-                          {stockSaving && <Loader2 className="w-3 h-3 animate-spin" />}
-                          Guardar
-                        </button>
-                        <button type="button" onClick={() => { setEditingStock(false); setStockReal(stockCce?.cantidad_real ?? 0); setStockDisp(stockCce?.cantidad_disp ?? 0) }}
-                          className="font-body text-xs text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
-                          Cancelar
-                        </button>
-                      </div>
+                  {tipoSaving && (
+                    <div className="flex items-center gap-2 text-gray-400">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span className="font-body text-xs">Guardando…</span>
                     </div>
                   )}
+                  {tipoError && <p className="font-body text-xs text-red-600">{tipoError}</p>}
                 </div>
-              )}
 
-              {/* ── Stock compartido (solo si COMPARTIDO) ── */}
-              {cceTipo === 'COMPARTIDO' && (
-                <div className="mx-5 mb-4 bg-teal-50 border border-teal-100 rounded-xl p-4">
-                  <p className="font-body text-xs font-semibold text-teal-700 uppercase tracking-wide mb-2">Stock compartido con Conserjes</p>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <p className="font-body text-[10px] text-teal-500">Cantidad real (compartida)</p>
-                      <p className="font-heading font-bold text-xl text-teal-900">{initial.stock?.cantidad_real ?? 0}</p>
+                {/* ── Stock propio CCE (solo si PROPIO) ── */}
+                {cceTipo === 'PROPIO' && (
+                  <div className="mx-5 mb-4 bg-purple-50 border border-purple-100 rounded-xl p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <p className="font-body text-xs font-semibold text-purple-700 uppercase tracking-wide">Stock propio CCE</p>
+                      {!editingStock && (
+                        <button type="button" onClick={() => setEditingStock(true)}
+                          className="font-body text-xs text-purple-600 hover:underline">
+                          Ajustar
+                        </button>
+                      )}
                     </div>
-                    <div>
-                      <p className="font-body text-[10px] text-teal-500">Disponible (compartida)</p>
-                      <p className="font-heading font-bold text-xl text-teal-900">{initial.stock?.cantidad_disp ?? 0}</p>
-                    </div>
+                    {!editingStock ? (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <p className="font-body text-[10px] text-purple-500">Cantidad real</p>
+                          <p className="font-heading font-bold text-xl text-purple-900">{stockCce?.cantidad_real ?? 0}</p>
+                        </div>
+                        <div>
+                          <p className="font-body text-[10px] text-purple-500">Cantidad disponible</p>
+                          <p className="font-heading font-bold text-xl text-purple-900">{stockCce?.cantidad_disp ?? 0}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="font-body text-[10px] text-purple-600 block mb-0.5">Cantidad real</label>
+                            <input
+                              type="number" min="0" step="1"
+                              value={stockReal}
+                              onChange={e => setStockReal(Number(e.target.value))}
+                              className="w-full border border-purple-200 rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-purple-400 bg-white"
+                            />
+                          </div>
+                          <div>
+                            <label className="font-body text-[10px] text-purple-600 block mb-0.5">Disponible</label>
+                            <input
+                              type="number" min="0" step="1"
+                              value={stockDisp}
+                              onChange={e => setStockDisp(Number(e.target.value))}
+                              className="w-full border border-purple-200 rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-purple-400 bg-white"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <button type="button" disabled={stockSaving} onClick={handleStockSave}
+                            className="flex items-center gap-1.5 bg-purple-600 text-white font-body text-xs px-3 py-1.5 rounded-lg hover:bg-purple-700 transition-colors disabled:opacity-50">
+                            {stockSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                            Guardar
+                          </button>
+                          <button type="button" onClick={() => { setEditingStock(false); setStockReal(stockCce?.cantidad_real ?? 0); setStockDisp(stockCce?.cantidad_disp ?? 0) }}
+                            className="font-body text-xs text-gray-500 px-3 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
+                            Cancelar
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <p className="font-body text-[10px] text-teal-600 mt-2">
-                    Estas unidades son del inventario de Conserjes. CCE y Conserjes comparten el mismo pool.
-                  </p>
-                </div>
-              )}
+                )}
 
-              {/* ── Datos del bien CCE ── */}
-              {initial.cce && (
+                {/* ── Stock compartido (solo si COMPARTIDO) ── */}
+                {cceTipo === 'COMPARTIDO' && (
+                  <div className="mx-5 mb-4 bg-teal-50 border border-teal-100 rounded-xl p-4">
+                    <p className="font-body text-xs font-semibold text-teal-700 uppercase tracking-wide mb-2">Stock compartido con Conserjes</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <p className="font-body text-[10px] text-teal-500">Cantidad real (compartida)</p>
+                        <p className="font-heading font-bold text-xl text-teal-900">{initial.stock?.cantidad_real ?? 0}</p>
+                      </div>
+                      <div>
+                        <p className="font-body text-[10px] text-teal-500">Disponible (compartida)</p>
+                        <p className="font-heading font-bold text-xl text-teal-900">{initial.stock?.cantidad_disp ?? 0}</p>
+                      </div>
+                    </div>
+                    <p className="font-body text-[10px] text-teal-600 mt-2">
+                      Estas unidades son del inventario de Conserjes. CCE y Conserjes comparten el mismo pool.
+                    </p>
+                  </div>
+                )}
+
+                {/* ── Datos del bien CCE ── */}
                 <div className="px-5 pb-5 pt-1 space-y-3 border-t border-gray-100">
                   <p className="font-body text-xs text-gray-500 font-semibold uppercase tracking-wide pt-3">Ficha del bien CCE</p>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -586,18 +582,11 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
                     </div>
                   )}
                 </div>
-              )}
 
-              {!initial.cce && (
-                <div className="px-5 pb-5 pt-3">
-                  <p className="font-body text-sm text-gray-400 text-center py-4">
-                    Este producto no tiene una categoría CCE asignada.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Últimos movimientos */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
