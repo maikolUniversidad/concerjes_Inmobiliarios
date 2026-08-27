@@ -54,3 +54,6 @@ test-results/
 _cloner_ref/
 
 .env*
+
+# Fotos originales sin optimizar (fuente de las de public/images). No se publican.
+fotos-originales/

@@ -1,11 +1,17 @@
 # Fotos del sitio — dónde va cada una
 
-El código ya busca cada foto en una ruta exacta. **No hay que tocar nada más:
-basta con dejar el archivo con ese nombre en esa carpeta.** Mientras el archivo
-no exista se ve un degradado de marca de respaldo (`components/ui/FotoFondo.tsx`)
-y la página no se rompe.
+**Estado: las 13 fotos ya están colocadas y en producción.**
 
-Las carpetas ya están creadas en `apps/web/public/images/`.
+Los originales (PNG de 2752x1536, entre 5 y 10 MB cada uno) se conservan en
+`fotos-originales/FotosPagina/`, fuera del control de versiones y fuera de
+`public/` para que no se publiquen. Las versiones del sitio se generaron con
+sharp: JPG progresivo, calidad 80, mozjpeg; 2400 px de ancho para las portadas,
+1800 px para las secundarias y 1200 px para las tarjetas. El total pasó de
+**108 MB a 2,1 MB**.
+
+Si se reemplaza alguna, basta con dejar el JPG con el mismo nombre en la misma
+ruta. Mientras un archivo no exista se ve un degradado de marca de respaldo
+(`components/ui/FotoFondo.tsx`) y la página no se rompe.
 
 ## Mapa de colocación
 
@@ -25,7 +31,7 @@ Numeración según el orden en que se entregaron las 13 fotos.
 | 5 | Inventario en la bodega de insumos | `images/servicios/operacion.jpg` | Portada de `/servicios` |
 | 4 | Capacitación en sala con tablero de seguridad | `images/seguridad-salud/capacitacion.jpg` | Portada de `/seguridad-salud` |
 | 13 | Logo sobre fondo azul | `images/og-image.jpg` | Miniatura al compartir el enlace |
-| 1 | Restregando la plancha de acero con vapor | *(sin asignar)* | Ver abajo |
+| 1 | Restregando la plancha de acero con vapor | `images/servicios-hogar/limpieza-profunda-2.jpg` | Sin usar — reserva, ver abajo |
 
 ### Rutas completas
 
