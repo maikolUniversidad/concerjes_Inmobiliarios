@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { CTASection } from '@/components/sections/CTASection'
 import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
+import { Foto } from '@/components/ui/Foto'
 
 export const metadata: Metadata = {
   title: 'Nosotros',
@@ -92,11 +93,13 @@ export default function NosotrosPage() {
             <h2 className="font-heading font-bold text-3xl text-center text-brand-gray-dark mb-8">
               Nuestro equipo
             </h2>
-            <div className="aspect-video bg-gray-100 rounded-3xl border-2 border-dashed border-gray-200 flex flex-col items-center justify-center max-w-4xl mx-auto shadow-lg">
-              <span className="text-5xl mb-4">👥</span>
-              <p className="font-body text-gray-400">[ Foto o video del equipo corporativo ]</p>
-              <p className="font-body text-xs text-gray-300 mt-1">Recomendado: 1280×720px o video MP4</p>
-            </div>
+            <Foto
+              src="/images/servicios/operacion.jpg"
+              alt="Colaboradores de Conserjes Inmobiliarios alistando insumos en la bodega"
+              ratio="aspect-video"
+              className="mx-auto max-w-4xl rounded-3xl shadow-lg"
+              sizes="(max-width: 1024px) 100vw, 896px"
+            />
           </div>
 
           {/* Timeline */}

@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import { CheckCircle, Shield, Award, FileText } from 'lucide-react'
 import { CTASection } from '@/components/sections/CTASection'
 import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
+import { Foto } from '@/components/ui/Foto'
 
 export const metadata: Metadata = {
   title: 'Seguridad y Salud',
@@ -59,13 +60,14 @@ export default function SeguridadSaludPage() {
           </div>
 
           {/* Banner image slot */}
-          <div className="aspect-[21/6] bg-gray-100 rounded-3xl border-2 border-dashed border-gray-200 flex items-center justify-center mb-16 shadow-lg">
-            <div className="text-center text-gray-400">
-              <span className="text-4xl block mb-2">🦺</span>
-              <p className="font-body text-sm">[ Foto de EPP / Personal en campo ]</p>
-              <p className="font-body text-xs mt-1 opacity-60">Recomendado: 1440×400px</p>
-            </div>
-          </div>
+          <Foto
+            src="/images/servicios-hogar/post-obra.jpg"
+            alt="Colaboradora en campo con tapabocas y gorro de proteccion durante una limpieza post-obra"
+            ratio="aspect-[21/6]"
+            className="mb-16 rounded-3xl shadow-lg"
+            posicion="center 45%"
+            sizes="100vw"
+          />
 
           {/* Certifications */}
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">

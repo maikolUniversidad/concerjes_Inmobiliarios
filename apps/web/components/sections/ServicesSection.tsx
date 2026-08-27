@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { ArrowRight, Sparkles } from 'lucide-react'
+import { FOTOS_SERVICIO } from '@/lib/fotos'
+import { Foto } from '@/components/ui/Foto'
 
 const services = [
   {
@@ -127,10 +129,14 @@ export function ServicesSection() {
                 ))}
               </ul>
 
-              {/* Image slot */}
-              <div className={`w-full h-32 ${service.bgColor} rounded-xl mb-5 flex items-center justify-center border-2 border-dashed border-current opacity-20`}>
-                <span className="text-xs font-body text-gray-400">[ Foto del servicio ]</span>
-              </div>
+              {/* Foto del servicio */}
+              <Foto
+                src={FOTOS_SERVICIO[service.id].src}
+                alt={FOTOS_SERVICIO[service.id].alt}
+                ratio="aspect-[16/9]"
+                className="mb-5 rounded-xl"
+                sizes="(max-width: 768px) 100vw, 33vw"
+              />
 
               <Link
                 href={`/servicios#${service.id}`}

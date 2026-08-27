@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { ArrowRight, Award, Heart, Shield, Leaf } from 'lucide-react'
+import { Foto } from '@/components/ui/Foto'
 
 const principles = [
   {
@@ -29,14 +30,12 @@ export function AboutSection() {
         <div className="grid lg:grid-cols-2 gap-16 items-center">
           {/* Left — Image + card */}
           <div className="relative">
-            {/* Main image placeholder */}
-            <div className="aspect-[4/3] bg-gray-100 rounded-3xl overflow-hidden shadow-2xl border-2 border-dashed border-gray-200 flex items-center justify-center">
-              <div className="text-center text-gray-400">
-                <div className="text-5xl mb-3">📸</div>
-                <p className="font-body text-sm">[ Foto corporativa del equipo ]</p>
-                <p className="font-body text-xs mt-1 opacity-60">Recomendado: 800×600px</p>
-              </div>
-            </div>
+            <Foto
+              src="/images/nosotros/equipo.jpg"
+              alt="Equipo de colaboradoras de Conserjes Inmobiliarios"
+              className="rounded-3xl shadow-2xl"
+              posicion="center 35%"
+            />
 
             {/* Video badge */}
             <div className="absolute -bottom-6 -right-6 bg-white rounded-2xl p-5 shadow-xl border border-gray-100 max-w-[200px]">
@@ -47,12 +46,14 @@ export function AboutSection() {
               <p className="font-body text-sm text-brand-gray-mid">Años de trayectoria</p>
             </div>
 
-            {/* Video slot */}
-            <div className="absolute -top-4 -left-4 w-28 h-28 bg-brand-green rounded-2xl shadow-lg overflow-hidden border-2 border-dashed border-white/40 flex items-center justify-center">
-              <div className="text-center text-white/60 text-xs font-body p-2">
-                🎥<br />Video corporativo
-              </div>
-            </div>
+            {/* Segunda foto, superpuesta */}
+            <Foto
+              src="/images/servicios/operacion.jpg"
+              alt="Alistamiento de insumos en la bodega"
+              ratio="aspect-square"
+              className="absolute -top-6 -left-6 w-32 rounded-2xl shadow-xl ring-4 ring-white"
+              sizes="128px"
+            />
           </div>
 
           {/* Right — Content */}

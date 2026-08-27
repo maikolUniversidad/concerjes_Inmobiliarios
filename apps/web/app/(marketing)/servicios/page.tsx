@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { ArrowRight, CheckCircle } from 'lucide-react'
 import { CTASection } from '@/components/sections/CTASection'
 import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
+import { FOTOS_SERVICIO } from '@/lib/fotos'
+import { Foto } from '@/components/ui/Foto'
 
 export const metadata: Metadata = {
   title: 'Servicios',
@@ -146,20 +148,11 @@ export default function ServiciosPage() {
               >
                 {/* Image/Video slot */}
                 <div className={index % 2 === 1 ? 'lg:col-start-2' : ''}>
-                  <div className="aspect-[4/3] bg-gray-100 rounded-3xl overflow-hidden border-2 border-dashed border-gray-200 flex flex-col items-center justify-center shadow-lg">
-                    <span className="text-6xl mb-4">{service.emoji}</span>
-                    {service.videoSlot ? (
-                      <div className="text-center text-gray-400">
-                        <p className="font-body text-sm">[ Video del servicio ]</p>
-                        <p className="font-body text-xs mt-1 opacity-60">MP4 recomendado · 16:9</p>
-                      </div>
-                    ) : (
-                      <div className="text-center text-gray-400">
-                        <p className="font-body text-sm">[ Foto del servicio ]</p>
-                        <p className="font-body text-xs mt-1 opacity-60">800×600px recomendado</p>
-                      </div>
-                    )}
-                  </div>
+                  <Foto
+                    src={FOTOS_SERVICIO[service.id].src}
+                    alt={FOTOS_SERVICIO[service.id].alt}
+                    className="rounded-3xl shadow-lg"
+                  />
                 </div>
 
                 {/* Content */}

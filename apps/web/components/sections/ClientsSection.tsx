@@ -22,23 +22,9 @@ export function ClientsSection() {
           </h2>
         </div>
 
-        {/* Client logos placeholder grid */}
-        <div className="mb-12">
-          <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-8 gap-4">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div
-                key={i}
-                className="aspect-square bg-gray-50 rounded-xl border-2 border-dashed border-gray-200 flex items-center justify-center hover:border-brand-green/30 hover:bg-brand-green/3 transition-colors"
-              >
-                <span className="text-xs font-body text-gray-400 text-center p-1">Logo {i + 1}</span>
-              </div>
-            ))}
-          </div>
-          <p className="text-center text-xs font-body text-gray-400 mt-3">
-            [ Reemplazar con logos de clientes reales — 160×80px recomendado ]
-          </p>
-        </div>
-
+        {/* Los logos de clientes entran cuando esten las autorizaciones de
+            uso de marca. Mientras tanto se muestran solo los sectores: una
+            rejilla de recuadros punteados vacios restaba mas de lo que sumaba. */}
         {/* Sector cards */}
         <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-4">
           {clientTypes.map((c) => (
