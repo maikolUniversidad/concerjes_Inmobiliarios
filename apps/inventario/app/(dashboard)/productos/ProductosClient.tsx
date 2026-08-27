@@ -71,8 +71,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       const matchCce = !cceFilter || (
         cceFilter === 'cce'        ? p.cce !== null :
         cceFilter === 'propio'     ? p.cce_tipo === 'PROPIO' :
-        cceFilter === 'compartido' ? p.cce_tipo === 'COMPARTIDO' :
-        cceFilter === 'sin_cce'    ? p.cce === null : true
+        cceFilter === 'compartido' ? p.cce_tipo === 'COMPARTIDO' : true
       )
       const matchInv = !invFilter || (
         invFilter === 'no_hallado' ? noHallado(p) :
@@ -116,7 +115,6 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       const r = p.stock?.cantidad_real ?? 0
       return r <= (p.stock_minimo_def ?? 0)
     }).length,
-    conCce: productos.filter(p => p.cce !== null).length,
     noHallado: productos.filter(noHallado).length,
   }), [productos])
 
@@ -129,12 +127,11 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   return (
     <>
       {/* Stats chips */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
           { label: 'Total productos',  value: stats.total,   color: 'bg-blue-50 text-blue-700 border-blue-100' },
           { label: 'Cat. A alta rot.', value: stats.catA,    color: 'bg-green-50 text-green-700 border-green-100' },
           { label: 'Stock crítico',    value: stats.critico, color: 'bg-red-50 text-red-700 border-red-100' },
-          { label: '🏛 Colombia Compra', value: stats.conCce, color: 'bg-purple-50 text-purple-700 border-purple-100' },
           { label: periodo ? `🏷 No hallados · ${periodo}` : '🏷 No hallados', value: stats.noHallado, color: 'bg-orange-50 text-orange-700 border-orange-100' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-3 ${s.color}`}>
@@ -197,7 +194,6 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           <option value="cce">Con categoría CCE</option>
           <option value="propio">🔒 Propio CCE</option>
           <option value="compartido">↔ Compartido</option>
-          <option value="sin_cce">Sin CCE</option>
         </select>
         <select value={invFilter} onChange={e => setInv(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none focus:border-brand-green bg-white">
