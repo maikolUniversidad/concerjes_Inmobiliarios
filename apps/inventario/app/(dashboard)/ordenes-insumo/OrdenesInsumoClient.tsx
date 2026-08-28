@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
@@ -166,6 +167,7 @@ function ReportePorCreador({ ordenes }: { ordenes: OrdenRow[] }) {
 export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   ordenes: OrdenRow[]; puedeCrear: boolean; estadoInicial?: string
 }) {
+  const router = useRouter()
   const estadoValido = estadoInicial && estadoInicial in ESTADO_META
     ? (estadoInicial as EstadoOrdenInsumo) : 'todos'
   // Primera vista: lo urgente por entregar, ordenado por fecha.
@@ -422,6 +424,8 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
         datos={lista}
         columnas={columnas}
         filaId={o => o.id}
+        onFilaClick={o => router.push(`/ordenes-insumo/${o.id}`)}
+        anchoAcciones="w-28"
         busqueda="Buscar por número, sede o creador…"
         gridTarjetas="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
         tarjetaSinMarco

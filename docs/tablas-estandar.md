@@ -12,6 +12,7 @@ Resuelve de una sola vez lo que antes cada pantalla resolvía a su manera:
 | Filtro por columna | Cada encabezado tiene un embudo: orden A→Z / Z→A, filtro «contiene» y lista de valores con casillas (estilo Excel). Los valores que ofrece cada columna ya vienen filtrados por las demás columnas. |
 | Copiar a Excel | Selección de celdas, rangos, columnas completas o toda la tabla → `Ctrl+C` o el botón **Copiar**. Va al portapapeles como TSV + HTML, así que se pega directo en Excel con las columnas separadas. |
 | Descargar | Botón **CSV** (separador `;`, con BOM para las tildes). |
+| Acciones | Van en la **primera columna**, junto al número de fila. Si la pantalla define `onFilaClick`, ahí aparece un botón verde **Ver** que abre el detalle (el texto se cambia con `textoDetalle`). |
 | Trazabilidad | Cada copia y cada descarga queda registrada en `actividad_log`. |
 
 ## Cómo se selecciona (igual que en una hoja de cálculo)
@@ -23,7 +24,7 @@ Resuelve de una sola vez lo que antes cada pantalla resolvía a su manera:
 - **Clic en la esquina `#`** o **Ctrl+A**: selecciona todo lo que se ve en la página.
 - **Flechas** mueven la selección, **Shift+flechas** la extienden, **Esc** la limpia.
 - **Ctrl+C** copia; sin selección, el botón **Copiar tabla** copia todo lo filtrado (todas las páginas).
-- **Doble clic** en la fila abre el detalle cuando la pantalla define `onFilaClick`.
+- **Doble clic** en la fila abre el detalle, igual que el botón **Ver** de la primera columna.
 
 ## Qué queda en el log
 
@@ -95,6 +96,8 @@ const columnas: ColumnaTabla<Fila>[] = [
 - `copiable` / `descargable` — apagan los botones de copiar o CSV.
 - `vacio` — mensaje propio cuando no hay filas.
 - `filaClassName` — resaltados por fila (crítico, vencido…).
+- `acciones` / `anchoAcciones` — botones propios de la pantalla, en la primera columna.
+- `textoDetalle` — etiqueta del botón que abre el detalle (`Ver` por defecto).
 - `pie` — fila de totales al pie (solo en vista de tabla): devuelve, por id de
   columna, lo que se pinta; recibe las filas ya filtradas.
 

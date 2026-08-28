@@ -2,6 +2,7 @@
 import { useState, useMemo } from 'react'
 import { Search, AlertTriangle, Eye, Pencil, ArrowLeftRight, Camera, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
@@ -45,6 +46,7 @@ function getStockStatus(real: number, minimo: number) {
 }
 
 export function ProductosClient({ productos, total }: { productos: Producto[]; total: number }) {
+  const router = useRouter()
   const [search, setSearch]     = useState('')
   const [catFilter, setCat]     = useState('')
   const [tipoFilter, setTipo]   = useState('')
@@ -300,16 +302,13 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         datos={filtered}
         columnas={columnas}
         filaId={p => p.id}
+        onFilaClick={p => router.push(`/productos/${p.id}`)}
         busqueda={false}
         vistaInicial="tarjetas"
         gridTarjetas="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
         tarjetaSinMarco
         acciones={p => (
           <>
-            <Link href={`/productos/${p.id}`} title="Ver detalle"
-              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
-              <Eye className="w-4 h-4" />
-            </Link>
             <Link href={`/productos/${p.id}/editar`} title="Editar producto"
               className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
               <Pencil className="w-4 h-4" />
@@ -324,7 +323,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
             </Link>
           </>
         )}
-        anchoAcciones="w-32"
+        anchoAcciones="w-44"
         vacio={
           <>
             <p className="font-heading font-bold text-lg text-gray-500">No se encontraron productos</p>

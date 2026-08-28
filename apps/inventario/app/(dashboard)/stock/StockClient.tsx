@@ -2,6 +2,7 @@
 import { useMemo, useState } from 'react'
 import { Boxes, TrendingDown, TrendingUp, AlertCircle, Share2, Lock } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
@@ -33,6 +34,7 @@ const cceLabel = (r: StockRow) =>
   r.cceTipo === 'PROPIO' ? 'Propio' : r.cceTipo === 'COMPARTIDO' ? 'Compartido' : 'Sin CCE'
 
 export function StockClient({ rows }: { rows: StockRow[] }) {
+  const router = useRouter()
   const [filtro, setFiltro] = useState('')
   const [cceFilter, setCceFilter] = useState('')
 
@@ -256,6 +258,8 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
         datos={filtered}
         columnas={columnas}
         filaId={(s) => s.id}
+        onFilaClick={(s) => router.push(`/productos/${s.id}`)}
+        anchoAcciones="w-28"
         busqueda="Buscar por nombre, ref, categoría, estado…"
         filaClassName={(s) => (estado(s.real, s.minimo).key === 'critico' ? 'bg-red-50/20' : '')}
         vacio={

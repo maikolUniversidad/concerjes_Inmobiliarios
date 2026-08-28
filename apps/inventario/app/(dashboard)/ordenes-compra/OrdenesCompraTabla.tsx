@@ -1,7 +1,8 @@
 'use client'
 
 import Link from 'next/link'
-import { Ban, FileText, Printer, SlidersHorizontal } from 'lucide-react'
+import { useRouter } from 'next/navigation'
+import { Ban, FileText, Printer } from 'lucide-react'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import type { EstadoOC } from '@/lib/types/database'
@@ -39,6 +40,7 @@ export function OrdenesCompraTabla({
   /** Server action de anulación; llega desde el componente de servidor. */
   anularOC: (formData: FormData) => void | Promise<void>
 }) {
+  const router = useRouter()
   const columnas: ColumnaTabla<OCRow>[] = [
     {
       id: 'numero', header: 'N° OC', valor: o => o.numero_oc, ancho: 'w-32', tarjeta: 'titulo',
@@ -84,13 +86,11 @@ export function OrdenesCompraTabla({
       columnas={columnas}
       filaId={o => o.id}
       busqueda="Buscar por N° OC, proveedor o estado…"
+      onFilaClick={o => router.push(`/ordenes-compra/${o.id}`)}
+      textoDetalle="Gestionar"
       anchoAcciones="w-44"
       acciones={o => (
         <>
-          <Link href={`/ordenes-compra/${o.id}`} title="Gestionar orden (estados, ítems, recepción)"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-2.5 py-1.5 font-body text-xs font-semibold text-gray-600 hover:border-brand-green hover:text-brand-green hover:bg-green-50 transition-colors">
-            <SlidersHorizontal className="w-3.5 h-3.5" /> <span className="hidden sm:inline">Gestionar</span>
-          </Link>
           <Link href={`/ordenes-compra/${o.id}/imprimir`} target="_blank" title="Imprimir / Guardar PDF"
             className="p-2 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
             <Printer className="w-3.5 h-3.5" />

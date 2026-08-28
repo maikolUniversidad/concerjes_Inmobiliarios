@@ -741,6 +741,7 @@ export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sede
         filaId={u => u.id}
         busqueda="Buscar por nombre, correo, rol o grupo…"
         onFilaClick={openEdit}
+        textoDetalle="Editar"
         acciones={() => <ChevronRight className="w-4 h-4 text-gray-300" />}
         anchoAcciones="w-10"
         vacio={

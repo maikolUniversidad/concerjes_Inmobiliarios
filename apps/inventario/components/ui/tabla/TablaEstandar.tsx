@@ -15,6 +15,7 @@ import {
   ClipboardCheck,
   Copy,
   Download,
+  Eye,
   FilterX,
   LayoutGrid,
   Rows3,
@@ -52,9 +53,11 @@ export interface TablaEstandarProps<T> {
   tarjetaSinMarco?: boolean
   /** Doble clic en la fila (la tabla usa el clic simple para seleccionar) y clic en la tarjeta. */
   onFilaClick?: (fila: T) => void
-  /** Columna final fija, fuera del copiado. */
+  /** Columna de acciones, al inicio de la fila y fuera del copiado. */
   acciones?: (fila: T) => ReactNode
   anchoAcciones?: string
+  /** Texto del botón que abre el detalle. Solo aparece si hay `onFilaClick`. */
+  textoDetalle?: string
   /** `false` oculta el buscador; un string cambia el placeholder. */
   busqueda?: boolean | string
   /** Controles propios de la pantalla dentro de la barra. */
@@ -116,6 +119,7 @@ export function TablaEstandar<T>({
   onFilaClick,
   acciones,
   anchoAcciones = 'w-24',
+  textoDetalle = 'Ver',
   busqueda = true,
   herramientas,
   vacio,
@@ -530,9 +534,10 @@ export function TablaEstandar<T>({
             ))}
           </div>
         )}
-        {acciones && (
-          <div className="mt-3 flex justify-end gap-1" onClick={(e) => e.stopPropagation()}>
-            {acciones(fila)}
+        {hayAcciones && (
+          <div className="mt-3 flex items-center justify-end gap-1" onClick={(e) => e.stopPropagation()}>
+            {botonDetalle(fila)}
+            {acciones?.(fila)}
           </div>
         )}
       </>
@@ -540,6 +545,25 @@ export function TablaEstandar<T>({
   }
 
   const pieValores = pie ? pie(ordenadas) : {}
+
+  // Las acciones van al inicio de la fila: es lo primero que se busca al
+  // llegar a la tabla, y el botón de detalle deja de depender del doble clic.
+  const hayAcciones = !!acciones || !!onFilaClick
+
+  const botonDetalle = (fila: T) =>
+    onFilaClick ? (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation()
+          onFilaClick(fila)
+        }}
+        title="Abrir el detalle"
+        className="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg bg-brand-green px-2.5 py-1.5 font-body text-xs font-semibold text-white shadow-sm transition-colors hover:bg-brand-green-dark"
+      >
+        <Eye className="h-3.5 w-3.5" /> {textoDetalle}
+      </button>
+    ) : null
 
   const alineacion = (c: ColumnaTabla<T>) =>
     c.align === 'right' ? 'text-right' : c.align === 'center' ? 'text-center' : 'text-left'
@@ -722,6 +746,11 @@ export function TablaEstandar<T>({
                 >
                   #
                 </th>
+                {hayAcciones && (
+                  <th className={`px-3 py-2.5 text-left font-body text-xs font-semibold uppercase tracking-wide text-gray-500 ${anchoAcciones}`}>
+                    Acciones
+                  </th>
+                )}
                 {columnasVisibles.map((c, ci) => (
                   <th
                     key={c.id}
@@ -767,7 +796,6 @@ export function TablaEstandar<T>({
                     </div>
                   </th>
                 ))}
-                {acciones && <th className={`px-3 py-2.5 ${anchoAcciones}`} />}
               </tr>
             </thead>
             <tbody>
@@ -786,6 +814,14 @@ export function TablaEstandar<T>({
                   >
                     {paginaActual * (porPagina || 0) + ri + 1}
                   </td>
+                  {hayAcciones && (
+                    <td className="select-text px-3 py-2.5" onMouseDown={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-1">
+                        {botonDetalle(fila)}
+                        {acciones?.(fila)}
+                      </div>
+                    </td>
+                  )}
                   {columnasVisibles.map((c, ci) => (
                     <td
                       key={c.id}
@@ -817,11 +853,6 @@ export function TablaEstandar<T>({
                       {c.celda ? c.celda(fila) : textoDeValor(c.valor(fila))}
                     </td>
                   ))}
-                  {acciones && (
-                    <td className="px-3 py-2.5 text-right" onMouseDown={(e) => e.stopPropagation()}>
-                      <div className="flex items-center justify-end gap-1">{acciones(fila)}</div>
-                    </td>
-                  )}
                 </tr>
               ))}
             </tbody>
@@ -829,12 +860,12 @@ export function TablaEstandar<T>({
               <tfoot>
                 <tr className="border-t-2 border-gray-200 bg-gray-50 font-semibold">
                   <td className="px-2 py-2.5" />
+                  {hayAcciones && <td className="px-3 py-2.5" />}
                   {columnasVisibles.map((c) => (
                     <td key={c.id} className={`px-3 py-2.5 font-body text-sm text-gray-700 ${alineacion(c)}`}>
                       {pieValores[c.id] ?? null}
                     </td>
                   ))}
-                  {acciones && <td className="px-3 py-2.5" />}
                 </tr>
               </tfoot>
             )}
@@ -846,7 +877,7 @@ export function TablaEstandar<T>({
         <p className="mt-2 px-1 font-body text-[11px] text-gray-400">
           Clic para seleccionar · arrastra o Shift+clic para un rango · clic en el título de la
           columna para toda la columna · Ctrl+C para pegar en Excel
-          {onFilaClick ? ' · doble clic para abrir' : ''}
+          {onFilaClick ? ' · «Ver» o doble clic para abrir el detalle' : ''}
         </p>
       )}
 
