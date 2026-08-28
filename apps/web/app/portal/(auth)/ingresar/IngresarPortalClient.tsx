@@ -23,6 +23,8 @@ export function IngresarPortalClient() {
   const [cargando, setCargando] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [aviso, setAviso] = useState<string | null>(null)
+  // Correo cuya cuenta existe pero está sin confirmar: habilita el reenvío.
+  const [porConfirmar, setPorConfirmar] = useState<string | null>(null)
 
   // email + password
   const [nombre, setNombre] = useState('')
@@ -55,7 +57,7 @@ export function IngresarPortalClient() {
   }
 
   async function conEmail() {
-    setError(null); setAviso(null)
+    setError(null); setAviso(null); setPorConfirmar(null)
     const mail = email.trim().toLowerCase()
     if (!mail || !password.trim()) { setError('Escribe tu correo y contraseña.'); return }
     if (modo === 'registro' && !nombre.trim()) { setError('Escribe tu nombre.'); return }
@@ -75,7 +77,8 @@ export function IngresarPortalClient() {
         })
         if (error) { setError(traducir(error.message)); return }
         if (!data.session) {
-          setAviso('Te enviamos un correo para confirmar tu cuenta. Revísalo y luego inicia sesión.')
+          setPorConfirmar(mail)
+          setAviso('Te enviamos un correo para confirmar tu cuenta. Ábrelo (revisa también spam) y luego inicia sesión.')
           setModo('login')
           return
         }
@@ -84,13 +87,51 @@ export function IngresarPortalClient() {
         irAlPortal()
       } else {
         const { error } = await sb.auth.signInWithPassword({ email: mail, password: password.trim() })
-        if (error) { setError('Correo o contraseña incorrectos.'); return }
+        if (error) {
+          const code = (error as { code?: string }).code ?? ''
+          if (code === 'email_not_confirmed' || /not confirmed/i.test(error.message)) {
+            // Causa más frecuente: la cuenta se creó, pero el correo de
+            // confirmación nunca llegó. Decirlo y ofrecer reenviarlo.
+            setPorConfirmar(mail)
+            setError('Tu cuenta existe pero aún no está confirmada. Abre el correo que te enviamos o pide uno nuevo aquí abajo.')
+          } else if (code === 'invalid_credentials' || /invalid login/i.test(error.message)) {
+            setError('Correo o contraseña incorrectos.')
+          } else {
+            setError('No pudimos iniciar sesión. Intenta de nuevo en unos minutos.')
+          }
+          return
+        }
         await asegurarCliente()
         toast.success('¡Bienvenido!')
         irAlPortal()
       }
     } catch {
       setError('No se pudo procesar. Intenta de nuevo.')
+    } finally {
+      setCargando(null)
+    }
+  }
+
+  /** Reenvía el correo de confirmación a una cuenta ya creada. */
+  async function reenviarConfirmacion() {
+    if (!porConfirmar) return
+    setError(null); setAviso(null)
+    setCargando('reenviar')
+    try {
+      const { error } = await getPortalSupabase().auth.resend({
+        type: 'signup',
+        email: porConfirmar,
+        options: { emailRedirectTo: `${window.location.origin}/portal/auth/callback` },
+      })
+      if (error) {
+        setError(/rate|limit|seconds/i.test(error.message)
+          ? 'Ya enviamos un correo hace poco. Espera un minuto e inténtalo otra vez.'
+          : 'No pudimos reenviar el correo. Escríbenos por WhatsApp y activamos tu cuenta.')
+        return
+      }
+      setAviso(`Reenviamos el correo de confirmación a ${porConfirmar}. Revisa también la carpeta de spam.`)
+    } catch {
+      setError('No pudimos reenviar el correo. Intenta de nuevo.')
     } finally {
       setCargando(null)
     }
@@ -266,6 +307,16 @@ export function IngresarPortalClient() {
       {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
       {aviso && <p className="rounded-lg bg-brand-green-bg px-3 py-2 text-sm text-brand-green-dark">{aviso}</p>}
 
+      {porConfirmar && (
+        <button
+          onClick={reenviarConfirmacion} disabled={!!cargando}
+          className="flex w-full items-center justify-center gap-2 rounded-xl border border-brand-green py-2.5 font-body text-sm font-semibold text-brand-green transition-colors hover:bg-brand-green-bg disabled:opacity-50"
+        >
+          {cargando === 'reenviar' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+          Reenviar correo de confirmación
+        </button>
+      )}
+
       {metodo === 'email' && (
         <p className="text-center text-sm text-gray-500">
           {modo === 'login' ? '¿Aún no tienes cuenta? ' : '¿Ya tienes cuenta? '}
@@ -307,6 +358,9 @@ function normalizarTelefono(v: string): string | null {
 
 function traducir(msg: string): string {
   if (/already registered|already exists/i.test(msg)) return 'Ese correo ya tiene una cuenta. Inicia sesión.'
+  if (/rate limit|too many|for security purposes/i.test(msg)) return 'Demasiados intentos seguidos. Espera un minuto y vuelve a intentar.'
+  if (/signups? not allowed|disabled/i.test(msg)) return 'El registro está deshabilitado en este momento. Escríbenos por WhatsApp.'
+  if (/invalid.*email|email address.*invalid/i.test(msg)) return 'Ese correo no parece válido. Revísalo.'
   if (/password/i.test(msg)) return 'La contraseña no cumple los requisitos (mínimo 6 caracteres).'
   return 'No se pudo crear la cuenta. Verifica los datos.'
 }
