@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient as createAdminSb } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
-import { IMPORT_CONFIGS, parseBool, type EntityConfig } from '@/lib/import/config'
+import { IMPORT_CONFIGS, aFecha, normalizaClave, type EntityConfig } from '@/lib/import/config'
 
 export interface FilaCommit { fila: number; clave: string; datos: Record<string, unknown> }
 export interface ImportResultRow { fila: number; clave: string; accion: 'creado' | 'actualizado' | 'error'; error?: string }
@@ -90,87 +90,88 @@ async function provisionCuenta(ctx: PersonasCtx, datos: Record<string, unknown>)
   return uid
 }
 
+/**
+ * Copia al payload SOLO los campos que vienen en el archivo.
+ *
+ * Antes se enviaban todas las columnas con `?? null`: actualizar un producto con
+ * un Excel de dos columnas le borraba la presentación, el precio y el proveedor,
+ * y le ponía tipo_insumo = OTROS. Lo que el archivo no trae, no se toca.
+ */
+function soloPresentes(
+  datos: Record<string, unknown>,
+  campos: readonly string[],
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {}
+  for (const c of campos) {
+    const v = datos[c]
+    if (v !== undefined && v !== null && String(v).trim() !== '') out[c] = v
+  }
+  return out
+}
+
+/** Aplica el payload: UPDATE si ya existe (sin pisar lo ausente), INSERT si es nuevo. */
+async function guardar(
+  supabase: DB, tabla: string, id: string | null,
+  campos: Record<string, unknown>, porDefecto: Record<string, unknown> = {},
+): Promise<'creado' | 'actualizado'> {
+  if (id) {
+    if (Object.keys(campos).length === 0) return 'actualizado' // nada que cambiar
+    const { error } = await supabase.from(tabla).update(campos).eq('id', id)
+    if (error) throw new Error(error.message)
+    return 'actualizado'
+  }
+  const { error } = await supabase.from(tabla).insert({ ...porDefecto, ...campos })
+  if (error) throw new Error(error.message)
+  return 'creado'
+}
+
 async function buscarExistente(supabase: DB, config: EntityConfig, datos: Record<string, unknown>): Promise<string | null> {
   for (const mk of config.matchKeys) {
     const val = datos[mk]
     if (val === undefined || val === null || String(val).trim() === '') continue
-    const { data } = await supabase.from(config.id).select('id').eq(mk, val).limit(1).maybeSingle()
+    const col = config.columns.find((c) => c.key === mk)
+    // El preview compara en minúsculas; para texto se busca igual (ilike) para
+    // que "DETALGRAF" y "Detalgraf" no terminen creando dos proveedores.
+    const q = supabase.from(config.id).select('id')
+    const { data } = await (col?.type === 'number'
+      ? q.eq(mk, val)
+      : q.ilike(mk, String(val))).limit(1).maybeSingle()
     if (data?.id) return data.id as string
   }
   return null
 }
 
+const CAMPOS_PRODUCTO = [
+  'nombre_estandar', 'presentacion', 'tipo_insumo', 'cat_rotacion',
+  'stock_minimo_def', 'precio_lista', 'complemento', 'ref', 'codigo',
+] as const
+
 async function upsertProducto(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
-  const payload: Record<string, unknown> = {
-    nombre_estandar: datos.nombre_estandar,
-    presentacion: datos.presentacion ?? null,
-    tipo_insumo: datos.tipo_insumo ?? 'OTROS',
-    cat_rotacion: datos.cat_rotacion ?? 'C',
-    stock_minimo_def: datos.stock_minimo_def ?? 0,
-    precio_lista: datos.precio_lista ?? null,
-    complemento: datos.complemento ?? null,
-    ref: datos.ref ?? null,
-    codigo: datos.codigo ?? null,
-  }
-  if (id) {
-    const { error } = await supabase.from('productos').update(payload).eq('id', id)
-    if (error) throw new Error(error.message)
-    return 'actualizado'
-  }
-  const { data, error } = await supabase.from('productos').insert(payload).select('id').single()
+  const campos = soloPresentes(datos, CAMPOS_PRODUCTO)
+  if (id) return guardar(supabase, 'productos', id, campos)
+
+  const { data, error } = await supabase.from('productos')
+    .insert({ tipo_insumo: 'OTROS', cat_rotacion: 'C', stock_minimo_def: 0, ...campos })
+    .select('id').single()
   if (error) throw new Error(error.message)
+
   const stockInicial = Number(datos.stock_inicial ?? 0) || 0
   await supabase.from('stock').insert({ producto_id: data.id, cantidad_real: stockInicial, cantidad_disp: stockInicial })
   return 'creado'
 }
 
+const CAMPOS_PROVEEDOR = ['nombre', 'nit', 'contacto', 'telefono', 'email', 'es_principal'] as const
+
 async function upsertProveedor(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
-  const payload = {
-    nombre: datos.nombre,
-    nit: datos.nit ?? null,
-    contacto: datos.contacto ?? null,
-    telefono: datos.telefono ?? null,
-    email: datos.email ?? null,
-    es_principal: parseBool(datos.es_principal),
-  }
-  if (id) {
-    const { error } = await supabase.from('proveedores').update(payload).eq('id', id)
-    if (error) throw new Error(error.message)
-    return 'actualizado'
-  }
-  const { error } = await supabase.from('proveedores').insert(payload)
-  if (error) throw new Error(error.message)
-  return 'creado'
+  return guardar(supabase, 'proveedores', id,
+    soloPresentes(datos, CAMPOS_PROVEEDOR), { es_principal: false })
 }
+
+const CAMPOS_USUARIO = ['nombre', 'email', 'rol', 'telefono', 'activo'] as const
 
 async function upsertUsuario(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
-  const payload: Record<string, unknown> = {
-    nombre: datos.nombre,
-    email: datos.email,
-    rol: datos.rol ?? 'AUDITOR',
-    telefono: datos.telefono ?? null,
-    activo: datos.activo === null || datos.activo === undefined ? true : parseBool(datos.activo),
-  }
-  if (id) {
-    const { error } = await supabase.from('usuarios').update(payload).eq('id', id)
-    if (error) throw new Error(error.message)
-    return 'actualizado'
-  }
-  const { error } = await supabase.from('usuarios').insert({ id: crypto.randomUUID(), ...payload })
-  if (error) throw new Error(error.message)
-  return 'creado'
-}
-
-function parseFecha(v: unknown): string | null {
-  const s = String(v ?? '').trim()
-  if (!s) return null
-  // AAAA-MM-DD
-  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s)
-  if (m) return `${m[1]}-${m[2]}-${m[3]}`
-  // DD/MM/AAAA
-  m = /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/.exec(s)
-  if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
-  return null
+  return guardar(supabase, 'usuarios', id, soloPresentes(datos, CAMPOS_USUARIO),
+    { id: crypto.randomUUID(), rol: 'AUDITOR', activo: true })
 }
 
 async function resolverEmpresaUsuaria(supabase: DB, nombre: unknown): Promise<string | null> {
@@ -190,25 +191,32 @@ async function resolverSede(supabase: DB, nombre: unknown): Promise<string | nul
   return (data?.id as string) ?? null
 }
 
+const CAMPOS_PERSONA = [
+  'tipo_doc', 'documento', 'nombres', 'apellidos', 'cargo', 'estado',
+  'email', 'telefono', 'direccion', 'eps', 'arl',
+] as const
+
 async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: string | null, ctx: PersonasCtx | null): Promise<'creado' | 'actualizado'> {
-  const empresaId = await resolverEmpresaUsuaria(supabase, datos.empresa_usuaria)
-  const sedeId = await resolverSede(supabase, datos.sede)
-  const payload: Record<string, unknown> = {
-    tipo_doc: datos.tipo_doc ?? 'CC',
-    documento: String(datos.documento).trim(),
-    nombres: datos.nombres,
-    apellidos: datos.apellidos,
-    cargo: datos.cargo ?? null,
-    empresa_usuaria_id: empresaId,
-    sede_id: sedeId,
-    fecha_ingreso: parseFecha(datos.fecha_ingreso),
-    estado: datos.estado ?? 'ACTIVO',
-    email: datos.email ?? null,
-    telefono: datos.telefono ?? null,
-    direccion: datos.direccion ?? null,
-    eps: datos.eps ?? null,
-    arl: datos.arl ?? null,
+  const payload: Record<string, unknown> = soloPresentes(datos, CAMPOS_PERSONA)
+  if (payload.documento) payload.documento = String(payload.documento).trim()
+
+  // Las relaciones solo se tocan si el archivo trae la columna.
+  if (datos.empresa_usuaria) payload.empresa_usuaria_id = await resolverEmpresaUsuaria(supabase, datos.empresa_usuaria)
+  if (datos.sede) {
+    const sedeId = await resolverSede(supabase, datos.sede)
+    if (!sedeId) throw new Error(`La sede "${String(datos.sede).trim()}" no existe.`)
+    payload.sede_id = sedeId
   }
+  if (datos.fecha_ingreso) {
+    const f = aFecha(datos.fecha_ingreso)
+    if (!f) throw new Error('La fecha de ingreso no es válida (usa AAAA-MM-DD o DD/MM/AAAA).')
+    payload.fecha_ingreso = f
+  }
+  if (!id) {
+    payload.tipo_doc ??= 'CC'
+    payload.estado ??= 'ACTIVO'
+  }
+
   if (id) {
     // Actualiza los datos; no altera la cuenta de acceso existente.
     const { error } = await supabase.from('personas').update(payload).eq('id', id)
@@ -228,45 +236,28 @@ async function upsertPersona(supabase: DB, datos: Record<string, unknown>, id: s
   return 'creado'
 }
 
+const CAMPOS_EMPRESA = ['nombre', 'nit', 'ciudad', 'contacto', 'telefono', 'email'] as const
+
 async function upsertEmpresaUsuaria(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
-  const payload = {
-    nombre: datos.nombre,
-    nit: datos.nit ?? null,
-    ciudad: datos.ciudad ?? null,
-    contacto: datos.contacto ?? null,
-    telefono: datos.telefono ?? null,
-    email: datos.email ?? null,
-  }
-  if (id) {
-    const { error } = await supabase.from('empresas_usuarias').update(payload).eq('id', id)
-    if (error) throw new Error(error.message)
-    return 'actualizado'
-  }
-  const { error } = await supabase.from('empresas_usuarias').insert(payload)
-  if (error) throw new Error(error.message)
-  return 'creado'
+  return guardar(supabase, 'empresas_usuarias', id, soloPresentes(datos, CAMPOS_EMPRESA))
 }
 
+const CAMPOS_SEDE = ['nombre', 'codigo_interno', 'zona', 'ciudad'] as const
+
 async function upsertSede(supabase: DB, datos: Record<string, unknown>, id: string | null): Promise<'creado' | 'actualizado'> {
-  // Resolver grupo de contrato por código (CA, MO, MB, PB, AD)
-  const codigo = String(datos.grupo ?? '').trim().toUpperCase()
-  const { data: grupo } = await supabase.from('grupos_contrato').select('id').eq('codigo', codigo).limit(1).maybeSingle()
-  if (!grupo?.id) throw new Error(`Grupo "${codigo}" no existe (usa CA, MO, MB, PB o AD).`)
-  const payload = {
-    grupo_id: grupo.id,
-    nombre: datos.nombre,
-    codigo_interno: datos.codigo_interno ?? null,
-    zona: datos.zona ?? null,
-    ciudad: datos.ciudad ?? 'BOGOTÁ D.C.',
+  const payload: Record<string, unknown> = soloPresentes(datos, CAMPOS_SEDE)
+
+  // El grupo de contrato solo se resuelve (y se cambia) si viene en el archivo.
+  if (datos.grupo) {
+    const codigo = String(datos.grupo).trim().toUpperCase()
+    const { data: grupo } = await supabase.from('grupos_contrato').select('id').eq('codigo', codigo).limit(1).maybeSingle()
+    if (!grupo?.id) throw new Error(`Grupo "${codigo}" no existe (usa CA, MO, MB, PB o AD).`)
+    payload.grupo_id = grupo.id
+  } else if (!id) {
+    throw new Error('Falta el grupo de contrato para crear la sede.')
   }
-  if (id) {
-    const { error } = await supabase.from('sedes').update(payload).eq('id', id)
-    if (error) throw new Error(error.message)
-    return 'actualizado'
-  }
-  const { error } = await supabase.from('sedes').insert(payload)
-  if (error) throw new Error(error.message)
-  return 'creado'
+
+  return guardar(supabase, 'sedes', id, payload, { ciudad: 'BOGOTÁ D.C.' })
 }
 
 export async function importarEntidad(entidad: string, rows: FilaCommit[], archivo: string): Promise<ImportResult> {
@@ -285,8 +276,21 @@ export async function importarEntidad(entidad: string, rows: FilaCommit[], archi
   // Contexto para provisionar cuentas de acceso al importar personas.
   const personasCtx = entidad === 'personas' ? await crearCtxPersonas(user.id) : null
 
+  // Segunda barrera contra repetidos: el preview ya los marca, pero el servidor
+  // no debe confiar en lo que le mandó el navegador.
+  const clavesVistas = new Set<string>()
+
   for (const row of rows) {
     try {
+      const datos = soloColumnasDeLaPlantilla(config, row.datos)
+
+      const huella = huellaDe(config, datos)
+      if (huella && clavesVistas.has(huella)) {
+        throw new Error('Fila repetida dentro del mismo archivo; se cargó solo la primera.')
+      }
+      if (huella) clavesVistas.add(huella)
+
+      row.datos = datos
       const id = await buscarExistente(supabase, config, row.datos)
       let accion: 'creado' | 'actualizado'
       if (entidad === 'productos') accion = await upsertProducto(supabase, row.datos, id)
@@ -327,6 +331,23 @@ export async function importarEntidad(entidad: string, rows: FilaCommit[], archi
   revalidatePath('/historial')
 
   return { ok: true, total: rows.length, creados, actualizados, errores, detalle }
+}
+
+/** Descarta cualquier campo que no sea una columna declarada en la plantilla. */
+function soloColumnasDeLaPlantilla(config: EntityConfig, datos: Record<string, unknown>): Record<string, unknown> {
+  const permitidas = new Set(config.columns.map((c) => c.key))
+  const out: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(datos)) if (permitidas.has(k)) out[k] = v
+  return out
+}
+
+/** Clave con la que se reconoce una fila (la primera matchKey con valor). */
+function huellaDe(config: EntityConfig, datos: Record<string, unknown>): string | null {
+  for (const mk of config.matchKeys) {
+    const v = datos[mk]
+    if (v !== undefined && v !== null && String(v).trim() !== '') return `${mk}:${normalizaClave(v)}`
+  }
+  return null
 }
 
 function traducir(msg: string): string {
