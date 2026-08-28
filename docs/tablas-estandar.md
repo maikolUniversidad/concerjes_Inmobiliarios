@@ -124,4 +124,4 @@ compra y la vista previa de las cargas masivas.
 | Detalle de un cambio en el historial | Es un diff campo/antes/después dentro de un desplegable, no una rejilla de datos. |
 | Respuestas del asistente de IA (`Markdown.tsx`) | Pinta tablas de markdown arbitrario; ya va dentro de un contenedor con scroll propio. |
 | Impresión de la orden de compra | Es una hoja A4: una barra de herramientas o paginación arruinaría el impreso. Se le agregó scroll horizontal solo en pantalla. |
-| Agenda del portal web (`apps/web`) | Es una grilla de horas × días para reservar, no un listado. |
+| Agenda del portal web (repo Concerjes_Web) | Es una grilla de horas × días para reservar, no un listado. |

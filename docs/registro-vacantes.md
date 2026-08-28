@@ -1,7 +1,7 @@
 # Módulo Registro de Vacantes (Contratación / ATS público)
 
 Flujo público de registro de candidatos, accesible desde la landing
-(`apps/web`), en **`/registro-vacantes`**. Fase 1 (FUNDACIÓN) implementada:
+(repo [Concerjes_Web](https://github.com/maikolUniversidad/Concerjes_Web)), en **`/registro-vacantes`**. Fase 1 (FUNDACIÓN) implementada:
 modelo de datos + formulario público + carga de documentos. La generación del
 contrato (paquete de 18 PDFs) y el motor facial GPU quedan como fases siguientes,
 ya con las costuras (seams) listas.
@@ -50,7 +50,7 @@ creado su fila `usuarios` (rol AUDITOR); se le fija correo/nombre/contraseña.
 Credenciales: usuario = correo de contacto o `<documento>@aspirante.conserjesinmobiliarios.com`;
 contraseña = número de documento. Se muestran en la pantalla final.
 
-Login en **`/ingresar`** (apps/web): documento (o correo) + contraseña
+Login en **`/ingresar`** (repo Concerjes_Web): documento (o correo) + contraseña
 (`resolver-email` traduce documento→correo, luego `signInWithPassword`), **o**
 reconocimiento facial (`/api/registro/facial/login`, env-gated: identify+liveness
 → 1:N → magic link → `verifyOtp`; sin microservicio cae al documento). Al ingresar
@@ -65,7 +65,7 @@ reanuda `/registro-vacantes` con sus datos.
 Link libre en el Hero: "¿Buscas empleo? **Trabaja con nosotros** · Ya me registré"
 (→ `/registro-vacantes` y `/ingresar`). Sin botones grandes.
 
-### Frontend (`apps/web`)
+### Frontend (repo Concerjes_Web)
 - `/registro-vacantes` — wizard de 6 pasos, mobile-first, español simple,
   **guardado parcial y reanudable** (autosave con rebote + reanudar por sesión).
   - Paso 0 · Consentimientos (datos = obligatorio; biométrico = separado y opcional).
@@ -76,7 +76,7 @@ Link libre en el Hero: "¿Buscas empleo? **Trabaja con nosotros** · Ya me regis
   - Paso 3 · Documentos multi-archivo por tipo (bucket privado, reglas condicionales por cargo).
   - Paso 4 · Revisión + declaraciones.
   - Paso 5 · Envío → estado `POSTULADO`.
-- Env: copiar `apps/web/.env.local.example` → `.env.local`.
+- Env: copiar `.env.local.example` → `.env.local` en el repo Concerjes_Web.
 
 ## Microservicio facial → `services/facial/` (implementado)
 El motor ya está escrito: FastAPI + InsightFace `buffalo_l` (ArcFace 512-d) +

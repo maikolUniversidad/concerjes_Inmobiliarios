@@ -20,13 +20,13 @@ Otros comandos:
 | --- | --- |
 | `npm run test:watch` | Deja las pruebas corriendo mientras programas. |
 | `npm run verificar:rapido` | Pruebas + tipos, sin los builds (para el preview). |
-| `npx vitest run --project inventario` | Solo un grupo (`offline`, `inventario`, `web`, `proyecto`). |
-| `npx vitest run tests/web/api-portal-pagos.test.ts` | Un solo archivo. |
+| `npx vitest run --project inventario` | Solo un grupo (`offline`, `inventario`, `proyecto`). |
+| `npx vitest run tests/inventario/utils.test.ts` | Un solo archivo. |
 
 ## Qué se está verificando
 
 Las pruebas viven todas en `tests/`, fuera de las apps, para que `next build` no
-intente compilarlas. Están repartidas en cuatro grupos (`vitest.config.ts`):
+intente compilarlas. Están repartidas en tres grupos (`vitest.config.ts`):
 
 ### `tests/offline` — motor de sincronización (`packages/offline`)
 
@@ -63,20 +63,12 @@ Supabase, sin red:
     el resto de la ficha), los valores por defecto se aplican solo al crear, y el
     servidor descarta campos ajenos y claves repetidas.
 
-### `tests/web` — sitio público y portal
+### El sitio público ya no se prueba desde aquí
 
-- **Cuentas de cobro del portal** (`POST /api/portal/pagos`), la ruta que toca
-  plata: no se puede pagar el cobro de otro cliente, ni por encima del saldo, ni
-  con una forma de pago oculta; el `cliente_id` siempre sale del token y nunca
-  del cuerpo de la petición; el comprobante debe estar en la carpeta del propio
-  cliente; y si la base falla devuelve 500 sin fingir que guardó.
-- **Consentimientos (Ley 1581/2012)**: los textos no quedan vacíos ni con
-  marcadores sin reemplazar, identifican al responsable, y el hash SHA-256 —que
-  es la prueba de qué firmó el candidato— es estable y distinto por documento.
-- **Documentos del registro**: extensión y hash de los archivos, tope de 8 MB y
-  la regla `aplica_si` que decide qué documentos pide cada cargo.
-- **Fotos del sitio**: cada foto declarada existe en `public/` y tiene texto
-  alternativo.
+Las pruebas del sitio (cobros del portal, consentimientos, documentos del
+registro y fotos) se fueron con él a
+[`maikolUniversidad/Concerjes_Web`](https://github.com/maikolUniversidad/Concerjes_Web),
+donde se corren con `npm test` desde la raíz de ese repo.
 
 ### `tests/proyecto` — que el repositorio siga sano
 
@@ -99,14 +91,13 @@ Son las que responden a "¿se dañó algo?" sin tener que abrir el navegador:
 
 ## Nota sobre ESLint
 
-Next 16 eliminó el comando `next lint`, así que el script `lint` de `web` e
-`inventario` llevaba tiempo fallando (y con él, el paso "Lint" del CI). En su
+Next 16 eliminó el comando `next lint`, así que el script `lint` de `inventario`
+llevaba tiempo fallando (y con él, el paso "Lint" del CI). En su
 lugar la verificación corre `npm run typecheck` (`tsc --noEmit` en los cuatro
 paquetes), que sí funciona y atrapa más.
 
 Si se quiere recuperar ESLint hay que crear un `eslint.config.mjs` por app y
-limpiar lo que reporte (en `apps/web` son ~12 hallazgos: imports sin usar, `any`
-sueltos y un `require()` en `tailwind.config.ts`). Es un trabajo aparte, no un
+limpiar lo que reporte. Es un trabajo aparte, no un
 requisito para desplegar.
 
 ## Qué NO cubre (todavía)

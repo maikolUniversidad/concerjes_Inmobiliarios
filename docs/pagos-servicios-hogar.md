@@ -3,7 +3,7 @@
 Cierra el ciclo del portal de clientes: **ingresar → alquilar → hacer seguimiento
 → calificar → pagar**, más la **administración y parametrización** de los cobros.
 
-Antes de este módulo el portal (`apps/web/app/portal`) ya permitía agendar,
+Antes de este módulo el portal (`app/portal` del repo Concerjes_Web) ya permitía agendar,
 seguir y calificar un servicio, pero no existía nada de dinero: ni cuenta de
 cobro, ni forma de pago, ni cartera. Eso es lo que se agregó.
 
@@ -58,7 +58,7 @@ re-ejecutarse sin efectos.
 node scripts/apply-migrations.mjs supabase/migrations/20260827000000_pagos_servicios_hogar.sql
 ```
 
-## Portal del cliente (`apps/web`)
+## Portal del cliente (repo Concerjes_Web)
 
 | Ruta | Qué hace |
 |---|---|

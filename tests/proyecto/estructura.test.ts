@@ -18,8 +18,8 @@ describe('inventario de archivos', () => {
   it('encuentra las rutas, páginas y acciones del proyecto', () => {
     // Si estos números caen a cero, el recorrido se rompió y las demás pruebas
     // de esta sección estarían pasando en vacío.
-    expect(rutasApi.length).toBeGreaterThan(20)
-    expect(paginas.length).toBeGreaterThan(50)
+    expect(rutasApi.length).toBeGreaterThan(10)
+    expect(paginas.length).toBeGreaterThan(40)
     expect(acciones.length).toBeGreaterThan(5)
     expect(fuentes.length).toBeGreaterThan(200)
   })

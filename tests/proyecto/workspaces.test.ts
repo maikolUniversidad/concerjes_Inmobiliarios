@@ -6,8 +6,7 @@ import { leer, RAIZ } from './_fs'
 const paquete = (ruta: string) => JSON.parse(leer(join(RAIZ, ruta, 'package.json')))
 
 const raiz = paquete('.')
-const WORKSPACES = ['apps/web', 'apps/inventario', 'apps/movil', 'packages/offline']
-const web = paquete('apps/web')
+const WORKSPACES = ['apps/inventario', 'apps/movil', 'packages/offline']
 const inventario = paquete('apps/inventario')
 
 const deps = (p: Record<string, Record<string, string>>) => ({
@@ -78,21 +77,13 @@ describe('turbo.json', () => {
   })
 })
 
-describe('versiones compartidas entre las dos apps Next', () => {
-  it('no hay dependencias con versiones distintas entre web e inventario', () => {
-    // Dos versiones de React o de Next en el mismo monorepo producen errores
-    // que solo aparecen en producción.
-    const a = deps(web)
-    const b = deps(inventario)
-    const divergentes = Object.keys(a)
-      .filter((k) => b[k] && b[k] !== a[k])
-      .map((k) => `${k}: web ${a[k]} vs inventario ${b[k]}`)
-    expect(divergentes).toEqual([])
-  })
-
-  it('ambas apps comparten React, Next y el cliente de Supabase', () => {
+describe('dependencias de la app Next', () => {
+  // Antes esto comparaba web contra inventario para que no divergieran las
+  // versiones de React o Next. El sitio se fue a su propio repo, así que esa
+  // comparación ya no se puede hacer desde aquí: si las dos apps deben seguir
+  // alineadas, hay que revisarlo a mano al subir Next o React.
+  it('inventario declara React, Next y el cliente de Supabase', () => {
     for (const dep of ['next', 'react', 'react-dom', '@supabase/supabase-js']) {
-      expect(web.dependencies[dep], `web no depende de ${dep}`).toBeTruthy()
       expect(inventario.dependencies[dep], `inventario no depende de ${dep}`).toBeTruthy()
     }
   })

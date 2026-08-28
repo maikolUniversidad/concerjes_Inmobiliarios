@@ -23,8 +23,13 @@ function referencias(): Referencia[] {
 const refs = referencias()
 
 describe('imágenes y archivos estáticos', () => {
-  it('el proyecto referencia archivos estáticos (el recorrido encuentra algo)', () => {
-    expect(refs.length).toBeGreaterThan(5)
+  it('el recorrido de archivos funciona (las demás pruebas no pasan en vacío)', () => {
+    // Antes esto exigía más de 5 referencias a /images/, y todas venían del
+    // sitio público, que se fue a su propio repo. Hoy inventario no referencia
+    // imágenes estáticas: un 0 es legítimo, así que lo que se comprueba es que
+    // el recorrido encuentre código, no que encuentre imágenes.
+    const fuentes = APPS_NEXT.flatMap((a) => archivos(join(RAIZ, a), ['.ts', '.tsx']))
+    expect(fuentes.length).toBeGreaterThan(50)
   })
 
   it('toda imagen referenciada existe en la carpeta public de su app', () => {

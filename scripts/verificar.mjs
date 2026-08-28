@@ -34,15 +34,9 @@ const PASOS = [
   },
   {
     nombre: 'Chequeo de tipos',
-    detalle: 'web, inventario, móvil y el motor offline',
+    detalle: 'inventario, móvil y el motor offline',
     comando: 'npx turbo run typecheck',
     saltar: soloPruebas,
-  },
-  {
-    nombre: 'Build de web',
-    detalle: 'apps/web',
-    comando: 'npx turbo run build --filter=web',
-    saltar: rapido || soloPruebas,
   },
   {
     nombre: 'Build de inventario',

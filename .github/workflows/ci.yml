@@ -28,12 +28,6 @@ jobs:
       - name: Chequeo de tipos
         run: npm run typecheck
 
-      - name: Build web
-        run: npx turbo run build --filter=web
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-
       - name: Build inventario
         run: npx turbo run build --filter=inventario
         env:

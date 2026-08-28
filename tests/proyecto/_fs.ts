@@ -40,12 +40,12 @@ export function leer(ruta: string): string {
   return readFileSync(ruta, 'utf8')
 }
 
-export const APPS_NEXT = ['apps/web', 'apps/inventario'] as const
+// El sitio público se fue a maikolUniversidad/Concerjes_Web; aquí queda una sola app Next.
+export const APPS_NEXT = ['apps/inventario'] as const
 
-/** Archivos de código de las dos apps Next y del motor offline. */
+/** Archivos de código de las apps y del motor offline. */
 export function codigoFuente(): string[] {
   return [
-    ...archivos(join(RAIZ, 'apps/web'), ['.ts', '.tsx']),
     ...archivos(join(RAIZ, 'apps/inventario'), ['.ts', '.tsx']),
     ...archivos(join(RAIZ, 'apps/movil/src'), ['.ts', '.tsx']),
     ...archivos(join(RAIZ, 'packages/offline/src'), ['.ts']),

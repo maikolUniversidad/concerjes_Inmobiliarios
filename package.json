@@ -7,7 +7,6 @@
   ],
   "scripts": {
     "dev": "turbo run dev",
-    "dev:web": "turbo run dev --filter=web",
     "dev:inventario": "turbo run dev --filter=inventario",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
@@ -19,8 +18,6 @@
     "clean": "turbo run clean",
     "deploy": "npm run verificar && node scripts/vercel-deploy.mjs deploy --prod --yes",
     "deploy:sin-verificar": "node scripts/vercel-deploy.mjs deploy --prod --yes",
-    "deploy:web": "npm run verificar && node scripts/vercel-deploy.mjs deploy --prod --yes --cwd apps/web",
-    "deploy:web:preview": "npm run verificar:rapido && node scripts/vercel-deploy.mjs deploy --yes --cwd apps/web",
     "deploy:preview": "npm run verificar:rapido && node scripts/vercel-deploy.mjs deploy --yes",
     "deploy:status": "node scripts/vercel-deploy.mjs ls",
     "deploy:logs": "node scripts/vercel-deploy.mjs logs"
