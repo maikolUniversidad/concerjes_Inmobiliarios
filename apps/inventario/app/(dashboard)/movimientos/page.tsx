@@ -30,7 +30,7 @@ export default async function MovimientosPage({
 
   let query = supabase
     .from('movimientos')
-    .select('id, tipo, cantidad, observacion, created_at, usuario_id, producto:productos ( nombre_estandar, presentacion ), sede:sedes ( nombre )')
+    .select('id, tipo, cantidad, observacion, created_at, usuario_id, producto:productos ( ref, codigo, nombre_estandar, presentacion ), sede:sedes ( nombre )')
     .order('created_at', { ascending: false })
     .limit(100)
   // Filtro por clasificación de contrato: sólo movimientos de esas sedes.

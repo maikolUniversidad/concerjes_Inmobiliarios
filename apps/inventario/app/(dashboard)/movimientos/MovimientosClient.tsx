@@ -21,7 +21,7 @@ export interface MovRow {
   usuario_id?: string | null
   /** Quién registró el movimiento (resuelto en el servidor). */
   responsable?: string | null
-  producto: { nombre_estandar: string; presentacion: string | null } | null
+  producto: { ref: number | null; codigo: number | null; nombre_estandar: string; presentacion: string | null } | null
   sede: { nombre: string } | null
 }
 
@@ -90,7 +90,23 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
     </button>
   )
 
+  /** Identificador visible del producto: REF y, si no hay, el código. */
+  const refProducto = (m: MovRow) => m.producto?.ref ?? m.producto?.codigo ?? null
+
   const columnas: ColumnaTabla<MovRow>[] = [
+    {
+      id: 'ref',
+      header: 'REF',
+      valor: (m) => refProducto(m) ?? '',
+      ancho: 'w-20',
+      celda: (m) => {
+        const ref = refProducto(m)
+        return ref === null
+          ? <span className="font-body text-xs text-gray-300">—</span>
+          : <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-500">{ref}</span>
+      },
+      tarjeta: 'meta',
+    },
     {
       id: 'tipo',
       header: 'Tipo',
@@ -194,7 +210,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
         datos={filtrados}
         columnas={columnas}
         filaId={(m) => m.id}
-        busqueda="Buscar por producto, sede, responsable u observación…"
+        busqueda="Buscar por REF, producto, sede, responsable u observación…"
         acciones={puedeEliminar ? (m) => btnBorrar(m) : undefined}
         anchoAcciones="w-12"
         vacio={
@@ -223,6 +239,9 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
               <p className="mt-2 break-words font-body text-sm font-medium text-gray-900">
                 {m.producto?.nombre_estandar ?? '—'}
               </p>
+              {refProducto(m) !== null && (
+                <p className="mt-1 font-mono text-xs text-gray-400">REF {refProducto(m)}</p>
+              )}
               {m.producto?.presentacion && (
                 <p className="font-body text-xs text-gray-400">{m.producto.presentacion}</p>
               )}
