@@ -7,6 +7,7 @@ import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
 import { ReportesExport } from './ReportesExport'
 import { InformesInventario } from './InformesInventario'
+import { ActividadUsuarioTabla } from './ActividadUsuarioTabla'
 
 export const metadata: Metadata = { title: 'Reportes' }
 export const revalidate = 0
@@ -163,49 +164,17 @@ export default async function ReportesPage() {
           <h2 className="font-heading font-semibold text-lg text-gray-900">Actividad por usuario</h2>
           <span className="font-body text-xs text-gray-400 ml-auto">qué ha hecho cada quien</span>
         </div>
-        {usuariosAct.length === 0 ? (
-          <p className="px-6 py-8 text-center font-body text-sm text-gray-400">
-            Aún no hay actividad registrada. Las acciones de los usuarios aparecerán aquí.
+        <div className="p-4">
+          <ActividadUsuarioTabla
+            usuarios={usuariosAct.map((u) => ({
+              clave: u.clave, nombre: u.nombre, email: u.email,
+              total: u.total, modulos: [...u.modulos], ultima: u.ultima,
+            }))}
+          />
+          <p className="px-2 pt-3 font-body text-xs text-gray-400">
+            Basado en las últimas {acts.length.toLocaleString('es-CO')} acciones. Descarga el detalle completo en “Exportar datos → Auditoría”.
           </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-6 py-3">Usuario</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Acciones</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Módulos</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-6 py-3">Última actividad</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {usuariosAct.map(u => (
-                  <tr key={u.clave} className="hover:bg-gray-50/50">
-                    <td className="px-6 py-3">
-                      <p className="font-body font-medium text-sm text-gray-900">{u.nombre}</p>
-                      {u.email && <p className="font-body text-xs text-gray-400">{u.email}</p>}
-                    </td>
-                    <td className="px-4 py-3 text-right font-heading font-bold text-base text-gray-900">{u.total}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex flex-wrap gap-1">
-                        {[...u.modulos].slice(0, 6).map(m => (
-                          <span key={m} className="font-body text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{m}</span>
-                        ))}
-                        {u.modulos.size > 6 && <span className="font-body text-xs text-gray-400">+{u.modulos.size - 6}</span>}
-                      </div>
-                    </td>
-                    <td className="px-6 py-3 text-right font-body text-xs text-gray-400">
-                      {new Date(u.ultima).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <p className="px-6 py-3 font-body text-xs text-gray-400">
-              Basado en las últimas {acts.length.toLocaleString('es-CO')} acciones. Descarga el detalle completo en “Exportar datos → Auditoría”.
-            </p>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   )

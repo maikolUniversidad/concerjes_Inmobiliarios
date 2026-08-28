@@ -1,8 +1,9 @@
 'use client'
-import { useState, useMemo } from 'react'
-import { Boxes, TrendingDown, TrendingUp, AlertCircle, Search, Share2, Lock } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Boxes, TrendingDown, TrendingUp, AlertCircle, Share2, Lock } from 'lucide-react'
 import Link from 'next/link'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface StockRow {
   id: string
@@ -28,53 +29,42 @@ function estado(real: number, minimo: number) {
   return { key: 'normal', label: 'Normal', cls: 'bg-green-100 text-green-700' }
 }
 
-// Búsqueda inteligente: sin tildes, minúsculas.
-const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/\p{Diacritic}/gu, '')
+const cceLabel = (r: StockRow) =>
+  r.cceTipo === 'PROPIO' ? 'Propio' : r.cceTipo === 'COMPARTIDO' ? 'Compartido' : 'Sin CCE'
 
 export function StockClient({ rows }: { rows: StockRow[] }) {
-  const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState('')
   const [cceFilter, setCceFilter] = useState('')
 
-  // "Heno" por fila: todos los datos visibles de la tabla, normalizados, para
-  // que el buscador filtre por cualquier columna (ref, nombre, presentación,
-  // categoría, cantidades, estado, CCE…).
-  const haystacks = useMemo(() => {
-    const m = new Map<string, string>()
-    for (const r of rows) {
-      const est = estado(r.real, r.minimo).label
-      const catLabel = (CATEGORIA_LABELS[r.cat] as { nombre?: string })?.nombre ?? ''
-      const cce = r.cceTipo === 'PROPIO' ? 'propio cce' : r.cceTipo === 'COMPARTIDO' ? 'compartido cce' : 'sin cce'
-      m.set(r.id, norm([
-        r.ref ?? '', r.nombre, r.presentacion ?? '', r.cat, catLabel,
-        r.real, r.disp, r.entrante, r.saliente, r.minimo, est, cce,
-        r.cceReal ?? '', r.cceDisp ?? '',
-      ].join(' ')))
-    }
-    return m
-  }, [rows])
-
+  // Los filtros por columna viven dentro de la tabla; aquí solo quedan los
+  // atajos de negocio (alertas de stock e inventario CCE).
   const filtered = useMemo(() => {
-    const tokens = norm(search.trim()).split(/\s+/).filter(Boolean)
-    return rows.filter(r => {
-      const hay = haystacks.get(r.id) ?? ''
-      const matchSearch = tokens.every(t => hay.includes(t))
+    return rows.filter((r) => {
       const e = estado(r.real, r.minimo).key
-      const matchFiltro = !filtro || (filtro === 'alerta' ? (e === 'critico' || e === 'bajo') : e === filtro)
-      const matchCce = !cceFilter || (
-        cceFilter === 'propio'      ? r.cceTipo === 'PROPIO' :
-        cceFilter === 'compartido'  ? r.cceTipo === 'COMPARTIDO' :
-        cceFilter === 'cce'         ? r.cceTipo !== null :
-        cceFilter === 'sin_cce'     ? r.cceTipo === null : true
-      )
-      return matchSearch && matchFiltro && matchCce
+      const matchFiltro =
+        !filtro || (filtro === 'alerta' ? e === 'critico' || e === 'bajo' : e === filtro)
+      const matchCce =
+        !cceFilter ||
+        (cceFilter === 'propio'
+          ? r.cceTipo === 'PROPIO'
+          : cceFilter === 'compartido'
+            ? r.cceTipo === 'COMPARTIDO'
+            : cceFilter === 'cce'
+              ? r.cceTipo !== null
+              : cceFilter === 'sin_cce'
+                ? r.cceTipo === null
+                : true)
+      return matchFiltro && matchCce
     })
-  }, [rows, haystacks, search, filtro, cceFilter])
+  }, [rows, filtro, cceFilter])
 
   const totalReal = rows.reduce((a, s) => a + s.real, 0)
   const totalEntrante = rows.reduce((a, s) => a + s.entrante, 0)
   const totalSaliente = rows.reduce((a, s) => a + s.saliente, 0)
-  const alertas = rows.filter(s => { const e = estado(s.real, s.minimo).key; return e === 'critico' || e === 'bajo' }).length
+  const alertas = rows.filter((s) => {
+    const e = estado(s.real, s.minimo).key
+    return e === 'critico' || e === 'bajo'
+  }).length
 
   const kpis = [
     { icon: Boxes, label: 'Unidades totales', value: totalReal.toLocaleString('es-CO'), color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
@@ -83,125 +73,230 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
     { icon: AlertCircle, label: 'Alertas stock', value: alertas.toString(), color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
   ]
 
+  const columnas: ColumnaTabla<StockRow>[] = [
+    {
+      id: 'ref',
+      header: 'REF',
+      valor: (s) => s.ref ?? '',
+      celda: (s) => <span className="font-mono text-xs text-gray-400">{s.ref ?? '—'}</span>,
+      ancho: 'w-20',
+      prioridad: 2,
+      tarjeta: 'meta',
+    },
+    {
+      id: 'nombre',
+      header: 'Producto',
+      valor: (s) => s.nombre,
+      celda: (s) => (
+        <Link
+          href={`/productos/${s.id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-body text-sm font-medium text-gray-900 hover:text-brand-green"
+        >
+          {s.nombre}
+        </Link>
+      ),
+      ancho: 'min-w-[200px]',
+      tarjeta: 'titulo',
+    },
+    {
+      id: 'presentacion',
+      header: 'Presentación',
+      valor: (s) => s.presentacion ?? '',
+      prioridad: 3,
+      className: 'text-gray-400 text-xs',
+      tarjeta: 'subtitulo',
+    },
+    {
+      id: 'cat',
+      header: 'Cat.',
+      valor: (s) => s.cat,
+      align: 'center',
+      prioridad: 2,
+      celda: (s) => {
+        const cat = CATEGORIA_LABELS[s.cat]
+        return (
+          <span className={`rounded-full px-2 py-0.5 font-body text-xs font-bold ${cat.bg} ${cat.color}`}>
+            {s.cat}
+          </span>
+        )
+      },
+      tarjeta: 'meta',
+    },
+    {
+      id: 'real',
+      header: 'Real',
+      valor: (s) => s.real,
+      align: 'right',
+      className: 'bg-gray-50/40',
+      headerClassName: 'bg-gray-100/60',
+      celda: (s) => <span className="font-heading text-base font-bold text-gray-900">{s.real}</span>,
+      tarjeta: 'meta',
+    },
+    {
+      id: 'disp',
+      header: 'Disp.',
+      valor: (s) => s.disp,
+      align: 'right',
+      className: 'bg-green-50/30',
+      headerClassName: 'bg-green-50 text-green-600',
+      celda: (s) => <span className="font-heading text-sm font-semibold text-green-700">{s.disp}</span>,
+      tarjeta: 'meta',
+    },
+    {
+      id: 'entrante',
+      header: 'Entr.',
+      valor: (s) => s.entrante,
+      align: 'right',
+      prioridad: 2,
+      className: 'bg-blue-50/30',
+      headerClassName: 'bg-blue-50 text-blue-600',
+      celda: (s) =>
+        s.entrante > 0 ? (
+          <span className="font-body text-sm font-semibold text-blue-600">+{s.entrante}</span>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        ),
+      tarjeta: 'oculto',
+    },
+    {
+      id: 'saliente',
+      header: 'Sal.',
+      valor: (s) => s.saliente,
+      align: 'right',
+      prioridad: 2,
+      className: 'bg-orange-50/30',
+      headerClassName: 'bg-orange-50 text-orange-600',
+      celda: (s) =>
+        s.saliente > 0 ? (
+          <span className="font-body text-sm font-semibold text-orange-600">-{s.saliente}</span>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        ),
+      tarjeta: 'oculto',
+    },
+    {
+      id: 'minimo',
+      header: 'Mín.',
+      valor: (s) => s.minimo,
+      align: 'right',
+      prioridad: 3,
+      className: 'text-gray-500',
+      tarjeta: 'oculto',
+    },
+    {
+      id: 'cce',
+      header: 'CCE',
+      valor: (s) => cceLabel(s),
+      copiaTexto: (s) =>
+        s.cceTipo === 'PROPIO' ? `Propio (${s.cceReal ?? 0})` : cceLabel(s),
+      align: 'center',
+      prioridad: 2,
+      className: 'bg-purple-50/20',
+      headerClassName: 'bg-purple-50/60 text-purple-600',
+      celda: (s) => (
+        <>
+          {s.cceTipo === 'PROPIO' && (
+            <div className="flex flex-col items-center gap-0.5">
+              <div className="flex items-center gap-1">
+                <Lock className="h-3 w-3 text-purple-500" />
+                <span className="font-body text-[10px] font-bold text-purple-700">PROPIO</span>
+              </div>
+              <span className="font-heading text-sm font-bold text-purple-900">{s.cceReal ?? 0}</span>
+            </div>
+          )}
+          {s.cceTipo === 'COMPARTIDO' && (
+            <div className="flex items-center justify-center gap-1">
+              <Share2 className="h-3 w-3 text-teal-500" />
+              <span className="font-body text-[10px] font-bold text-teal-700">COMPARTIDO</span>
+            </div>
+          )}
+          {!s.cceTipo && <span className="text-xs text-gray-200">—</span>}
+        </>
+      ),
+      tarjeta: 'meta',
+    },
+    {
+      id: 'estado',
+      header: 'Estado',
+      valor: (s) => estado(s.real, s.minimo).label,
+      align: 'center',
+      celda: (s) => {
+        const e = estado(s.real, s.minimo)
+        return (
+          <span className={`rounded-full px-2.5 py-1 font-body text-xs font-medium ${e.cls}`}>
+            {e.label}
+          </span>
+        )
+      },
+      tarjeta: 'badge',
+    },
+  ]
+
   return (
     <div className="space-y-5">
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {kpis.map(k => (
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {kpis.map((k) => (
           <div key={k.label} className={`rounded-xl border p-4 ${k.bg} flex items-start gap-3`}>
-            <k.icon className={`w-5 h-5 mt-0.5 ${k.color}`} />
+            <k.icon className={`mt-0.5 h-5 w-5 ${k.color}`} />
             <div>
-              <p className="font-heading font-bold text-2xl text-gray-900">{k.value}</p>
+              <p className="font-heading text-2xl font-bold text-gray-900">{k.value}</p>
               <p className={`font-body text-xs ${k.color}`}>{k.label}</p>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Filtros */}
-      <div className="bg-white border border-gray-100 rounded-xl p-4 flex flex-wrap gap-3 shadow-sm items-center">
-        <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-gray-400 shrink-0" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por cualquier dato: nombre, ref, categoría, estado, cantidad, CCE…"
-            className="font-body text-sm flex-1 outline-none placeholder:text-gray-400" />
-        </div>
-        <select value={filtro} onChange={e => setFiltro(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none bg-white">
-          <option value="">Todos los estados</option>
-          <option value="alerta">Con alerta (crítico/bajo)</option>
-          <option value="critico">Crítico / Agotado</option>
-          <option value="bajo">Bajo</option>
-          <option value="normal">Normal</option>
-        </select>
-        <select value={cceFilter} onChange={e => setCceFilter(e.target.value)}
-          className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none bg-white">
-          <option value="">Inventario CCE</option>
-          <option value="cce">Con categoría CCE</option>
-          <option value="propio">🔒 Propio CCE</option>
-          <option value="compartido">↔ Compartido</option>
-          <option value="sin_cce">Sin CCE</option>
-        </select>
-        <Link href="/movimientos/nuevo" className="ml-auto bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark transition-colors">
-          Registrar movimiento
-        </Link>
-      </div>
-
-      {/* Tabla */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Producto</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Cat.</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3 bg-gray-100/60">Real</th>
-                <th className="text-right font-body font-semibold text-xs text-green-600 uppercase px-4 py-3 bg-green-50">Disp.</th>
-                <th className="text-right font-body font-semibold text-xs text-blue-600 uppercase px-4 py-3 bg-blue-50">Entr.</th>
-                <th className="text-right font-body font-semibold text-xs text-orange-600 uppercase px-4 py-3 bg-orange-50">Sal.</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Mín.</th>
-                <th className="text-center font-body font-semibold text-xs text-purple-600 uppercase px-4 py-3 bg-purple-50/60">CCE</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Estado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtered.map(s => {
-                const e = estado(s.real, s.minimo)
-                const cat = CATEGORIA_LABELS[s.cat]
-                return (
-                  <tr key={s.id} className={`hover:bg-gray-50/50 transition-colors ${e.key === 'critico' ? 'bg-red-50/20' : ''}`}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-gray-400">{s.ref ?? '—'}</span>
-                        <div>
-                          <Link href={`/productos/${s.id}`} className="font-body font-medium text-sm text-gray-900 hover:text-brand-green">{s.nombre}</Link>
-                          <p className="font-body text-xs text-gray-400">{s.presentacion}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <span className={`font-body font-bold text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.color}`}>{s.cat}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right bg-gray-50/40"><span className="font-heading font-bold text-base text-gray-900">{s.real}</span></td>
-                    <td className="px-4 py-3 text-right bg-green-50/30"><span className="font-heading font-semibold text-sm text-green-700">{s.disp}</span></td>
-                    <td className="px-4 py-3 text-right bg-blue-50/30">{s.entrante > 0 ? <span className="font-body text-sm text-blue-600 font-semibold">+{s.entrante}</span> : <span className="text-gray-300 text-xs">—</span>}</td>
-                    <td className="px-4 py-3 text-right bg-orange-50/30">{s.saliente > 0 ? <span className="font-body text-sm text-orange-600 font-semibold">-{s.saliente}</span> : <span className="text-gray-300 text-xs">—</span>}</td>
-                    <td className="px-4 py-3 text-right font-body text-sm text-gray-500">{s.minimo || '—'}</td>
-                    <td className="px-4 py-3 text-center bg-purple-50/20">
-                      {s.cceTipo === 'PROPIO' && (
-                        <div className="flex flex-col items-center gap-0.5">
-                          <div className="flex items-center gap-1">
-                            <Lock className="w-3 h-3 text-purple-500" />
-                            <span className="font-body text-[10px] font-bold text-purple-700">PROPIO</span>
-                          </div>
-                          <span className="font-heading font-bold text-sm text-purple-900">{s.cceReal ?? 0}</span>
-                        </div>
-                      )}
-                      {s.cceTipo === 'COMPARTIDO' && (
-                        <div className="flex items-center justify-center gap-1">
-                          <Share2 className="w-3 h-3 text-teal-500" />
-                          <span className="font-body text-[10px] font-bold text-teal-700">COMPARTIDO</span>
-                        </div>
-                      )}
-                      {!s.cceTipo && <span className="text-gray-200 text-xs">—</span>}
-                    </td>
-                    <td className="px-4 py-3 text-center"><span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${e.cls}`}>{e.label}</span></td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        <div className="border-t border-gray-100 px-4 py-3">
-          <p className="font-body text-xs text-gray-500">Mostrando {filtered.length} de {rows.length} productos</p>
-        </div>
-      </div>
-
-      {filtered.length === 0 && (
-        <div className="text-center py-12 text-gray-400">
-          <p className="font-heading font-bold">Sin resultados</p>
-          <p className="font-body text-sm mt-1">Ajusta la búsqueda o los filtros</p>
-        </div>
-      )}
+      <TablaEstandar
+        id="stock"
+        titulo="Stock"
+        modulo="Inventario"
+        entidad="stock"
+        datos={filtered}
+        columnas={columnas}
+        filaId={(s) => s.id}
+        busqueda="Buscar por nombre, ref, categoría, estado…"
+        filaClassName={(s) => (estado(s.real, s.minimo).key === 'critico' ? 'bg-red-50/20' : '')}
+        vacio={
+          <>
+            <p className="font-heading font-bold text-gray-500">Sin resultados</p>
+            <p className="mt-1 font-body text-sm text-gray-400">Ajusta la búsqueda o los filtros</p>
+          </>
+        }
+        herramientas={
+          <>
+            <select
+              value={filtro}
+              onChange={(e) => setFiltro(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 font-body text-sm text-gray-700 outline-none"
+            >
+              <option value="">Todos los estados</option>
+              <option value="alerta">Con alerta (crítico/bajo)</option>
+              <option value="critico">Crítico / Agotado</option>
+              <option value="bajo">Bajo</option>
+              <option value="normal">Normal</option>
+            </select>
+            <select
+              value={cceFilter}
+              onChange={(e) => setCceFilter(e.target.value)}
+              className="rounded-xl border border-gray-200 bg-white px-3 py-2 font-body text-sm text-gray-700 outline-none"
+            >
+              <option value="">Inventario CCE</option>
+              <option value="cce">Con categoría CCE</option>
+              <option value="propio">🔒 Propio CCE</option>
+              <option value="compartido">↔ Compartido</option>
+              <option value="sin_cce">Sin CCE</option>
+            </select>
+            <Link
+              href="/movimientos/nuevo"
+              className="rounded-xl bg-brand-green px-4 py-2 font-body text-sm font-semibold text-white transition-colors hover:bg-brand-green-dark"
+            >
+              Registrar movimiento
+            </Link>
+          </>
+        }
+      />
     </div>
   )
 }

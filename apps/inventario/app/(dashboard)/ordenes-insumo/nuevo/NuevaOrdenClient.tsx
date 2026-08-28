@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { crearOrdenInsumo } from '../actions'
 import { ProductoThumb } from '../[id]/ProductoThumb'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface SedeOpt { id: string; nombre: string; grupo: string | null }
 export interface BodegaOpt { id: string; nombre: string }
@@ -107,8 +108,8 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
     setBuscar('')
   }
 
-  function quitarItem(i: number) {
-    setItems((prev) => prev.filter((_, idx) => idx !== i))
+  function quitarItem(productoId: string) {
+    setItems((prev) => prev.filter((it) => it.producto_id !== productoId))
   }
 
   async function onSede(id: string) {
@@ -153,10 +154,10 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
     }
   }
 
-  function setCantidad(i: number, v: number) {
+  function setCantidad(productoId: string, v: number) {
     // Los parametrizados topan en su máximo; los adicionales no tienen tope.
-    setItems((prev) => prev.map((it, idx) => {
-      if (idx !== i) return it
+    setItems((prev) => prev.map((it) => {
+      if (it.producto_id !== productoId) return it
       const tope = it.es_adicional || !it.maximo ? Infinity : it.maximo
       return { ...it, cantidad: Math.max(0, Math.min(tope, v)) }
     }))
@@ -194,6 +195,77 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
   }
 
   const total = items.filter((i) => i.cantidad > 0).length
+
+  const columnasItems: ColumnaTabla<ItemForm>[] = [
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.nombre, ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: (it) => (
+        <div className="flex items-start gap-2.5">
+          <ProductoThumb url={it.imagen_url} nombre={it.nombre} />
+          <div className="min-w-0">
+            <p className="font-body text-sm text-gray-900 break-words leading-snug">{it.nombre}</p>
+            {it.presentacion && <p className="font-body text-[11px] text-gray-400 mt-0.5">{it.presentacion}</p>}
+          </div>
+        </div>
+      ),
+    },
+    { id: 'presentacion', header: 'Presentación', valor: (it) => it.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    {
+      id: 'origen', header: 'Origen', valor: (it) => (it.es_adicional ? 'Adicional' : 'Parametrizado'),
+      ancho: 'w-28', prioridad: 2, tarjeta: 'badge',
+      celda: (it) => it.es_adicional ? (
+        <span className="inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+          <AlertCircle className="w-3 h-3" /> Adicional
+        </span>
+      ) : (
+        <span className="inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
+          Parametrizado
+        </span>
+      ),
+    },
+    {
+      id: 'inventario', header: 'Inventario', align: 'center', ancho: 'w-32', prioridad: 2, tarjeta: 'meta',
+      valor: (it) => stock.get(it.producto_id)?.disponible ?? '',
+      copiaTexto: (it) => {
+        const st = stock.get(it.producto_id)
+        return st ? `Stock ${st.real} / Disp ${st.disponible}` : ''
+      },
+      celda: (it) => {
+        const st = stock.get(it.producto_id)
+        if (!st) return <span className="font-body text-xs text-gray-300">—</span>
+        const neg = st.disponible < 0
+        return (
+          <div className="leading-tight">
+            <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
+            <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
+            {neg && (
+              <span className="inline-flex items-center gap-0.5 font-body text-[10px] text-red-500" title={`Comprometido en otras órdenes: ${st.comprometido}`}>
+                <AlertCircle className="w-2.5 h-2.5" /> sobre-pedido
+              </span>
+            )}
+          </div>
+        )
+      },
+    },
+    {
+      id: 'maximo', header: 'Máximo', align: 'center', ancho: 'w-20', prioridad: 3, tarjeta: 'meta',
+      valor: (it) => (it.es_adicional ? '' : it.maximo),
+      celda: (it) => (
+        <span className="font-body text-sm text-gray-500">
+          {it.es_adicional ? <span className="text-gray-300">sin tope</span> : it.maximo}
+        </span>
+      ),
+    },
+    {
+      id: 'cantidad', header: 'Cantidad', align: 'center', ancho: 'w-28', interactiva: true, tarjeta: 'meta',
+      valor: (it) => it.cantidad,
+      celda: (it) => (
+        <input type="number" min={0} max={it.es_adicional ? undefined : (it.maximo || undefined)} step="1" value={it.cantidad}
+          onChange={(e) => setCantidad(it.producto_id, Number(e.target.value) || 0)}
+          className={`${inputCls} text-center font-semibold`} />
+      ),
+    },
+  ]
 
   return (
     <div className="space-y-4">
@@ -266,84 +338,30 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
           </p>
           {cargando && <Loader2 className="w-4 h-4 animate-spin text-brand-green" />}
         </div>
-        {items.length === 0 ? (
-          <p className="font-body text-sm text-gray-400 text-center py-10">
-            {sedeId ? (cargando ? 'Cargando parametrización…' : 'Sin productos parametrizados.') : 'Selecciona una sede para cargar sus productos.'}
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[480px]">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Producto</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Origen</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-32">Inventario</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-20">Máximo</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Cantidad</th>
-                  <th className="px-3 py-2.5 w-10" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {items.map((it, i) => (
-                  <tr key={it.producto_id} className={`hover:bg-gray-50/60 ${it.es_adicional ? 'bg-amber-50/40' : ''}`}>
-                    <td className="px-4 py-2">
-                      <div className="flex items-start gap-2.5">
-                        <ProductoThumb url={it.imagen_url} nombre={it.nombre} />
-                        <div className="min-w-0">
-                          <p className="font-body text-sm text-gray-900 break-words leading-snug">{it.nombre}</p>
-                          {it.presentacion && <p className="font-body text-[11px] text-gray-400 mt-0.5">{it.presentacion}</p>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2">
-                      {it.es_adicional ? (
-                        <span className="inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
-                          <AlertCircle className="w-3 h-3" /> Adicional
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-700">
-                          Parametrizado
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {(() => {
-                        const st = stock.get(it.producto_id)
-                        if (!st) return <span className="font-body text-xs text-gray-300">—</span>
-                        const neg = st.disponible < 0
-                        return (
-                          <div className="leading-tight">
-                            <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
-                            <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
-                            {neg && (
-                              <span className="inline-flex items-center gap-0.5 font-body text-[10px] text-red-500" title={`Comprometido en otras órdenes: ${st.comprometido}`}>
-                                <AlertCircle className="w-2.5 h-2.5" /> sobre-pedido
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })()}
-                    </td>
-                    <td className="px-3 py-2 text-center font-body text-sm text-gray-500">
-                      {it.es_adicional ? <span className="text-gray-300">sin tope</span> : it.maximo}
-                    </td>
-                    <td className="px-3 py-2">
-                      <input type="number" min={0} max={it.es_adicional ? undefined : (it.maximo || undefined)} step="1" value={it.cantidad}
-                        onChange={(e) => setCantidad(i, Number(e.target.value) || 0)}
-                        className={`${inputCls} text-center font-semibold`} />
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {it.es_adicional && (
-                        <button type="button" onClick={() => quitarItem(i)} title="Quitar"
-                          className="text-gray-300 hover:text-red-500 transition-colors">×</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="p-4">
+          <TablaEstandar
+            id="orden-nueva-items"
+            titulo="Productos de la orden"
+            modulo="Inventario"
+            entidad="orden_insumo_items"
+            datos={items}
+            columnas={columnasItems}
+            filaId={(it) => it.producto_id}
+            busqueda="Buscar producto de la orden…"
+            filasPorPagina={0}
+            anchoAcciones="w-10"
+            filaClassName={(it) => (it.es_adicional ? 'bg-amber-50/40' : '')}
+            acciones={(it) => it.es_adicional ? (
+              <button type="button" onClick={() => quitarItem(it.producto_id)} title="Quitar"
+                className="text-gray-300 hover:text-red-500 transition-colors">×</button>
+            ) : <span />}
+            vacio={
+              <p className="font-body text-sm text-gray-400">
+                {sedeId ? (cargando ? 'Cargando parametrización…' : 'Sin productos parametrizados.') : 'Selecciona una sede para cargar sus productos.'}
+              </p>
+            }
+          />
+        </div>
 
         {/* Agregar producto fuera de la parametrización (no restrictivo) */}
         {sedeId && (

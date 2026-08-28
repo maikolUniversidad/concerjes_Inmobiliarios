@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Phone, Mail, MapPin, Clock, RefreshCw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { updateEstadoSolicitud } from '../actions'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 const ESTADOS = [
   { value: 'TODOS',       label: 'Todas' },
@@ -63,6 +64,72 @@ export default function SolicitudesClient({ solicitudes, total, page, pageSize }
 
   const totalPages = Math.ceil(total / pageSize)
 
+  /* eslint-disable @typescript-eslint/no-explicit-any */
+  const columnas: ColumnaTabla<any>[] = [
+    { id: 'numero', header: '#', valor: s => s.numero ?? '', ancho: 'w-24', className: 'font-mono text-xs text-gray-500', tarjeta: 'meta' },
+    {
+      id: 'cliente', header: 'Cliente', valor: s => s.cliente_nombre ?? '', ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: s => (
+        <>
+          <p className="font-semibold text-gray-900">{s.cliente_nombre}</p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <a href={`tel:${s.cliente_telefono}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-green">
+              <Phone className="w-3 h-3" />{s.cliente_telefono}
+            </a>
+            <a href={`mailto:${s.cliente_email}`} onClick={e => e.stopPropagation()} className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-green">
+              <Mail className="w-3 h-3" />
+            </a>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
+            <MapPin className="w-3 h-3" />{s.cliente_direccion}, {s.cliente_ciudad}
+          </div>
+        </>
+      ),
+    },
+    { id: 'telefono', header: 'Teléfono', valor: s => s.cliente_telefono ?? '', prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'oculto' },
+    { id: 'email', header: 'Correo', valor: s => s.cliente_email ?? '', prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'oculto' },
+    { id: 'ciudad', header: 'Ciudad', valor: s => s.cliente_ciudad ?? '', prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'oculto' },
+    {
+      id: 'servicio', header: 'Servicio', valor: s => s.tipos_servicio_hogar?.nombre ?? '', prioridad: 2, tarjeta: 'subtitulo',
+      celda: s => (
+        <>
+          <div className="flex items-center gap-1.5">
+            <span>{s.tipos_servicio_hogar?.icono}</span>
+            <span className="font-medium text-gray-800">{s.tipos_servicio_hogar?.nombre ?? '—'}</span>
+          </div>
+          {s.tarifas_servicio_hogar?.nombre && (
+            <p className="text-xs text-gray-400 mt-0.5">{s.tarifas_servicio_hogar.nombre}</p>
+          )}
+          <p className="text-xs text-gray-400">{s.frecuencia}</p>
+        </>
+      ),
+    },
+    { id: 'frecuencia', header: 'Frecuencia', valor: s => s.frecuencia ?? '', prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'oculto' },
+    {
+      id: 'fecha', header: 'Fecha/Hora', prioridad: 2, tarjeta: 'meta',
+      valor: s => `${s.fecha_deseada ?? ''} ${s.hora_inicio?.slice(0, 5) ?? ''}`.trim(),
+      celda: s => (
+        <>
+          <div className="flex items-center gap-1 text-gray-700">
+            <Calendar className="w-3.5 h-3.5 text-gray-400" />{s.fecha_deseada}
+          </div>
+          <div className="flex items-center gap-1 text-gray-500 text-xs mt-0.5">
+            <Clock className="w-3 h-3" />{s.hora_inicio?.slice(0, 5)}
+          </div>
+        </>
+      ),
+    },
+    {
+      id: 'estado', header: 'Estado', valor: s => s.estado ?? '', align: 'center', tarjeta: 'badge',
+      celda: s => (
+        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${EST_CLS[s.estado] ?? 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+          {s.estado}
+        </span>
+      ),
+    },
+    { id: 'notas', header: 'Notas', valor: s => s.notas ?? '', prioridad: 3, className: 'text-xs text-gray-400 max-w-[200px] truncate', tarjeta: 'cuerpo' },
+  ]
+
   return (
     <div className="space-y-4">
       {/* Filtros */}
@@ -93,93 +160,33 @@ export default function SolicitudesClient({ solicitudes, total, page, pageSize }
         </div>
       </div>
 
-      {/* Tabla */}
       {isPending ? (
         <div className="flex justify-center py-20"><RefreshCw className="w-6 h-6 animate-spin text-brand-green" /></div>
-      ) : solicitudes.length === 0 ? (
-        <div className="bg-white rounded-2xl border border-gray-100 p-16 text-center text-gray-400 text-sm">
-          No hay solicitudes con estos filtros.
-        </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-100 text-left">
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">#</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">Cliente</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">Servicio</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">Fecha/Hora</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">Estado</th>
-                  <th className="px-4 py-3 text-xs font-semibold text-gray-500">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {solicitudes.map((s: any) => {
-                  const cls = EST_CLS[s.estado] ?? 'bg-gray-100 text-gray-600 border-gray-200'
-                  const siguientes = SIGUIENTES[s.estado] ?? []
-                  return (
-                    <tr key={s.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.numero}</td>
-                      <td className="px-4 py-3">
-                        <p className="font-semibold text-gray-900">{s.cliente_nombre}</p>
-                        <div className="flex items-center gap-3 mt-0.5">
-                          <a href={`tel:${s.cliente_telefono}`} className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-green">
-                            <Phone className="w-3 h-3" />{s.cliente_telefono}
-                          </a>
-                          <a href={`mailto:${s.cliente_email}`} className="flex items-center gap-1 text-xs text-gray-500 hover:text-brand-green">
-                            <Mail className="w-3 h-3" />
-                          </a>
-                        </div>
-                        <div className="flex items-center gap-1 text-xs text-gray-400 mt-0.5">
-                          <MapPin className="w-3 h-3" />{s.cliente_direccion}, {s.cliente_ciudad}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <span>{s.tipos_servicio_hogar?.icono}</span>
-                          <span className="font-medium text-gray-800">{s.tipos_servicio_hogar?.nombre ?? '—'}</span>
-                        </div>
-                        {s.tarifas_servicio_hogar?.nombre && (
-                          <p className="text-xs text-gray-400 mt-0.5">{s.tarifas_servicio_hogar.nombre}</p>
-                        )}
-                        <p className="text-xs text-gray-400">{s.frecuencia}</p>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 text-gray-700">
-                          <Calendar className="w-3.5 h-3.5 text-gray-400" />
-                          {s.fecha_deseada}
-                        </div>
-                        <div className="flex items-center gap-1 text-gray-500 text-xs mt-0.5">
-                          <Clock className="w-3 h-3" />{s.hora_inicio?.slice(0, 5)}
-                        </div>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border ${cls}`}>
-                          {s.estado}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1.5 flex-wrap">
-                          {siguientes.map((acc) => (
-                            <button key={acc.value} onClick={() => cambiarEstado(s.id, acc.value)}
-                              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80 ${acc.cls}`}>
-                              {acc.label}
-                            </button>
-                          ))}
-                        </div>
-                        {s.notas && (
-                          <p className="text-xs text-gray-400 mt-1 truncate max-w-[160px]" title={s.notas}>
-                            📝 {s.notas}
-                          </p>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+        <>
+          <TablaEstandar
+            id="servicios-solicitudes"
+            titulo="Solicitudes de servicio"
+            modulo="Servicios del Hogar"
+            entidad="solicitudes_servicio_hogar"
+            datos={solicitudes}
+            columnas={columnas}
+            filaId={s => String(s.id)}
+            busqueda={false}
+            filasPorPagina={0}
+            anchoAcciones="w-48"
+            acciones={s => (
+              <div className="flex gap-1.5 flex-wrap justify-end">
+                {(SIGUIENTES[s.estado] ?? []).map((acc) => (
+                  <button key={acc.value} onClick={() => cambiarEstado(s.id, acc.value)}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-opacity hover:opacity-80 ${acc.cls}`}>
+                    {acc.label}
+                  </button>
+                ))}
+              </div>
+            )}
+            vacio={<p className="text-sm text-gray-400">No hay solicitudes con estos filtros.</p>}
+          />
 
           {/* Paginación */}
           {totalPages > 1 && (
@@ -197,7 +204,7 @@ export default function SolicitudesClient({ solicitudes, total, page, pageSize }
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   )

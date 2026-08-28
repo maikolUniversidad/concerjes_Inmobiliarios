@@ -2,13 +2,14 @@
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, Search, X, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown, FileSpreadsheet, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { createClient } from '@/lib/supabase/client'
 import { traerTodoPorIds } from '@/lib/supabase/paginado'
 import { calcularUrgencia, fmtFecha } from './urgencia'
 import { exportarOrdenesExcel, type ItemExport } from './exportarExcel'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface OrdenRow {
   id: string
@@ -50,10 +51,6 @@ function fmt(iso: string | null) {
   if (!iso) return '—'
   return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 }
-
-// Búsqueda "inteligente": sin acentos/mayúsculas, por tokens (cada palabra debe
-// aparecer, en cualquier orden).
-const norm = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase()
 
 type Tab = 'entregar' | 'proceso' | 'todas'
 
@@ -101,6 +98,32 @@ function ReportePorCreador({ ordenes }: { ordenes: OrdenRow[] }) {
     return { filas, estadosPresentes }
   }, [ordenes])
 
+  const columnasReporte: ColumnaTabla<FilaReporte>[] = [
+    {
+      id: 'nombre', header: 'Creado por', valor: (f) => f.nombre, ancho: 'min-w-[200px]', tarjeta: 'titulo',
+      celda: (f) => (
+        <span className="inline-flex items-center gap-1.5 font-body text-sm text-gray-800">
+          <UserCircle2 className="w-4 h-4 text-gray-300 shrink-0" /> {f.nombre}
+        </span>
+      ),
+    },
+    {
+      id: 'total', header: 'Total', valor: (f) => f.total, align: 'center', ancho: 'w-20', tarjeta: 'badge',
+      celda: (f) => <span className="font-heading font-bold text-sm text-brand-green">{f.total}</span>,
+    },
+    ...estadosPresentes.map((e): ColumnaTabla<FilaReporte> => ({
+      id: e,
+      header: metaEstado(e).label,
+      valor: (f) => f.porEstado[e] ?? 0,
+      align: 'center',
+      prioridad: 2,
+      tarjeta: 'meta',
+      celda: (f) => f.porEstado[e]
+        ? <span className={`inline-block min-w-[22px] font-body text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${metaEstado(e).cls}`}>{f.porEstado[e]}</span>
+        : <span className="font-body text-xs text-gray-200">·</span>,
+    })),
+  ]
+
   if (ordenes.length === 0) return null
 
   return (
@@ -115,52 +138,25 @@ function ReportePorCreador({ ordenes }: { ordenes: OrdenRow[] }) {
       </button>
 
       {abierto && (
-        <div className="border-t border-gray-100 overflow-x-auto">
-          <table className="w-full min-w-[560px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Creado por</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-20">Total</th>
-                {estadosPresentes.map((e) => (
-                  <th key={e} className="text-center font-body font-semibold text-[10px] text-gray-500 uppercase px-2 py-2.5 whitespace-nowrap">
-                    {metaEstado(e).label}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filas.map((f) => (
-                <tr key={f.id} className="hover:bg-gray-50/60">
-                  <td className="px-4 py-2.5">
-                    <span className="inline-flex items-center gap-1.5 font-body text-sm text-gray-800">
-                      <UserCircle2 className="w-4 h-4 text-gray-300 shrink-0" /> {f.nombre}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2.5 text-center">
-                    <span className="font-heading font-bold text-sm text-brand-green">{f.total}</span>
-                  </td>
-                  {estadosPresentes.map((e) => (
-                    <td key={e} className="px-2 py-2.5 text-center">
-                      {f.porEstado[e]
-                        ? <span className={`inline-block min-w-[22px] font-body text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${metaEstado(e).cls}`}>{f.porEstado[e]}</span>
-                        : <span className="font-body text-xs text-gray-200">·</span>}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="bg-gray-50/70 border-t border-gray-100">
-                <td className="px-4 py-2.5 font-body font-semibold text-sm text-gray-700">Total</td>
-                <td className="px-3 py-2.5 text-center font-heading font-bold text-sm text-gray-900">{ordenes.length}</td>
-                {estadosPresentes.map((e) => (
-                  <td key={e} className="px-2 py-2.5 text-center font-body text-xs font-semibold text-gray-600">
-                    {filas.reduce((s, f) => s + (f.porEstado[e] ?? 0), 0)}
-                  </td>
-                ))}
-              </tr>
-            </tfoot>
-          </table>
+        <div className="border-t border-gray-100 p-4">
+          <TablaEstandar
+            id="ordenes-reporte-creador"
+            titulo="Órdenes por creador"
+            modulo="Inventario"
+            entidad="ordenes_insumo"
+            datos={filas}
+            columnas={columnasReporte}
+            filaId={(f) => f.id}
+            busqueda="Buscar usuario…"
+            filasPorPagina={0}
+            pie={(fs) => ({
+              nombre: 'Total',
+              total: <span className="font-heading font-bold text-gray-900">{fs.reduce((a, f) => a + f.total, 0)}</span>,
+              ...Object.fromEntries(estadosPresentes.map((e) => [
+                e, fs.reduce((acc, f) => acc + (f.porEstado[e] ?? 0), 0),
+              ])),
+            })}
+          />
         </div>
       )}
     </div>
@@ -178,7 +174,6 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   const [showFiltro, setShowFiltro] = useState(false)
   const [filtroCreador, setFiltroCreador] = useState<string>('todos')
   const [showCreador, setShowCreador] = useState(false)
-  const [q, setQ] = useState('')
 
   // Lista de creadores presentes (para el filtro "creado por").
   const creadores = useMemo(() => {
@@ -205,11 +200,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     const base = tab === 'proceso' ? proceso : tab === 'entregar' ? porEntregar : ordenes
     const porEstado = filtroEstado === 'todos' ? base : base.filter((o) => o.estado === filtroEstado)
     const porCreador = filtroCreador === 'todos' ? porEstado : porEstado.filter((o) => (o.creador_id ?? 'sin') === filtroCreador)
-    const tokens = norm(q).split(/\s+/).filter(Boolean)
-    const filtrada = tokens.length === 0 ? porCreador : porCreador.filter((o) => {
-      const heno = norm(`${o.numero} ${o.sede} ${o.creador_nombre ?? ''}`)
-      return tokens.every((t) => heno.includes(t))
-    })
+    const filtrada = porCreador
     // En "Por entregar" se ordena por urgencia (vencidas primero), luego por
     // fecha pactada más próxima y por más recientes.
     if (tab !== 'entregar') return filtrada
@@ -221,7 +212,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       if (fa !== fb) return fa < fb ? -1 : 1
       return a.created_at < b.created_at ? 1 : -1
     })
-  }, [tab, proceso, porEntregar, ordenes, filtroEstado, filtroCreador, q])
+  }, [tab, proceso, porEntregar, ordenes, filtroEstado, filtroCreador])
 
   // ── Exportar a Excel lo que está filtrado en pantalla ──────────────────────
   const [exportando, setExportando] = useState(false)
@@ -272,23 +263,67 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     }
   }
 
+  const columnas: ColumnaTabla<OrdenRow>[] = [
+    {
+      id: 'numero', header: 'Número', valor: o => o.numero, tarjeta: 'titulo', ancho: 'w-36',
+      celda: o => (
+        <Link href={`/ordenes-insumo/${o.id}`} onClick={e => e.stopPropagation()}
+          className="font-heading font-bold text-sm text-gray-900 hover:text-brand-green">
+          {o.numero}
+        </Link>
+      ),
+    },
+    {
+      id: 'sede', header: 'Sede', valor: o => o.sede, ancho: 'min-w-[220px]', tarjeta: 'subtitulo',
+      celda: o => (
+        <span className="font-body text-sm text-gray-600 flex items-center gap-1">
+          <MapPin className="w-3 h-3 text-brand-green shrink-0" />
+          <span className="truncate max-w-[280px]" title={o.sede}>{o.sede}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'estado', header: 'Estado', valor: o => metaEstado(o.estado).label, align: 'center', tarjeta: 'badge',
+      celda: o => {
+        const meta = metaEstado(o.estado)
+        return <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${meta.cls}`}>{meta.label}</span>
+      },
+    },
+    {
+      id: 'urgencia', header: 'Urgencia', align: 'center', prioridad: 2, tarjeta: 'badge',
+      valor: o => calcularUrgencia(o).label ?? '',
+      celda: o => {
+        const urg = calcularUrgencia(o)
+        return urg.label
+          ? <span className={`inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${urg.cls}`}>
+              {urg.rank <= 1 && <AlertTriangle className="w-2.5 h-2.5" />}{urg.label}
+            </span>
+          : <span className="text-gray-200">—</span>
+      },
+    },
+    { id: 'items', header: 'Ítems', valor: o => o.total_items, align: 'right', prioridad: 2, tarjeta: 'meta' },
+    {
+      id: 'alistado', header: 'Alistado', align: 'right', prioridad: 3, tarjeta: 'meta',
+      valor: o => `${o.alistados}/${o.total_items}`,
+    },
+    { id: 'responsables', header: 'Resp.', valor: o => o.responsables, align: 'right', prioridad: 3, tarjeta: 'oculto' },
+    {
+      id: 'creada', header: 'Creada', valor: o => fmt(o.created_at), prioridad: 2,
+      className: 'whitespace-nowrap text-xs text-gray-400', tarjeta: 'meta',
+    },
+    {
+      id: 'entrega', header: 'Entrega', prioridad: 2, tarjeta: 'meta',
+      valor: o => (o.fecha_entrega_pactada ? fmtFecha(o.fecha_entrega_pactada) : ''),
+      className: 'whitespace-nowrap text-xs text-gray-500',
+    },
+    {
+      id: 'creador', header: 'Creada por', valor: o => o.creador_nombre ?? '', prioridad: 3,
+      className: 'text-xs text-gray-500', tarjeta: 'meta',
+    },
+  ]
+
   return (
     <div className="space-y-4">
-      {/* Buscador inteligente por número o sede */}
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-        <input
-          value={q} onChange={(e) => setQ(e.target.value)}
-          placeholder="Buscar por número o sede…"
-          className="w-full rounded-xl border border-gray-200 bg-white py-2.5 pl-10 pr-9 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20"
-        />
-        {q && (
-          <button onClick={() => setQ('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
-            <X className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
       {/* Reporte de órdenes por quién la creó (estado + conteo).
           Usa la lista YA filtrada (tab + estado + creador + búsqueda) para que
           los filtros de pantalla también afecten el reporte. */}
@@ -379,79 +414,87 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
         </div>
       </div>
 
-      {lista.length === 0 ? (
-        <div className="bg-white border border-gray-100 rounded-2xl p-16 text-center shadow-sm">
-          <ClipboardList className="w-12 h-12 text-gray-200 mx-auto mb-3" />
-          <p className="font-body text-sm text-gray-400">
-            {q ? 'Ninguna orden coincide con tu búsqueda.'
-              : tab === 'entregar' ? 'No hay órdenes pendientes por entregar.'
-              : tab === 'proceso' ? 'No hay órdenes por procesar.'
-              : filtroEstado !== 'todos' ? 'No hay órdenes con ese estado.'
-              : 'Aún no hay órdenes de insumo.'}
-          </p>
-        </div>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-          {lista.map((o) => {
-            const meta = metaEstado(o.estado)
-            const urg = calcularUrgencia(o)
-            const pct = o.total_items > 0 ? Math.round((o.alistados / o.total_items) * 100) : 0
-            // Borde de acento para lo más urgente.
-            const acento = urg.nivel === 'VENCIDA' ? 'border-red-300' : urg.nivel === 'HOY' ? 'border-orange-300' : urg.nivel === 'URGENTE' ? 'border-amber-300' : 'border-gray-100'
-            return (
-              <Link key={o.id} href={`/ordenes-insumo/${o.id}`}
-                className={`bg-white border rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group ${acento}`}>
-                <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <p className="font-heading font-bold text-sm text-gray-900">{o.numero}</p>
-                    <p className="font-body text-xs text-gray-500 truncate flex items-center gap-1 mt-0.5">
-                      <MapPin className="w-3 h-3 text-brand-green shrink-0" /> {o.sede}
-                    </p>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 shrink-0">
-                    <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
-                    {urg.label && (
-                      <span className={`inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${urg.cls}`}>
-                        {urg.rank <= 1 && <AlertTriangle className="w-2.5 h-2.5" />}{urg.label}
-                      </span>
-                    )}
-                  </div>
+      <TablaEstandar
+        id="ordenes-insumo"
+        titulo="Órdenes de insumo"
+        modulo="Inventario"
+        entidad="ordenes_insumo"
+        datos={lista}
+        columnas={columnas}
+        filaId={o => o.id}
+        busqueda="Buscar por número, sede o creador…"
+        gridTarjetas="grid gap-3 sm:grid-cols-2 xl:grid-cols-3"
+        tarjetaSinMarco
+        vacio={
+          <>
+            <ClipboardList className="w-12 h-12 text-gray-200 mx-auto mb-3" />
+            <p className="font-body text-sm text-gray-400">
+              {tab === 'entregar' ? 'No hay órdenes pendientes por entregar.'
+                : tab === 'proceso' ? 'No hay órdenes por procesar.'
+                : filtroEstado !== 'todos' ? 'No hay órdenes con ese estado.'
+                : 'Aún no hay órdenes de insumo.'}
+            </p>
+          </>
+        }
+        renderTarjeta={o => {
+          const meta = metaEstado(o.estado)
+          const urg = calcularUrgencia(o)
+          const pct = o.total_items > 0 ? Math.round((o.alistados / o.total_items) * 100) : 0
+          // Borde de acento para lo más urgente.
+          const acento = urg.nivel === 'VENCIDA' ? 'border-red-300' : urg.nivel === 'HOY' ? 'border-orange-300' : urg.nivel === 'URGENTE' ? 'border-amber-300' : 'border-gray-100'
+          return (
+            <Link href={`/ordenes-insumo/${o.id}`}
+              className={`bg-white border rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group block ${acento}`}>
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="font-heading font-bold text-sm text-gray-900">{o.numero}</p>
+                  <p className="font-body text-xs text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-brand-green shrink-0" /> {o.sede}
+                  </p>
                 </div>
-
-                <div className="mt-3 flex items-center gap-3 font-body text-xs text-gray-500 flex-wrap">
-                  <span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5" /> {o.total_items} ítems</span>
-                  <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {o.responsables}</span>
-                  <span className="inline-flex items-center gap-1">
-                    {o.estado === 'DESPACHADO' ? <Clock className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                    {o.estado === 'DESPACHADO' ? fmt(o.despachado_at) : fmt(o.created_at)}
-                  </span>
-                  {o.fecha_entrega_pactada && (
-                    <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Entrega {fmtFecha(o.fecha_entrega_pactada)}</span>
-                  )}
-                  {o.creador_nombre && (
-                    <span className="inline-flex items-center gap-1" title="Creada por"><UserCircle2 className="w-3.5 h-3.5" /> {o.creador_nombre}</span>
+                <div className="flex flex-col items-end gap-1 shrink-0">
+                  <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+                  {urg.label && (
+                    <span className={`inline-flex items-center gap-1 font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${urg.cls}`}>
+                      {urg.rank <= 1 && <AlertTriangle className="w-2.5 h-2.5" />}{urg.label}
+                    </span>
                   )}
                 </div>
+              </div>
 
-                {!['DESPACHADO', 'RECIBIDO', 'ANULADA'].includes(o.estado) && (
-                  <div className="mt-3">
-                    <div className="flex items-center justify-between font-body text-[11px] text-gray-400 mb-1">
-                      <span>Alistado</span><span>{o.alistados}/{o.total_items}</span>
-                    </div>
-                    <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
-                      <div className="h-full bg-brand-green transition-all" style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
+              <div className="mt-3 flex items-center gap-3 font-body text-xs text-gray-500 flex-wrap">
+                <span className="inline-flex items-center gap-1"><Package className="w-3.5 h-3.5" /> {o.total_items} ítems</span>
+                <span className="inline-flex items-center gap-1"><Users className="w-3.5 h-3.5" /> {o.responsables}</span>
+                <span className="inline-flex items-center gap-1">
+                  {o.estado === 'DESPACHADO' ? <Clock className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                  {o.estado === 'DESPACHADO' ? fmt(o.despachado_at) : fmt(o.created_at)}
+                </span>
+                {o.fecha_entrega_pactada && (
+                  <span className="inline-flex items-center gap-1"><CalendarClock className="w-3.5 h-3.5" /> Entrega {fmtFecha(o.fecha_entrega_pactada)}</span>
                 )}
+                {o.creador_nombre && (
+                  <span className="inline-flex items-center gap-1" title="Creada por"><UserCircle2 className="w-3.5 h-3.5" /> {o.creador_nombre}</span>
+                )}
+              </div>
 
-                <div className="mt-3 flex justify-end">
-                  <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brand-green transition-colors" />
+              {!['DESPACHADO', 'RECIBIDO', 'ANULADA'].includes(o.estado) && (
+                <div className="mt-3">
+                  <div className="flex items-center justify-between font-body text-[11px] text-gray-400 mb-1">
+                    <span>Alistado</span><span>{o.alistados}/{o.total_items}</span>
+                  </div>
+                  <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                    <div className="h-full bg-brand-green transition-all" style={{ width: `${pct}%` }} />
+                  </div>
                 </div>
-              </Link>
-            )
-          })}
-        </div>
-      )}
+              )}
+
+              <div className="mt-3 flex justify-end">
+                <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-brand-green transition-colors" />
+              </div>
+            </Link>
+          )
+        }}
+      />
     </div>
   )
 }

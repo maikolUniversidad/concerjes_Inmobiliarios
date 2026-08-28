@@ -7,9 +7,10 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario } from '@/lib/permisos-server'
-import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
+import { type CategoriaRotacion } from '@/lib/types/database'
 import { MovimientosChart, type ChartPoint } from './MovimientosChart'
 import { PedidosBodegaTabla, type PedidoFila } from './PedidosBodegaTabla'
+import { AlertasStockTabla } from './AlertasStockTabla'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 export const dynamic = 'force-dynamic'
@@ -202,49 +203,16 @@ export default async function DashboardPage() {
               </Link>
             )}
           </div>
-          {criticos.length === 0 ? (
-            <div className="h-32 bg-green-50/50 rounded-xl border border-green-100 flex flex-col items-center justify-center text-green-700">
-              <Package className="w-8 h-8 mb-2 opacity-60" />
-              <p className="font-body text-sm">Todo el inventario está por encima del mínimo ✅</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-gray-100">
-                    <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Producto</th>
-                    <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Cat.</th>
-                    <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Disponible</th>
-                    <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Mínimo</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {criticos.slice(0, 8).map((p) => {
-                    const cat = CATEGORIA_LABELS[p.cat_rotacion]
-                    const real = p.stock?.cantidad_real ?? 0
-                    return (
-                      <tr key={p.id} className="hover:bg-gray-50/50">
-                        <td className="px-3 py-2.5">
-                          <Link href={`/productos/${p.id}`} className="font-body font-medium text-sm text-gray-900 hover:text-brand-green">{p.nombre_estandar}</Link>
-                          <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <span className={`font-body font-bold text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.color}`}>{p.cat_rotacion}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right">
-                          <span className={`font-heading font-bold text-base ${real === 0 ? 'text-red-600' : 'text-orange-600'}`}>{real}</span>
-                        </td>
-                        <td className="px-3 py-2.5 text-right font-body text-sm text-gray-500">{p.stock_minimo_def}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-              {criticos.length > 8 && (
-                <p className="font-body text-xs text-gray-400 mt-3 text-center">+ {criticos.length - 8} productos más en estado crítico</p>
-              )}
-            </div>
-          )}
+          <AlertasStockTabla
+            criticos={criticos.map((p) => ({
+              id: p.id,
+              nombre_estandar: p.nombre_estandar,
+              presentacion: p.presentacion,
+              cat_rotacion: p.cat_rotacion,
+              stock_minimo_def: p.stock_minimo_def,
+              real: p.stock?.cantidad_real ?? 0,
+            }))}
+          />
         </div>
       )}
 

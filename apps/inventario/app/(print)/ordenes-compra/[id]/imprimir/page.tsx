@@ -94,7 +94,8 @@ export default async function OCImprimirPage({ params }: { params: Promise<{ id:
         </div>
 
         {/* Ítems */}
-        <table className="mt-6 w-full border-collapse text-sm">
+        <div className="mt-6 overflow-x-auto print:overflow-visible">
+        <table className="w-full min-w-[520px] border-collapse text-sm print:min-w-0">
           <thead>
             <tr className="border-y-2 border-gray-800 text-left font-body text-[11px] uppercase tracking-wide text-gray-600">
               <th className="py-2 pr-2 font-semibold">#</th>
@@ -122,6 +123,7 @@ export default async function OCImprimirPage({ params }: { params: Promise<{ id:
             )}
           </tbody>
         </table>
+        </div>
 
         {/* Total */}
         <div className="mt-4 flex justify-end">

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { AlertTriangle, Truck, Loader2, PackageCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import { registrarEnvioRestante } from '../actions'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 interface ItemIn {
@@ -54,6 +55,54 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
     })
   }
 
+  const columnas: ColumnaTabla<ItemIn>[] = [
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
+      ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: (it) => (
+        <>
+          <p className="font-body text-sm text-gray-900">{it.producto?.nombre_estandar ?? '—'}</p>
+          {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
+        </>
+      ),
+    },
+    { id: 'presentacion', header: 'Presentación', valor: (it) => it.producto?.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    { id: 'pedido', header: 'Pedido', valor: (it) => Number(it.cantidad_solicitada), align: 'right', prioridad: 2, className: 'text-gray-600', tarjeta: 'meta' },
+    { id: 'enviado', header: 'Enviado', valor: (it) => Number(it.cantidad_alistada), align: 'right', prioridad: 2, className: 'text-gray-600', tarjeta: 'meta' },
+    {
+      id: 'pendiente', header: 'Pendiente', align: 'right', tarjeta: 'badge',
+      valor: (it) => Number(it.cantidad_solicitada) - Number(it.cantidad_alistada),
+      className: 'font-heading font-bold text-amber-700',
+    },
+    {
+      id: 'stock', header: 'Stock', valor: (it) => stockDisp(it), align: 'right', prioridad: 2, tarjeta: 'meta',
+      celda: (it) => {
+        const disp = stockDisp(it)
+        return <span className={disp <= 0 ? 'text-red-500' : 'text-gray-500'}>{disp}</span>
+      },
+    },
+  ]
+
+  if (puedeAlistar) {
+    columnas.push({
+      id: 'enviar', header: 'Enviar ahora', align: 'center', ancho: 'w-28', interactiva: true, tarjeta: 'meta',
+      valor: (it) => Number(cant[it.id]) || 0,
+      celda: (it) => {
+        const pend = Number(it.cantidad_solicitada) - Number(it.cantidad_alistada)
+        const valor = Number(cant[it.id]) || 0
+        const sinStock = valor > stockDisp(it)
+        return (
+          <>
+            <input type="number" min={0} max={pend} value={cant[it.id] ?? 0}
+              onChange={e => setCant(c => ({ ...c, [it.id]: Math.max(0, Math.min(pend, Number(e.target.value) || 0)) }))}
+              className={`w-20 rounded-lg border px-2 py-1 text-sm text-right outline-none focus:border-brand-green ${sinStock ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
+            {sinStock && <p className="font-body text-[10px] text-red-500 mt-0.5">supera stock</p>}
+          </>
+        )
+      },
+    })
+  }
+
   return (
     <div className="rounded-2xl border border-amber-200 bg-amber-50/40 shadow-sm overflow-hidden">
       <div className="flex items-center gap-2 border-b border-amber-100 px-5 py-3 text-amber-800">
@@ -65,47 +114,19 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
         Esta orden se despachó con productos pendientes. Envía lo que falta: se descuenta del inventario y queda registrado en la trazabilidad.
       </p>
 
-      <div className="overflow-x-auto p-3">
-        <table className="w-full min-w-[560px] text-sm">
-          <thead>
-            <tr className="text-left font-body text-[11px] uppercase tracking-wide text-gray-400">
-              <th className="px-2 py-1.5">Producto</th>
-              <th className="px-2 py-1.5 text-right">Pedido</th>
-              <th className="px-2 py-1.5 text-right">Enviado</th>
-              <th className="px-2 py-1.5 text-right">Pendiente</th>
-              <th className="px-2 py-1.5 text-right">Stock</th>
-              {puedeAlistar && <th className="px-2 py-1.5 text-center w-28">Enviar ahora</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {pendientes.map(it => {
-              const pend = Number(it.cantidad_solicitada) - Number(it.cantidad_alistada)
-              const disp = stockDisp(it)
-              const val = Number(cant[it.id]) || 0
-              const sinStock = val > disp
-              return (
-                <tr key={it.id} className="border-t border-amber-100/70 align-middle">
-                  <td className="px-2 py-2">
-                    <p className="font-body text-sm text-gray-900">{it.producto?.nombre_estandar ?? '—'}</p>
-                    {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400">{it.producto.presentacion}</p>}
-                  </td>
-                  <td className="px-2 py-2 text-right font-body text-gray-600">{Number(it.cantidad_solicitada)}</td>
-                  <td className="px-2 py-2 text-right font-body text-gray-600">{Number(it.cantidad_alistada)}</td>
-                  <td className="px-2 py-2 text-right font-heading font-bold text-amber-700">{pend}</td>
-                  <td className={`px-2 py-2 text-right font-body ${disp <= 0 ? 'text-red-500' : 'text-gray-500'}`}>{disp}</td>
-                  {puedeAlistar && (
-                    <td className="px-2 py-2 text-center">
-                      <input type="number" min={0} max={pend} value={cant[it.id] ?? 0}
-                        onChange={e => setCant(c => ({ ...c, [it.id]: Math.max(0, Math.min(pend, Number(e.target.value) || 0)) }))}
-                        className={`w-20 rounded-lg border px-2 py-1 text-sm text-right outline-none focus:border-brand-green ${sinStock ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
-                      {sinStock && <p className="font-body text-[10px] text-red-500 mt-0.5">supera stock</p>}
-                    </td>
-                  )}
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="p-3">
+        <TablaEstandar
+          id="orden-envio-restante"
+          titulo="Envío restante"
+          modulo="Inventario"
+          entidad="orden_insumo_items"
+          datos={pendientes}
+          columnas={columnas}
+          filaId={(it) => it.id}
+          busqueda={false}
+          filasPorPagina={0}
+          descargable={false}
+        />
       </div>
 
       {puedeAlistar ? (

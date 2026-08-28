@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { actualizarItemSolicitado, agregarItemSolicitado, quitarItemSolicitado } from '../actions'
 import { ProductoThumb } from './ProductoThumb'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 interface Item {
   id: string
@@ -132,6 +133,78 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
     })
   }
 
+  const columnas: ColumnaTabla<Item>[] = [
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
+      ancho: 'min-w-[240px]', tarjeta: 'titulo',
+      celda: (it) => (
+        <div className="flex items-start gap-2.5">
+          <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
+          <div className="min-w-0">
+            <p className="font-body text-sm text-gray-900 break-words leading-snug">{it.producto?.nombre_estandar ?? '—'}</p>
+            {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400 mt-0.5">{it.producto.presentacion}</p>}
+          </div>
+        </div>
+      ),
+    },
+    { id: 'presentacion', header: 'Presentación', valor: (it) => it.producto?.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    {
+      id: 'tipo', header: 'Tipo', valor: (it) => (it.es_adicional ? 'Adicional' : 'Parametrizado'),
+      ancho: 'w-28', prioridad: 2, tarjeta: 'badge',
+      celda: (it) => it.es_adicional
+        ? <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
+        : <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>,
+    },
+    {
+      id: 'inventario', header: 'Inventario', align: 'center', ancho: 'w-28', prioridad: 2, tarjeta: 'meta',
+      valor: (it) => stock.get(it.producto_id)?.disponible ?? '',
+      copiaTexto: (it) => {
+        const st = stock.get(it.producto_id)
+        return st ? `Stock ${st.real} / Disp ${st.disponible}` : ''
+      },
+      celda: (it) => {
+        const st = stock.get(it.producto_id)
+        if (!st) return <span className="font-body text-xs text-gray-300">—</span>
+        const neg = st.disponible < 0
+        return (
+          <div className="leading-tight">
+            <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
+            <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
+          </div>
+        )
+      },
+    },
+    {
+      id: 'cantidad', header: 'Cantidad', align: 'center', ancho: 'w-28', interactiva: puedeEditar, tarjeta: 'meta',
+      valor: (it) => Number(it.cantidad_solicitada),
+      celda: (it) => puedeEditar ? (
+        <input type="number" min={0} step="1"
+          value={cantidades[it.id] ?? 0}
+          onChange={(e) => setCantidades((prev) => ({ ...prev, [it.id]: Number(e.target.value) || 0 }))}
+          onBlur={() => guardarCantidad(it)}
+          disabled={pending}
+          className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
+      ) : (
+        <span className="font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</span>
+      ),
+    },
+    {
+      id: 'modificado', header: 'Modificado por', ancho: 'w-44', prioridad: 3, tarjeta: 'meta',
+      valor: (it) => it.modificado_nombre ?? '',
+      celda: (it) => it.modificado_nombre ? (
+        <span className="inline-flex items-center gap-1.5 font-body text-xs text-gray-600">
+          <User2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+          <span className="min-w-0">
+            <span className="block truncate max-w-[130px]">{it.modificado_nombre}</span>
+            {it.modificado_at && <span className="block text-[10px] text-gray-400">{fmtCorto(it.modificado_at)}</span>}
+          </span>
+        </span>
+      ) : (
+        <span className="font-body text-xs text-gray-300">—</span>
+      ),
+    },
+  ]
+
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap">
@@ -149,90 +222,27 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
         </div>
       )}
 
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[640px]">
-          <thead>
-            <tr className="bg-gray-50 border-b border-gray-100">
-              <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Producto</th>
-              <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Tipo</th>
-              <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Inventario</th>
-              <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Cantidad</th>
-              <th className="text-left  font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-44">Modificado por</th>
-              {puedeEditar && <th className="w-12 px-2" />}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {items.map((it) => (
-              <tr key={it.id} className={it.es_adicional ? 'bg-amber-50/30' : ''}>
-                <td className="px-4 py-2.5">
-                  <div className="flex items-start gap-2.5">
-                    <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
-                    <div className="min-w-0">
-                      <p className="font-body text-sm text-gray-900 break-words leading-snug">{it.producto?.nombre_estandar ?? '—'}</p>
-                      {it.producto?.presentacion && <p className="font-body text-[11px] text-gray-400 mt-0.5">{it.producto.presentacion}</p>}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-2.5">
-                  {it.es_adicional ? (
-                    <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
-                  ) : (
-                    <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  {(() => {
-                    const st = stock.get(it.producto_id)
-                    if (!st) return <span className="font-body text-xs text-gray-300">—</span>
-                    const neg = st.disponible < 0
-                    return (
-                      <div className="leading-tight">
-                        <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
-                        <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
-                      </div>
-                    )
-                  })()}
-                </td>
-                <td className="px-3 py-2.5 text-center">
-                  {puedeEditar ? (
-                    <input type="number" min={0} step="1"
-                      value={cantidades[it.id] ?? 0}
-                      onChange={(e) => setCantidades((prev) => ({ ...prev, [it.id]: Number(e.target.value) || 0 }))}
-                      onBlur={() => guardarCantidad(it)}
-                      disabled={pending}
-                      className="w-20 border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
-                  ) : (
-                    <span className="font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</span>
-                  )}
-                </td>
-                <td className="px-3 py-2.5">
-                  {it.modificado_nombre ? (
-                    <span className="inline-flex items-center gap-1.5 font-body text-xs text-gray-600">
-                      <User2 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                      <span className="min-w-0">
-                        <span className="block truncate max-w-[130px]">{it.modificado_nombre}</span>
-                        {it.modificado_at && <span className="block text-[10px] text-gray-400">{fmtCorto(it.modificado_at)}</span>}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="font-body text-xs text-gray-300">—</span>
-                  )}
-                </td>
-                {puedeEditar && (
-                  <td className="px-2 py-2.5 text-center">
-                    <button onClick={() => quitar(it)} disabled={busy === it.id || pending}
-                      className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40">
-                      {busy === it.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                    </button>
-                  </td>
-                )}
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr><td colSpan={puedeEditar ? 6 : 5} className="py-10 text-center font-body text-sm text-gray-400">La orden no tiene productos.</td></tr>
-            )}
-          </tbody>
-        </table>
+      <div className="p-4">
+        <TablaEstandar
+          id="orden-solicitud-items"
+          titulo="Productos de la solicitud"
+          modulo="Inventario"
+          entidad="orden_insumo_items"
+          datos={items}
+          columnas={columnas}
+          filaId={(it) => it.id}
+          busqueda="Buscar producto de la solicitud…"
+          filasPorPagina={0}
+          anchoAcciones="w-12"
+          filaClassName={(it) => (it.es_adicional ? 'bg-amber-50/30' : '')}
+          acciones={puedeEditar ? (it) => (
+            <button onClick={() => quitar(it)} disabled={busy === it.id || pending}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40">
+              {busy === it.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            </button>
+          ) : undefined}
+          vacio={<p className="font-body text-sm text-gray-400">La orden no tiene productos.</p>}
+        />
       </div>
 
       {/* Agregar producto */}

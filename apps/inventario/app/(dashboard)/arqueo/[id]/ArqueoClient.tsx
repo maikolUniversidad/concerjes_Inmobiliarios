@@ -1,10 +1,11 @@
 'use client'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  Search, Users, Loader2, CheckCircle2, AlertTriangle, Lock, Printer, ClipboardCheck, Wifi,
+  Users, Loader2, CheckCircle2, AlertTriangle, Lock, Printer, ClipboardCheck, Wifi,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { cerrarArqueo } from '../actions'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface ItemRow {
   id: string
@@ -38,7 +39,6 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
   const [items, setItems] = useState<ItemRow[]>(itemsIniciales)
   const [draft, setDraft] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState<Set<string>>(new Set())
-  const [search, setSearch] = useState('')
   const [filtro, setFiltro] = useState<'todos' | 'pendiente' | 'contado' | 'diferencia'>('todos')
   const [presentes, setPresentes] = useState<string[]>([])
   const [conectado, setConectado] = useState(false)
@@ -105,17 +105,76 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
   }, [items])
 
   const filtrados = useMemo(() => items.filter(i => {
-    const q = search.toLowerCase()
-    const matchS = !q || i.nombre.toLowerCase().includes(q) || String(i.ref ?? '').includes(q)
     const dif = i.cantidad_fisica !== null && Number(i.cantidad_fisica) !== Number(i.cantidad_sistema)
-    const matchF = filtro === 'todos' ||
+    return filtro === 'todos' ||
       (filtro === 'pendiente' && i.estado === 'PENDIENTE') ||
       (filtro === 'contado' && i.estado !== 'PENDIENTE') ||
       (filtro === 'diferencia' && dif)
-    return matchS && matchF
-  }), [items, search, filtro])
+  }), [items, filtro])
 
   const progreso = m.total > 0 ? Math.round((m.contados / m.total) * 100) : 0
+
+  const difDe = (it: ItemRow) =>
+    it.cantidad_fisica !== null ? Number(it.cantidad_fisica) - Number(it.cantidad_sistema) : null
+
+  const columnas: ColumnaTabla<ItemRow>[] = [
+    { id: 'ref', header: 'REF', valor: (it) => it.ref ?? '', ancho: 'w-20', prioridad: 2, className: 'font-mono text-xs text-gray-400', tarjeta: 'meta' },
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.nombre, ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: (it) => (
+        <>
+          <p className="font-body font-medium text-sm text-gray-900">{it.nombre}</p>
+          <p className="font-body text-xs text-gray-400">{it.presentacion}</p>
+        </>
+      ),
+    },
+    { id: 'presentacion', header: 'Presentación', valor: (it) => it.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    {
+      id: 'sistema', header: 'Sistema', valor: (it) => Number(it.cantidad_sistema), align: 'right', tarjeta: 'meta',
+      className: 'font-heading font-bold text-base text-gray-700',
+    },
+    {
+      id: 'fisico', header: 'Físico', align: 'center', ancho: 'w-32', interactiva: abierto, tarjeta: 'meta',
+      valor: (it) => (it.cantidad_fisica !== null ? Number(it.cantidad_fisica) : ''),
+      celda: (it) => {
+        const fisica = it.cantidad_fisica
+        const contado = it.estado !== 'PENDIENTE'
+        return abierto ? (
+          <div className="relative">
+            <input
+              type="number" min="0" step="0.01"
+              value={draft[it.id] ?? (fisica !== null ? String(fisica) : '')}
+              onChange={e => setDraft(d => ({ ...d, [it.id]: e.target.value }))}
+              onFocus={() => { focusRef.current = it.id }}
+              onBlur={() => { focusRef.current = null; contar(it) }}
+              onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
+              placeholder="—"
+              className={`w-full text-center border rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green
+                ${contado ? 'border-brand-green/40 bg-green-50/40' : 'border-gray-200'}`}
+            />
+            {saving.has(it.id) && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-green absolute right-1.5 top-2.5" />}
+          </div>
+        ) : (
+          <p className="text-center font-heading font-bold text-base text-gray-900">{fisica !== null ? Number(fisica) : '—'}</p>
+        )
+      },
+    },
+    {
+      id: 'diferencia', header: 'Diferencia', align: 'right', tarjeta: 'badge',
+      valor: (it) => difDe(it) ?? '',
+      celda: (it) => {
+        const dif = difDe(it)
+        if (dif === null) return <span className="text-gray-300">—</span>
+        if (dif === 0) return <span className="inline-flex items-center gap-1 text-green-600 font-body text-sm"><CheckCircle2 className="w-3.5 h-3.5" /> OK</span>
+        return (
+          <span className={`inline-flex items-center gap-1 font-heading font-bold text-sm ${dif < 0 ? 'text-red-600' : 'text-amber-600'}`}>
+            <AlertTriangle className="w-3.5 h-3.5" /> {dif > 0 ? '+' : ''}{dif}
+          </span>
+        )
+      },
+    },
+    { id: 'contadoPor', header: 'Contado por', valor: (it) => it.contado_por_nombre ?? '', prioridad: 2, className: 'text-xs text-gray-500', tarjeta: 'meta' },
+  ]
 
   return (
     <div className="space-y-5">
@@ -210,11 +269,6 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
 
       {/* Filtros */}
       <div className="bg-white border border-gray-100 rounded-xl p-3 flex flex-wrap gap-3 shadow-sm items-center">
-        <div className="flex items-center gap-2 border border-gray-200 rounded-lg px-3 py-2 flex-1 min-w-[200px]">
-          <Search className="w-4 h-4 text-gray-400 shrink-0" />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar producto por nombre o REF..."
-            className="font-body text-sm flex-1 outline-none placeholder:text-gray-400" />
-        </div>
         <div className="flex gap-1">
           {([['todos', 'Todos'], ['pendiente', 'Pendientes'], ['contado', 'Contados'], ['diferencia', 'Con diferencia']] as const).map(([k, l]) => (
             <button key={k} onClick={() => setFiltro(k)}
@@ -226,73 +280,22 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
       </div>
 
       {/* Tabla de conteo */}
-      <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Producto</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Sistema</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3 w-32">Físico</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Diferencia</th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Contado por</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filtrados.map(it => {
-                const fisica = it.cantidad_fisica
-                const dif = fisica !== null ? Number(fisica) - Number(it.cantidad_sistema) : null
-                const contado = it.estado !== 'PENDIENTE'
-                return (
-                  <tr key={it.id} className={`hover:bg-gray-50/50 ${dif !== null && dif !== 0 ? 'bg-red-50/30' : ''}`}>
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-gray-400">{it.ref ?? '—'}</span>
-                        <div>
-                          <p className="font-body font-medium text-sm text-gray-900">{it.nombre}</p>
-                          <p className="font-body text-xs text-gray-400">{it.presentacion}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-heading font-bold text-base text-gray-700">{Number(it.cantidad_sistema)}</td>
-                    <td className="px-4 py-2.5">
-                      {abierto ? (
-                        <div className="relative">
-                          <input
-                            type="number" min="0" step="0.01"
-                            value={draft[it.id] ?? (fisica !== null ? String(fisica) : '')}
-                            onChange={e => setDraft(d => ({ ...d, [it.id]: e.target.value }))}
-                            onFocus={() => { focusRef.current = it.id }}
-                            onBlur={() => { focusRef.current = null; contar(it) }}
-                            onKeyDown={e => { if (e.key === 'Enter') { e.currentTarget.blur() } }}
-                            placeholder="—"
-                            className={`w-full text-center border rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green
-                              ${contado ? 'border-brand-green/40 bg-green-50/40' : 'border-gray-200'}`}
-                          />
-                          {saving.has(it.id) && <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-green absolute right-1.5 top-2.5" />}
-                        </div>
-                      ) : (
-                        <p className="text-center font-heading font-bold text-base text-gray-900">{fisica !== null ? Number(fisica) : '—'}</p>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-right">
-                      {dif === null ? <span className="text-gray-300">—</span>
-                        : dif === 0 ? <span className="inline-flex items-center gap-1 text-green-600 font-body text-sm"><CheckCircle2 className="w-3.5 h-3.5" /> OK</span>
-                        : <span className={`inline-flex items-center gap-1 font-heading font-bold text-sm ${dif < 0 ? 'text-red-600' : 'text-amber-600'}`}>
-                            <AlertTriangle className="w-3.5 h-3.5" /> {dif > 0 ? '+' : ''}{dif}
-                          </span>}
-                    </td>
-                    <td className="px-4 py-2.5 font-body text-xs text-gray-500">{it.contado_por_nombre ?? '—'}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-        {filtrados.length === 0 && (
-          <p className="py-10 text-center font-body text-sm text-gray-400">No hay ítems que coincidan.</p>
-        )}
-      </div>
+      <TablaEstandar
+        id="arqueo-items"
+        titulo={`Arqueo ${arqueo.nombre}`}
+        modulo="Inventario"
+        entidad="arqueo_items"
+        datos={filtrados}
+        columnas={columnas}
+        filaId={(it) => it.id}
+        busqueda="Buscar producto por nombre o REF…"
+        filasPorPagina={0}
+        filaClassName={(it) => {
+          const dif = difDe(it)
+          return dif !== null && dif !== 0 ? 'bg-red-50/30' : ''
+        }}
+        vacio={<p className="font-body text-sm text-gray-400">No hay ítems que coincidan.</p>}
+      />
     </div>
   )
 }

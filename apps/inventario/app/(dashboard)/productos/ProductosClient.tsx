@@ -1,10 +1,11 @@
 'use client'
 import { useState, useMemo } from 'react'
-import { Search, Grid3X3, List, AlertTriangle, Eye, Pencil, ArrowLeftRight, Camera, SlidersHorizontal } from 'lucide-react'
+import { Search, AlertTriangle, Eye, Pencil, ArrowLeftRight, Camera, SlidersHorizontal } from 'lucide-react'
 import Link from 'next/link'
 import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 interface CceBien {
   id: string
@@ -50,7 +51,6 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [stockFilter, setStock] = useState('')
   const [cceFilter, setCce]     = useState('')
   const [invFilter, setInv]     = useState('')
-  const [view, setView]         = useState<'grid' | 'list'>('grid')
   const [scannerOpen, setScannerOpen] = useState(false)
 
   const filtered = useMemo(() => {
@@ -123,6 +123,94 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
     () => productos.find(p => p.inventario_periodo)?.inventario_periodo ?? null,
     [productos]
   )
+
+  const columnas: ColumnaTabla<Producto>[] = [
+    {
+      id: 'foto', header: '', valor: () => '', copiable: false, filtrable: false,
+      ancho: 'w-14', prioridad: 2, tarjeta: 'oculto',
+      celda: p => (
+        <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0">
+          {p.imagen_url
+            ? <Image src={p.imagen_url} alt={p.nombre_estandar} width={40} height={40} className="object-cover w-full h-full" />
+            : <div className="w-full h-full flex items-center justify-center text-lg">📦</div>}
+        </div>
+      ),
+    },
+    {
+      id: 'ref', header: 'REF', valor: p => p.ref ?? p.codigo ?? '', ancho: 'w-20', tarjeta: 'meta',
+      celda: p => (
+        <span className="font-mono text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">{p.ref ?? p.codigo}</span>
+      ),
+    },
+    {
+      id: 'nombre', header: 'Producto', valor: p => p.nombre_estandar, ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: p => (
+        <>
+          <Link href={`/productos/${p.id}`} onClick={e => e.stopPropagation()}
+            className="font-body font-medium text-sm text-gray-900 hover:text-brand-green line-clamp-2">
+            {p.nombre_estandar}
+          </Link>
+          <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
+          {noHallado(p) && (
+            <span className="inline-flex items-center gap-1 font-body text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5 mt-0.5"
+              title={`No se encontró en el inventario físico de ${p.inventario_periodo}`}>
+              🏷 No hallado{p.inventario_periodo ? ` · ${p.inventario_periodo}` : ''}
+            </span>
+          )}
+        </>
+      ),
+    },
+    { id: 'presentacion', header: 'Presentación', valor: p => p.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    { id: 'tipo', header: 'Tipo', valor: p => p.tipo_insumo, prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'oculto' },
+    {
+      id: 'cat', header: 'Cat.', valor: p => p.cat_rotacion, align: 'center', prioridad: 2, tarjeta: 'meta',
+      celda: p => {
+        const cat = CATEGORIA_LABELS[p.cat_rotacion]
+        return <span className={`font-body font-bold text-xs px-2 py-1 rounded-full ${cat.bg} ${cat.color}`}>{p.cat_rotacion}</span>
+      },
+    },
+    {
+      id: 'cce', header: 'CCE', prioridad: 3, tarjeta: 'oculto', ancho: 'max-w-[220px]',
+      valor: p => (p.cce ? `#${p.cce.item} · ${p.cce.bien}` : ''),
+      celda: p => p.cce ? (
+        <div className="space-y-0.5">
+          <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={`#${p.cce.item} · ${p.cce.bien}`}>
+            🏛 #{p.cce.item} · {p.cce.bien}
+          </span>
+          {p.cce_tipo === 'PROPIO' && (
+            <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 inline-block">
+              📦 Propio CCE: {p.stock_cce?.cantidad_real ?? 0} uds
+            </span>
+          )}
+          {p.cce_tipo === 'COMPARTIDO' && (
+            <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 inline-block">↔ Compartido</span>
+          )}
+        </div>
+      ) : null,
+    },
+    {
+      id: 'stock', header: 'Stock', valor: p => p.stock?.cantidad_real ?? 0, align: 'right', tarjeta: 'meta',
+      celda: p => {
+        const real = p.stock?.cantidad_real ?? 0
+        return real > 0
+          ? <><span className="font-heading font-bold text-base text-gray-900">{real}</span><span className="font-body text-xs text-gray-400 ml-1">/ mín {p.stock_minimo_def}</span></>
+          : <span className="font-body text-sm font-bold text-red-600">No hay</span>
+      },
+    },
+    { id: 'minimo', header: 'Mín.', valor: p => p.stock_minimo_def, align: 'right', prioridad: 3, className: 'text-gray-500', tarjeta: 'oculto' },
+    {
+      id: 'estado', header: 'Estado', align: 'center', tarjeta: 'badge',
+      valor: p => getStockStatus(p.stock?.cantidad_real ?? 0, p.stock_minimo_def).label,
+      celda: p => {
+        const status = getStockStatus(p.stock?.cantidad_real ?? 0, p.stock_minimo_def)
+        return <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${status.cls}`}>{status.label}</span>
+      },
+    },
+    {
+      id: 'inventario', header: 'Últ. inventario', prioridad: 3, tarjeta: 'oculto', className: 'text-xs text-gray-500',
+      valor: p => p.inventario_encontrado === false ? 'No hallado' : p.inventario_encontrado === true ? 'Hallado' : '',
+    },
+  ]
 
   return (
     <>
@@ -202,252 +290,141 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           <option value="hallado">Sí apareció en el último inventario</option>
         </select>
 
-        {/* View toggle */}
-        <div className="flex border border-gray-200 rounded-lg overflow-hidden ml-auto">
-          <button onClick={() => setView('grid')}
-            className={`p-2 transition-colors ${view === 'grid' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <Grid3X3 className="w-4 h-4" />
-          </button>
-          <button onClick={() => setView('list')}
-            className={`p-2 transition-colors ${view === 'list' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-50'}`}>
-            <List className="w-4 h-4" />
-          </button>
-        </div>
       </div>
 
-      {/* Results count */}
-      <p className="font-body text-xs text-gray-400">
-        {filtered.length} de {total} productos
-        {(search || catFilter || tipoFilter || stockFilter || cceFilter || invFilter) ? ' (filtrado)' : ''}
-      </p>
-
-      {/* GRID view */}
-      {view === 'grid' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {filtered.map(p => {
-            const cat    = CATEGORIA_LABELS[p.cat_rotacion]
-            const real   = p.stock?.cantidad_real ?? 0
-            const status = getStockStatus(real, p.stock_minimo_def)
-            return (
-              <div key={p.id}
-                className="group bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md hover:border-brand-green/30 transition-all duration-200 flex flex-col">
-                <Link href={`/productos/${p.id}`} className="block">
-                  {/* Foto */}
-                  <div className="aspect-square bg-gray-50 relative overflow-hidden">
-                    {p.imagen_url ? (
-                      <Image
-                        src={p.imagen_url}
-                        alt={p.nombre_estandar}
-                        fill
-                        className="object-cover group-hover:scale-105 transition-transform duration-300"
-                        sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
-                      />
-                    ) : (
-                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-300">
-                        <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
-                          <span className="text-2xl">📦</span>
-                        </div>
-                        <span className="font-body text-xs">Sin foto</span>
+      <TablaEstandar
+        id="productos"
+        titulo="Productos"
+        modulo="Inventario"
+        entidad="productos"
+        datos={filtered}
+        columnas={columnas}
+        filaId={p => p.id}
+        busqueda={false}
+        vistaInicial="tarjetas"
+        gridTarjetas="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4"
+        tarjetaSinMarco
+        acciones={p => (
+          <>
+            <Link href={`/productos/${p.id}`} title="Ver detalle"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
+              <Eye className="w-4 h-4" />
+            </Link>
+            <Link href={`/productos/${p.id}/editar`} title="Editar producto"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+              <Pencil className="w-4 h-4" />
+            </Link>
+            <Link href={`/movimientos/nuevo?producto=${p.id}`} title="Registrar movimiento"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+              <ArrowLeftRight className="w-4 h-4" />
+            </Link>
+            <Link href={`/movimientos/nuevo?producto=${p.id}&tipo=AJUSTE`} title="Ajustar unidades"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
+              <SlidersHorizontal className="w-4 h-4" />
+            </Link>
+          </>
+        )}
+        anchoAcciones="w-32"
+        vacio={
+          <>
+            <p className="font-heading font-bold text-lg text-gray-500">No se encontraron productos</p>
+            <p className="font-body text-sm mt-1 text-gray-400">Ajusta los filtros o agrega nuevos productos</p>
+          </>
+        }
+        renderTarjeta={p => {
+          const cat    = CATEGORIA_LABELS[p.cat_rotacion]
+          const real   = p.stock?.cantidad_real ?? 0
+          const status = getStockStatus(real, p.stock_minimo_def)
+          return (
+            <div className="group bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md hover:border-brand-green/30 transition-all duration-200 flex flex-col">
+              <Link href={`/productos/${p.id}`} className="block">
+                {/* Foto */}
+                <div className="aspect-square bg-gray-50 relative overflow-hidden">
+                  {p.imagen_url ? (
+                    <Image
+                      src={p.imagen_url}
+                      alt={p.nombre_estandar}
+                      fill
+                      className="object-cover group-hover:scale-105 transition-transform duration-300"
+                      sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 20vw"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 text-gray-300">
+                      <div className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center">
+                        <span className="text-2xl">📦</span>
                       </div>
-                    )}
-                    <span className={`absolute top-2 left-2 font-body font-bold text-xs px-1.5 py-0.5 rounded-md ${cat.bg} ${cat.color}`}>
-                      {p.cat_rotacion}
-                    </span>
-                    {real <= p.stock_minimo_def && real > 0 && (
-                      <AlertTriangle className="absolute top-2 right-2 w-4 h-4 text-orange-500" />
-                    )}
-                  </div>
-                  {/* Info */}
-                  <div className="p-3 space-y-2">
-                    <p className="font-body font-semibold text-xs text-gray-900 line-clamp-2 leading-tight">
-                      {p.nombre_estandar}
-                    </p>
-                    <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
-                    {noHallado(p) && (
-                      <span className="inline-flex items-center gap-1 font-body text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5"
-                        title={`No se encontró en el inventario físico de ${p.inventario_periodo}`}>
-                        🏷 No hallado{p.inventario_periodo ? ` · ${p.inventario_periodo}` : ''}
-                      </span>
-                    )}
-                    {p.cce && (
-                      <div className="flex items-center gap-1 flex-wrap">
-                        <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate flex-1 min-w-0" title={`#${p.cce.item} · ${p.cce.bien}`}>
-                          🏛 #{p.cce.item} · {p.cce.bien}
-                        </p>
-                        {p.cce_tipo === 'PROPIO' && (
-                          <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1 py-0.5 shrink-0">PROPIO</span>
-                        )}
-                        {p.cce_tipo === 'COMPARTIDO' && (
-                          <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded px-1 py-0.5 shrink-0">COMPARTIDO</span>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between gap-1">
-                      {real > 0 ? (
-                        <span className="font-body text-xs text-gray-500">
-                          <b className="font-heading text-sm text-gray-900">{real}</b> en stock
-                        </span>
-                      ) : (
-                        <span className="font-body text-xs font-bold text-red-600">No hay</span>
-                      )}
-                      <span className={`font-body text-xs px-1.5 py-0.5 rounded-full shrink-0 ${status.cls}`}>
-                        {status.label}
-                      </span>
+                      <span className="font-body text-xs">Sin foto</span>
                     </div>
-                  </div>
-                </Link>
-                {/* Barra de acciones */}
-                <div className="mt-auto grid grid-cols-4 border-t border-gray-100 divide-x divide-gray-100">
-                  <Link href={`/productos/${p.id}`} title="Ver detalle"
-                    className="flex items-center justify-center py-2 text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
-                    <Eye className="w-4 h-4" />
-                  </Link>
-                  <Link href={`/productos/${p.id}/editar`} title="Editar producto"
-                    className="flex items-center justify-center py-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                    <Pencil className="w-4 h-4" />
-                  </Link>
-                  <Link href={`/movimientos/nuevo?producto=${p.id}`} title="Registrar movimiento"
-                    className="flex items-center justify-center py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
-                    <ArrowLeftRight className="w-4 h-4" />
-                  </Link>
-                  <Link href={`/movimientos/nuevo?producto=${p.id}&tipo=AJUSTE`} title="Ajustar unidades"
-                    className="flex items-center justify-center py-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
-                    <SlidersHorizontal className="w-4 h-4" />
-                  </Link>
+                  )}
+                  <span className={`absolute top-2 left-2 font-body font-bold text-xs px-1.5 py-0.5 rounded-md ${cat.bg} ${cat.color}`}>
+                    {p.cat_rotacion}
+                  </span>
+                  {real <= p.stock_minimo_def && real > 0 && (
+                    <AlertTriangle className="absolute top-2 right-2 w-4 h-4 text-orange-500" />
+                  )}
                 </div>
+                {/* Info */}
+                <div className="p-3 space-y-2">
+                  <p className="font-body font-semibold text-xs text-gray-900 line-clamp-2 leading-tight">
+                    {p.nombre_estandar}
+                  </p>
+                  <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
+                  {noHallado(p) && (
+                    <span className="inline-flex items-center gap-1 font-body text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5"
+                      title={`No se encontró en el inventario físico de ${p.inventario_periodo}`}>
+                      🏷 No hallado{p.inventario_periodo ? ` · ${p.inventario_periodo}` : ''}
+                    </span>
+                  )}
+                  {p.cce && (
+                    <div className="flex items-center gap-1 flex-wrap">
+                      <p className="font-body text-[10px] text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate flex-1 min-w-0" title={`#${p.cce.item} · ${p.cce.bien}`}>
+                        🏛 #{p.cce.item} · {p.cce.bien}
+                      </p>
+                      {p.cce_tipo === 'PROPIO' && (
+                        <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1 py-0.5 shrink-0">PROPIO</span>
+                      )}
+                      {p.cce_tipo === 'COMPARTIDO' && (
+                        <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded px-1 py-0.5 shrink-0">COMPARTIDO</span>
+                      )}
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between gap-1">
+                    {real > 0 ? (
+                      <span className="font-body text-xs text-gray-500">
+                        <b className="font-heading text-sm text-gray-900">{real}</b> en stock
+                      </span>
+                    ) : (
+                      <span className="font-body text-xs font-bold text-red-600">No hay</span>
+                    )}
+                    <span className={`font-body text-xs px-1.5 py-0.5 rounded-full shrink-0 ${status.cls}`}>
+                      {status.label}
+                    </span>
+                  </div>
+                </div>
+              </Link>
+              {/* Barra de acciones */}
+              <div className="mt-auto grid grid-cols-4 border-t border-gray-100 divide-x divide-gray-100">
+                <Link href={`/productos/${p.id}`} title="Ver detalle"
+                  className="flex items-center justify-center py-2 text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
+                  <Eye className="w-4 h-4" />
+                </Link>
+                <Link href={`/productos/${p.id}/editar`} title="Editar producto"
+                  className="flex items-center justify-center py-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+                  <Pencil className="w-4 h-4" />
+                </Link>
+                <Link href={`/movimientos/nuevo?producto=${p.id}`} title="Registrar movimiento"
+                  className="flex items-center justify-center py-2 text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
+                  <ArrowLeftRight className="w-4 h-4" />
+                </Link>
+                <Link href={`/movimientos/nuevo?producto=${p.id}&tipo=AJUSTE`} title="Ajustar unidades"
+                  className="flex items-center justify-center py-2 text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
+                  <SlidersHorizontal className="w-4 h-4" />
+                </Link>
               </div>
-            )
-          })}
-        </div>
-      )}
-
-      {/* LIST view */}
-      {view === 'list' && (
-        <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3 w-12"></th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">REF</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Producto</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Cat.</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">CCE</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Stock</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Estado</th>
-                  <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.map(p => {
-                  const cat    = CATEGORIA_LABELS[p.cat_rotacion]
-                  const real   = p.stock?.cantidad_real ?? 0
-                  const status = getStockStatus(real, p.stock_minimo_def)
-                  return (
-                    <tr key={p.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-4 py-2.5">
-                        <div className="w-10 h-10 rounded-xl overflow-hidden bg-gray-100 shrink-0">
-                          {p.imagen_url ? (
-                            <Image
-                              src={p.imagen_url}
-                              alt={p.nombre_estandar}
-                              width={40} height={40}
-                              className="object-cover w-full h-full"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-lg">📦</div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <span className="font-mono text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded">
-                          {p.ref ?? p.codigo}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 max-w-[250px]">
-                        <p className="font-body font-medium text-sm text-gray-900 truncate">{p.nombre_estandar}</p>
-                        <p className="font-body text-xs text-gray-400">{p.presentacion}</p>
-                        {noHallado(p) && (
-                          <span className="inline-flex items-center gap-1 font-body text-[10px] font-bold text-orange-700 bg-orange-50 border border-orange-200 rounded px-1.5 py-0.5 mt-0.5"
-                            title={`No se encontró en el inventario físico de ${p.inventario_periodo}`}>
-                            🏷 No hallado{p.inventario_periodo ? ` · ${p.inventario_periodo}` : ''}
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`font-body font-bold text-xs px-2 py-1 rounded-full ${cat.bg} ${cat.color}`}>
-                          {p.cat_rotacion}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5 max-w-[220px]">
-                        {p.cce && (
-                          <div className="space-y-0.5">
-                            <span className="font-body text-xs text-blue-600 bg-blue-50 rounded px-1.5 py-0.5 truncate block" title={`#${p.cce.item} · ${p.cce.bien}`}>
-                              🏛 #{p.cce.item} · {p.cce.bien}
-                            </span>
-                            {p.cce_tipo === 'PROPIO' && (
-                              <span className="font-body text-[10px] font-bold text-purple-700 bg-purple-50 border border-purple-100 rounded px-1.5 py-0.5 inline-block">
-                                📦 Propio CCE: {p.stock_cce?.cantidad_real ?? 0} uds
-                              </span>
-                            )}
-                            {p.cce_tipo === 'COMPARTIDO' && (
-                              <span className="font-body text-[10px] font-bold text-teal-700 bg-teal-50 border border-teal-100 rounded px-1.5 py-0.5 inline-block">
-                                ↔ Compartido
-                              </span>
-                            )}
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right whitespace-nowrap">
-                        {real > 0 ? (
-                          <>
-                            <span className="font-heading font-bold text-base text-gray-900">{real}</span>
-                            <span className="font-body text-xs text-gray-400 ml-1">en stock / mín {p.stock_minimo_def}</span>
-                          </>
-                        ) : (
-                          <span className="font-body text-sm font-bold text-red-600">No hay</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-center">
-                        <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${status.cls}`}>
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2.5">
-                        <div className="flex items-center justify-center gap-0.5">
-                          <Link href={`/productos/${p.id}`} title="Ver detalle"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-colors">
-                            <Eye className="w-4 h-4" />
-                          </Link>
-                          <Link href={`/productos/${p.id}/editar`} title="Editar producto"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
-                            <Pencil className="w-4 h-4" />
-                          </Link>
-                          <Link href={`/movimientos/nuevo?producto=${p.id}`} title="Registrar movimiento"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-green-600 hover:bg-green-50 transition-colors">
-                            <ArrowLeftRight className="w-4 h-4" />
-                          </Link>
-                          <Link href={`/movimientos/nuevo?producto=${p.id}&tipo=AJUSTE`} title="Ajustar unidades"
-                            className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition-colors">
-                            <SlidersHorizontal className="w-4 h-4" />
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {filtered.length === 0 && (
-        <div className="text-center py-16 text-gray-400">
-          <p className="font-heading font-bold text-lg">No se encontraron productos</p>
-          <p className="font-body text-sm mt-1">Ajusta los filtros o agrega nuevos productos</p>
-        </div>
-      )}
+            </div>
+          )
+        }}
+      />
     </>
   )
 }

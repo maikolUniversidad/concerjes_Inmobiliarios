@@ -14,6 +14,7 @@ import { metaEstado } from '../OrdenesInsumoClient'
 import { actualizarItemAlistamiento, despacharOrden, anularOrden } from '../actions'
 import { VideoDespacho } from './VideoDespacho'
 import { ProductoThumb } from './ProductoThumb'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 interface Item {
   id: string
@@ -170,6 +171,70 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     router.refresh()
   }
 
+  const columnasItems: ColumnaTabla<Item>[] = [
+    {
+      id: 'ok', header: 'OK', align: 'center', ancho: 'w-12', copiable: false, filtrable: false,
+      interactiva: true, tarjeta: 'badge',
+      valor: (it) => (it.alistado ? 'Alistado' : 'Pendiente'),
+      celda: (it) => {
+        const sinStock = dispDe(it) <= 0
+        return (
+          <button onClick={() => toggleAlistado(it)} disabled={!editable || busyItem === it.id || (sinStock && !it.alistado)}
+            title={sinStock ? 'Sin stock disponible' : undefined}
+            className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-colors ${it.alistado ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'} disabled:opacity-40 disabled:cursor-not-allowed`}>
+            {busyItem === it.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" /> : it.alistado ? <Check className="w-3.5 h-3.5 text-white" /> : null}
+          </button>
+        )
+      },
+    },
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
+      ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: (it) => {
+        const disp = dispDe(it)
+        const sinStock = disp <= 0
+        return (
+          <div className="flex items-center gap-2.5">
+            <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="font-body text-sm text-gray-900 truncate max-w-[200px]">{it.producto?.nombre_estandar ?? '—'}</p>
+                {sinStock && (
+                  <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Sin stock</span>
+                )}
+                {it.es_adicional ? (
+                  <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
+                ) : (
+                  <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
+                )}
+              </div>
+              <p className="font-body text-[11px] text-gray-400">
+                {it.producto?.presentacion ? it.producto.presentacion + ' · ' : ''}
+                <span className={sinStock ? 'text-red-500 font-semibold' : ''}>Disp: {disp}</span>
+              </p>
+            </div>
+          </div>
+        )
+      },
+    },
+    { id: 'presentacion', header: 'Presentación', valor: (it) => it.producto?.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    { id: 'tipo', header: 'Tipo', valor: (it) => (it.es_adicional ? 'Adicional' : 'Parametrizado'), prioridad: 3, tarjeta: 'oculto' },
+    { id: 'disponible', header: 'Disp.', valor: (it) => dispDe(it), align: 'right', prioridad: 3, className: 'text-gray-500', tarjeta: 'meta' },
+    {
+      id: 'solicitado', header: 'Solicitado', valor: (it) => Number(it.cantidad_solicitada), align: 'center', ancho: 'w-24',
+      className: 'font-semibold text-gray-700', tarjeta: 'meta',
+    },
+    {
+      id: 'alistadoCant', header: 'Alistado', align: 'center', ancho: 'w-28', interactiva: true, tarjeta: 'meta',
+      valor: (it) => Number(it.cantidad_alistada),
+      celda: (it) => (
+        <input type="number" min={0} step="1" value={Number(it.cantidad_alistada)} disabled={!editable || dispDe(it) <= 0}
+          onChange={(e) => setCantAlistada(it, Number(e.target.value) || 0)} onBlur={() => guardarCant(it)}
+          className="w-full border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
+      ),
+    },
+  ]
+
   return (
     <div className="space-y-4">
       <Link href="/ordenes-insumo" className="inline-flex items-center gap-1.5 font-body text-sm text-gray-500 hover:text-brand-green">
@@ -220,65 +285,20 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
             <Package className="w-4 h-4 text-brand-green" /> Alistamiento
           </p>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[520px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-12">OK</th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5">Producto</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-24">Solicitado</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-28">Alistado</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {items.map((it) => {
-                const disp = dispDe(it)
-                const sinStock = disp <= 0
-                return (
-                <tr key={it.id} className={sinStock ? 'bg-gray-50/70 opacity-70' : it.alistado ? 'bg-green-50/40' : ''}>
-                  <td className="px-3 py-2.5 text-center">
-                    <button onClick={() => toggleAlistado(it)} disabled={!editable || busyItem === it.id || (sinStock && !it.alistado)}
-                      title={sinStock ? 'Sin stock disponible' : undefined}
-                      className={`w-6 h-6 rounded-md border-2 inline-flex items-center justify-center transition-colors ${it.alistado ? 'bg-brand-green border-brand-green' : 'border-gray-300 bg-white'} disabled:opacity-40 disabled:cursor-not-allowed`}>
-                      {busyItem === it.id ? <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400" /> : it.alistado ? <Check className="w-3.5 h-3.5 text-white" /> : null}
-                    </button>
-                  </td>
-                  <td className="px-3 py-2.5">
-                    <div className="flex items-center gap-2.5">
-                      <ProductoThumb url={it.producto?.imagen_url} nombre={it.producto?.nombre_estandar} />
-                      <div className="min-w-0">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <p className="font-body text-sm text-gray-900 truncate max-w-[200px]">{it.producto?.nombre_estandar ?? '—'}</p>
-                          {sinStock && (
-                            <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-100 text-red-700">Sin stock</span>
-                          )}
-                          {it.es_adicional ? (
-                            <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800">Adicional</span>
-                          ) : (
-                            <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>
-                          )}
-                        </div>
-                        <p className="font-body text-[11px] text-gray-400">
-                          {it.producto?.presentacion ? it.producto.presentacion + ' · ' : ''}
-                          <span className={sinStock ? 'text-red-500 font-semibold' : ''}>Disp: {disp}</span>
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-2.5 text-center font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</td>
-                  <td className="px-3 py-2.5">
-                    <input type="number" min={0} step="1" value={Number(it.cantidad_alistada)} disabled={!editable || sinStock}
-                      onChange={(e) => setCantAlistada(it, Number(e.target.value) || 0)} onBlur={() => guardarCant(it)}
-                      className="w-full border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
-                  </td>
-                </tr>
-                )
-              })}
-              {items.length === 0 && (
-                <tr><td colSpan={4} className="py-10 text-center font-body text-sm text-gray-400">La orden no tiene ítems.</td></tr>
-              )}
-            </tbody>
-          </table>
+        <div className="p-4">
+          <TablaEstandar
+            id="orden-alistamiento"
+            titulo={`Alistamiento ${orden.numero}`}
+            modulo="Inventario"
+            entidad="orden_insumo_items"
+            datos={items}
+            columnas={columnasItems}
+            filaId={(it) => it.id}
+            busqueda="Buscar producto de la orden…"
+            filasPorPagina={0}
+            filaClassName={(it) => (dispDe(it) <= 0 ? 'bg-gray-50/70 opacity-70' : it.alistado ? 'bg-green-50/40' : '')}
+            vacio={<p className="font-body text-sm text-gray-400">La orden no tiene ítems.</p>}
+          />
         </div>
       </div>
 

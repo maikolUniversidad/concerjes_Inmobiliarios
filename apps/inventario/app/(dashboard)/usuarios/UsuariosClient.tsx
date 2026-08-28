@@ -18,6 +18,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { logActivity } from '@/lib/activity'
 import { GRUPOS_PERMISOS, countActivos, colorRol } from '@/lib/permisos'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -661,6 +662,62 @@ export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sede
     }
   }
 
+  const columnas: ColumnaTabla<Usuario>[] = [
+    {
+      id: 'nombre', header: 'Usuario', valor: u => u.nombre, ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: u => (
+        <div className="flex items-center gap-3">
+          <Avatar url={u.avatar_url} nombre={u.nombre} size="sm" />
+          <div className="min-w-0">
+            <p className="font-body font-medium text-sm text-gray-900 leading-tight">{u.nombre}</p>
+            <p className="font-body text-xs text-gray-400 truncate">{u.email}</p>
+            {u.personas && u.personas.length > 0 && (
+              <p className="font-body text-[11px] text-brand-green flex items-center gap-1 mt-0.5">
+                <IdCard className="w-3 h-3" /> Colaborador · {u.personas[0].documento}
+              </p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    { id: 'email', header: 'Correo', valor: u => u.email ?? '', prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'subtitulo' },
+    {
+      id: 'rol', header: 'Rol', valor: u => nombreRol(u, roles), tarjeta: 'badge',
+      celda: u => {
+        const nombre = nombreRol(u, roles)
+        return <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${colorRol(nombre)}`}>{nombre}</span>
+      },
+    },
+    {
+      id: 'grupo', header: 'Grupo', prioridad: 2, tarjeta: 'meta', className: 'text-gray-600',
+      valor: u => (u.grupos_contrato ? `${u.grupos_contrato.codigo} · ${u.grupos_contrato.nombre}` : ''),
+      celda: u => u.grupos_contrato
+        ? <span className="font-body text-sm text-gray-600">{u.grupos_contrato.codigo} · {u.grupos_contrato.nombre}</span>
+        : <span className="text-gray-300">—</span>,
+    },
+    { id: 'creado', header: 'Creado', valor: u => formatFecha(u.created_at), prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'meta' },
+    {
+      id: 'activo', header: 'Activo', align: 'center', tarjeta: 'meta',
+      valor: u => (u.activo ? 'Activo' : 'Inactivo'),
+      celda: u => (
+        <span onClick={e => e.stopPropagation()}>
+          {togglingId === u.id ? (
+            <Loader2 className="w-4 h-4 animate-spin text-gray-400 mx-auto" />
+          ) : (
+            <button
+              type="button"
+              onClick={e => toggleActivo(u, e)}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${u.activo ? 'bg-[#2E7D32]' : 'bg-gray-200'}`}
+              title={u.activo ? 'Desactivar' : 'Activar'}
+            >
+              <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${u.activo ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </button>
+          )}
+        </span>
+      ),
+    },
+  ]
+
   return (
     <>
       {/* Header row */}
@@ -674,112 +731,25 @@ export default function UsuariosClient({ usuarios: initialUsuarios, grupos, sede
         </button>
       </div>
 
-      {/* Table card */}
-      <div className="rounded-2xl border border-gray-100 shadow-sm bg-white overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                  Usuario
-                </th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                  Rol
-                </th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3 hidden md:table-cell">
-                  Grupo
-                </th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">
-                  Creado
-                </th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                  Activo
-                </th>
-                <th className="px-4 py-3 w-8" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {usuarios.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-16 text-center">
-                    <Users className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                    <p className="font-body text-sm text-gray-400">No hay usuarios registrados</p>
-                  </td>
-                </tr>
-              )}
-              {usuarios.map((u) => (
-                <tr
-                  key={u.id}
-                  onClick={() => openEdit(u)}
-                  className="cursor-pointer hover:bg-gray-50/60 transition-colors"
-                >
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3">
-                      <Avatar url={u.avatar_url} nombre={u.nombre} size="sm" />
-                      <div>
-                        <p className="font-body font-medium text-sm text-gray-900 leading-tight">
-                          {u.nombre}
-                        </p>
-                        <p className="font-body text-xs text-gray-400">{u.email}</p>
-                        {u.personas && u.personas.length > 0 && (
-                          <p className="font-body text-[11px] text-brand-green flex items-center gap-1 mt-0.5">
-                            <IdCard className="w-3 h-3" /> Colaborador · {u.personas[0].documento}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    {(() => {
-                      const nombre = nombreRol(u, roles)
-                      return (
-                        <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${colorRol(nombre)}`}>
-                          {nombre}
-                        </span>
-                      )
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 hidden md:table-cell">
-                    <span className="font-body text-sm text-gray-600">
-                      {u.grupos_contrato
-                        ? `${u.grupos_contrato.codigo} · ${u.grupos_contrato.nombre}`
-                        : <span className="text-gray-300">—</span>}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 hidden lg:table-cell">
-                    <span className="font-body text-xs text-gray-400">
-                      {formatFecha(u.created_at)}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center" onClick={(e) => e.stopPropagation()}>
-                    {togglingId === u.id ? (
-                      <Loader2 className="w-4 h-4 animate-spin text-gray-400 mx-auto" />
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={(e) => toggleActivo(u, e)}
-                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                          u.activo ? 'bg-[#2E7D32]' : 'bg-gray-200'
-                        }`}
-                        title={u.activo ? 'Desactivar' : 'Activar'}
-                      >
-                        <span
-                          className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${
-                            u.activo ? 'translate-x-4' : 'translate-x-0.5'
-                          }`}
-                        />
-                      </button>
-                    )}
-                  </td>
-                  <td className="px-4 py-3">
-                    <ChevronRight className="w-4 h-4 text-gray-300" />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      <TablaEstandar
+        id="usuarios"
+        titulo="Usuarios"
+        modulo="Usuarios"
+        entidad="usuarios"
+        datos={usuarios}
+        columnas={columnas}
+        filaId={u => u.id}
+        busqueda="Buscar por nombre, correo, rol o grupo…"
+        onFilaClick={openEdit}
+        acciones={() => <ChevronRight className="w-4 h-4 text-gray-300" />}
+        anchoAcciones="w-10"
+        vacio={
+          <>
+            <Users className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+            <p className="font-body text-sm text-gray-400">No hay usuarios registrados</p>
+          </>
+        }
+      />
 
       {/* Right-side drawer */}
       {/* Backdrop */}

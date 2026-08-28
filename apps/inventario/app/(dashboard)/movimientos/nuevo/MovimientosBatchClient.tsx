@@ -1,15 +1,16 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, FileStack, Users, X, Check, PlayCircle, Search, ChevronDown, List, LayoutGrid } from 'lucide-react'
+import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, FileStack, Users, X, Check, PlayCircle, Search, ChevronDown } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarMovimientos, guardarBorrador, eliminarBorrador, registrarDesdeBorrador } from '../actions'
 import { ProductoCombo, type ProductoComboItem } from '@/components/ui/ProductoCombo'
 import { ComboBuscador } from '@/components/ui/ComboBuscador'
 import type { TipoMovimiento } from '@/lib/types/database'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface BorradorItem { tipo: TipoMovimiento; producto_id: string | null; cantidad: number | null; sede_id: string | null; ubicacion_id: string | null; observacion: string | null; orden: number }
 export interface Borrador { id: string; nombre: string | null; created_at: string; items: BorradorItem[]; responsableIds: string[] }
@@ -88,12 +89,6 @@ export function MovimientosBatchClient({
   const [nombreBorr, setNombreBorr] = useState('')
   const [respSel, setRespSel] = useState<string[]>([])
   const [respBuscar, setRespBuscar] = useState('')
-  // Vista de la lista: tarjetas (móvil) o tabla. Arranca en tarjetas (mobile-first)
-  // y pasa a tabla automáticamente en pantallas grandes; el usuario puede cambiarla.
-  const [vista, setVista] = useState<'tarjetas' | 'tabla'>('tarjetas')
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.innerWidth >= 1024) setVista('tabla')
-  }, [])
   const usuariosMap = useMemo(() => new Map(usuarios.map(u => [u.id, u.nombre])), [usuarios])
   const productosMap = useMemo(() => new Map(productos.map(p => [p.id, p])), [productos])
 
@@ -259,6 +254,47 @@ export function MovimientosBatchClient({
     </button>
   )
 
+  const sedesMap = new Map(sedes.map((x) => [x.id, x.nombre]))
+  const ubicMap = new Map(ubicaciones.map((u) => [u.id, u.label]))
+
+  const columnasFilas: ColumnaTabla<Fila>[] = [
+    {
+      id: 'tipo', header: 'Tipo', ancho: 'w-36', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => TIPOS.find((t) => t.value === f.tipo)?.label ?? f.tipo,
+      celda: (f) => (
+        <>
+          {campoTipo(f)}
+          <p className="mt-0.5 font-body text-[10px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
+        </>
+      ),
+    },
+    {
+      id: 'producto', header: 'Producto', ancho: 'min-w-[240px]', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => productosMap.get(f.producto_id)?.nombre_estandar ?? '',
+      celda: (f) => campoProducto(f),
+    },
+    {
+      id: 'cantidad', header: 'Cantidad', align: 'center', ancho: 'w-24', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => Number(f.cantidad) || 0,
+      celda: (f) => campoCantidad(f),
+    },
+    {
+      id: 'sede', header: 'Sede', ancho: 'w-40', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => sedesMap.get(f.sede_id) ?? '',
+      celda: (f) => campoSede(f),
+    },
+    ...(ubicaciones.length > 0 ? [{
+      id: 'ubicacion', header: 'Ubicación', ancho: 'w-44', interactiva: true, tarjeta: 'oculto' as const,
+      valor: (f: Fila) => ubicMap.get(f.ubicacion_id) ?? '',
+      celda: (f: Fila) => campoUbicacion(f),
+    }] : []),
+    {
+      id: 'observacion', header: 'Observación', ancho: 'min-w-[160px]', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => f.observacion,
+      celda: (f) => campoObservacion(f),
+    },
+  ]
+
   return (
     <div className="space-y-4">
       {error && (
@@ -354,117 +390,91 @@ export function MovimientosBatchClient({
         </div>
       )}
 
-      {/* Movimientos — toggle de vista (tarjetas / tabla) */}
+      {/* Movimientos: tabla o tarjetas, con el estándar del portal */}
       <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
         <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
           <span className="font-heading font-semibold text-sm text-gray-900">Movimientos ({filas.length})</span>
-          <div className="flex rounded-lg border border-gray-200 p-0.5">
-            <button type="button" onClick={() => setVista('tarjetas')} title="Vista tarjetas"
-              className={'rounded-md p-1.5 transition-colors ' + (vista === 'tarjetas' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-100')}>
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-            <button type="button" onClick={() => setVista('tabla')} title="Vista tabla"
-              className={'rounded-md p-1.5 transition-colors ' + (vista === 'tabla' ? 'bg-brand-green text-white' : 'text-gray-500 hover:bg-gray-100')}>
-              <List className="w-4 h-4" />
-            </button>
-          </div>
         </div>
-        {/* Tarjetas: acordeón — solo la que se edita queda expandida; las demás
-            se colapsan mostrando el nombre del producto. Tocar una la expande. */}
-        <div className={(vista === 'tarjetas' ? 'block' : 'hidden') + ' divide-y divide-gray-100'}>
-          {filas.map((f, i) => {
-            const open = abierta === f.key
-            const p = productosMap.get(f.producto_id)
-            const resumen = p ? `${p.nombre_estandar}${p.presentacion ? ` · ${p.presentacion}` : ''}` : 'Sin producto'
-            return (
-              <div key={f.key}>
-                <div className="flex items-center">
-                  <button type="button" onClick={() => setAbierta(open ? null : f.key)}
-                    className="flex flex-1 items-center gap-2 px-4 py-3 text-left min-w-0">
-                    <span className="font-heading font-bold text-sm text-gray-900 shrink-0">Mov. {i + 1}</span>
-                    {!open ? (
-                      <>
-                        <span className={`min-w-0 flex-1 truncate font-body text-sm ${p ? 'text-gray-700' : 'text-gray-400'}`}>{resumen}</span>
-                        {Number(f.cantidad) > 0 && (
-                          <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 font-body text-[11px] font-semibold text-gray-600">
-                            {TIPOS.find(t => t.value === f.tipo)?.label} · {f.cantidad}
-                          </span>
-                        )}
-                      </>
-                    ) : <span className="flex-1" />}
-                    <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
-                  </button>
-                  <div className="pr-3 shrink-0">{btnQuitar(f)}</div>
-                </div>
-                {open && (
-                  <div className="px-4 pb-4 space-y-3">
-                    <div>
-                      <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Tipo</label>
-                      {campoTipo(f)}
-                      <p className="mt-0.5 font-body text-[11px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
-                    </div>
-                    <div>
-                      <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Producto</label>
-                      {campoProducto(f)}
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Cantidad</label>
-                        {campoCantidad(f)}
-                      </div>
-                      <div>
-                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Sede</label>
-                        {campoSede(f)}
-                      </div>
-                    </div>
-                    {ubicaciones.length > 0 && (
-                      <div>
-                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Ubicación</label>
-                        {campoUbicacion(f)}
-                      </div>
-                    )}
-                    <div>
-                      <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Observación</label>
-                      {campoObservacion(f)}
-                    </div>
+        <div className="p-4">
+          <TablaEstandar
+            id="movimientos-lote"
+            titulo="Movimientos en lote"
+            modulo="Inventario"
+            entidad="movimientos"
+            datos={filas}
+            columnas={columnasFilas}
+            filaId={(f) => String(f.key)}
+            busqueda={false}
+            filasPorPagina={0}
+            descargable={false}
+            vistaInicial="tarjetas"
+            gridTarjetas="divide-y divide-gray-100 rounded-2xl border border-gray-100"
+            tarjetaSinMarco
+            anchoAcciones="w-10"
+            acciones={(f) => btnQuitar(f)}
+            vacio={<p className="font-body text-sm text-gray-400">Agrega la primera fila para registrar movimientos.</p>}
+            renderTarjeta={(f) => {
+              const open = abierta === f.key
+              const p = productosMap.get(f.producto_id)
+              const resumen = p ? `${p.nombre_estandar}${p.presentacion ? ` · ${p.presentacion}` : ''}` : 'Sin producto'
+              const i = filas.indexOf(f)
+              return (
+                <div>
+                  <div className="flex items-center">
+                    <button type="button" onClick={() => setAbierta(open ? null : f.key)}
+                      className="flex flex-1 items-center gap-2 px-4 py-3 text-left min-w-0">
+                      <span className="font-heading font-bold text-sm text-gray-900 shrink-0">Mov. {i + 1}</span>
+                      {!open ? (
+                        <>
+                          <span className={`min-w-0 flex-1 truncate font-body text-sm ${p ? 'text-gray-700' : 'text-gray-400'}`}>{resumen}</span>
+                          {Number(f.cantidad) > 0 && (
+                            <span className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 font-body text-[11px] font-semibold text-gray-600">
+                              {TIPOS.find(t => t.value === f.tipo)?.label} · {f.cantidad}
+                            </span>
+                          )}
+                        </>
+                      ) : <span className="flex-1" />}
+                      <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+                    </button>
+                    <div className="pr-3 shrink-0">{btnQuitar(f)}</div>
                   </div>
-                )}
-              </div>
-            )
-          })}
-        </div>
-
-        {/* Tabla (con scroll horizontal si la pantalla es angosta) */}
-        <div className={(vista === 'tabla' ? 'block' : 'hidden') + ' overflow-x-auto'}>
-          <table className="w-full min-w-[900px]">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100 text-left">
-                <th className="font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-36">Tipo</th>
-                <th className="font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 min-w-[240px]">Producto</th>
-                <th className="font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-24 text-center">Cantidad</th>
-                <th className="font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-40">Sede</th>
-                {ubicaciones.length > 0 && <th className="font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 w-44">Ubicación</th>}
-                <th className="font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2.5 min-w-[160px]">Observación</th>
-                <th className="w-10 px-2" />
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {filas.map(f => (
-                <tr key={f.key} className="align-top">
-                  <td className="px-3 py-2">
-                    {campoTipo(f)}
-                    <p className="mt-0.5 font-body text-[10px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
-                  </td>
-                  <td className="px-3 py-2">{campoProducto(f)}</td>
-                  <td className="px-3 py-2">{campoCantidad(f)}</td>
-                  <td className="px-3 py-2">{campoSede(f)}</td>
-                  {ubicaciones.length > 0 && <td className="px-3 py-2">{campoUbicacion(f)}</td>}
-                  <td className="px-3 py-2">{campoObservacion(f)}</td>
-                  <td className="px-2 py-2 text-center">{btnQuitar(f)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  {open && (
+                    <div className="px-4 pb-4 space-y-3">
+                      <div>
+                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Tipo</label>
+                        {campoTipo(f)}
+                        <p className="mt-0.5 font-body text-[11px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
+                      </div>
+                      <div>
+                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Producto</label>
+                        {campoProducto(f)}
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Cantidad</label>
+                          {campoCantidad(f)}
+                        </div>
+                        <div>
+                          <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Sede</label>
+                          {campoSede(f)}
+                        </div>
+                      </div>
+                      {ubicaciones.length > 0 && (
+                        <div>
+                          <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Ubicación</label>
+                          {campoUbicacion(f)}
+                        </div>
+                      )}
+                      <div>
+                        <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Observación</label>
+                        {campoObservacion(f)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            }}
+          />
         </div>
         <div className="border-t border-gray-100 px-4 py-3">
           <button onClick={addFila} className="flex items-center gap-1.5 border border-brand-green text-brand-green font-body font-semibold text-xs px-3 py-1.5 rounded-lg hover:bg-green-50">

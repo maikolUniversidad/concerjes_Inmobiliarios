@@ -1,33 +1,12 @@
 import type { Metadata } from 'next'
-import Link from 'next/link'
-import { RefreshCw, FileText, AlertTriangle, Download, ChevronRight, Sparkles, ShoppingCart, TrendingUp } from 'lucide-react'
+import { RefreshCw, FileText, Download, ChevronRight, Sparkles, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
+import { PlanReabastecimientoTabla, RecomendacionTabla, type RecFila } from './AprovisionamientoTablas'
 
 export const metadata: Metadata = { title: 'Aprovisionamiento' }
 export const dynamic = 'force-dynamic'
-
-interface RecRow {
-  producto_id: string; codigo: number | null; nombre_estandar: string; presentacion: string | null
-  cat_rotacion: string; precio_lista: number | null
-  stock_real: number; comprometido: number; oc_pendiente: number; recomendado: number
-}
-
-function getCatColor(cat: string) {
-  return (
-    { A: 'bg-green-100 text-green-700', B: 'bg-blue-100 text-blue-700',
-      C: 'bg-amber-100 text-amber-700', D: 'bg-red-100 text-red-700' }[cat]
-    ?? 'bg-gray-100 text-gray-700'
-  )
-}
-
-function getStockAlert(real: number, minimo: number) {
-  if (real <= 0) return 'text-red-600 font-bold'
-  if (real <= minimo) return 'text-red-600'
-  if (real <= minimo * 1.5) return 'text-amber-600'
-  return 'text-gray-900'
-}
 
 function formatCOP(n: number) {
   return new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(n)
@@ -76,7 +55,7 @@ export default async function AprovisionamientoPage() {
     .gt('recomendado', 0)
     .order('recomendado', { ascending: false })
     .limit(300)
-  const recs = (recData as unknown as RecRow[]) ?? []
+  const recs = (recData as unknown as RecFila[]) ?? []
   const recUnidades = recs.reduce((s, r) => s + Number(r.recomendado), 0)
   const recValor = recs.reduce((s, r) => s + Number(r.recomendado) * Number(r.precio_lista ?? 0), 0)
 
@@ -169,58 +148,9 @@ export default async function AprovisionamientoPage() {
         <p className="px-4 pt-2 font-body text-xs text-gray-400">
           Qué comprar para cubrir la demanda de las órdenes de insumo en cola que el stock actual y lo ya pedido en OC no alcanzan a cubrir.
         </p>
-        {recs.length === 0 ? (
-          <p className="py-10 text-center font-body text-sm text-gray-400">
-            No hay recomendaciones: el stock (más lo ya pedido) cubre la demanda comprometida. 👍
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-gray-500 uppercase px-3 py-2.5 min-w-[200px]">Producto</th>
-                  <th className="text-center font-body font-semibold text-gray-500 uppercase px-3 py-2.5">Cat.</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5">Stock</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5" title="Demanda comprometida en órdenes de insumo en cola">Demanda</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5" title="Ya pedido en órdenes de compra sin recibir">OC pend.</th>
-                  <th className="text-right font-body font-semibold text-brand-green uppercase px-3 py-2.5 bg-green-50">Recomendado</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase px-3 py-2.5">Valor est.</th>
-                  <th className="px-3 py-2.5 w-24" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {recs.map(r => (
-                  <tr key={r.producto_id} className="hover:bg-gray-50/50">
-                    <td className="px-3 py-2.5">
-                      <p className="font-medium text-gray-900 max-w-[220px] truncate">{r.nombre_estandar}</p>
-                      {r.presentacion && <p className="text-gray-400">{r.presentacion}</p>}
-                    </td>
-                    <td className="px-3 py-2.5 text-center"><span className={`font-bold px-1.5 py-0.5 rounded ${getCatColor(r.cat_rotacion)}`}>{r.cat_rotacion}</span></td>
-                    <td className="px-3 py-2.5 text-right text-gray-700">{Number(r.stock_real).toLocaleString('es-CO')}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-500">{Number(r.comprometido).toLocaleString('es-CO')}</td>
-                    <td className="px-3 py-2.5 text-right text-amber-600">{Number(r.oc_pendiente) > 0 ? Number(r.oc_pendiente).toLocaleString('es-CO') : '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-bold text-brand-green bg-green-50/60">{Number(r.recomendado).toLocaleString('es-CO')}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-600">{r.precio_lista ? formatCOP(Number(r.recomendado) * Number(r.precio_lista)) : '—'}</td>
-                    <td className="px-3 py-2.5 text-right">
-                      <Link href={`/ordenes-compra/nuevo?producto=${r.producto_id}`}
-                        className="inline-flex items-center gap-1 rounded-lg border border-gray-200 px-2 py-1 font-body font-semibold text-[11px] text-gray-600 hover:border-brand-green hover:text-brand-green hover:bg-green-50 transition-colors">
-                        <ShoppingCart className="w-3 h-3" /> Crear OC
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
-                  <td colSpan={5} className="px-3 py-2.5 text-right text-sm text-gray-700">TOTAL RECOMENDADO →</td>
-                  <td className="px-3 py-2.5 text-right text-brand-green font-bold text-sm bg-green-100">{recUnidades.toLocaleString('es-CO')}</td>
-                  <td className="px-3 py-2.5 text-right text-gray-700 text-sm">{formatCOP(recValor)}</td>
-                  <td />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
+        <div className="p-4">
+          <RecomendacionTabla recs={recs} />
+        </div>
       </div>
 
       {/* KPIs (plan CMI importado) */}
@@ -247,80 +177,9 @@ export default async function AprovisionamientoPage() {
           <span className="font-body text-xs text-gray-400 ml-auto">{rows.length} productos</span>
         </div>
 
-        {rows.length === 0 ? (
-          <div className="py-20 text-center">
-            <p className="font-heading font-bold text-gray-400">Sin datos de aprovisionamiento para {periodo}</p>
-            <p className="font-body text-sm text-gray-400 mt-1">Ejecuta el script de carga o genera el plan desde la hoja CMI</p>
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5 min-w-[40px]">Cód</th>
-                  <th className="text-left font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5 min-w-[200px]">Producto</th>
-                  <th className="text-center font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5">Cat.</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5 bg-blue-50/50">Stock</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5 bg-blue-50/50">Mín.</th>
-                  <th className="text-right font-body font-semibold text-blue-600 uppercase tracking-wide px-3 py-2.5 bg-blue-50">C.A.</th>
-                  <th className="text-right font-body font-semibold text-purple-600 uppercase tracking-wide px-3 py-2.5 bg-purple-50">M.O.</th>
-                  <th className="text-right font-body font-semibold text-green-600 uppercase tracking-wide px-3 py-2.5 bg-green-50">M.B.</th>
-                  <th className="text-right font-body font-semibold text-orange-600 uppercase tracking-wide px-3 py-2.5 bg-orange-50">P.B.</th>
-                  <th className="text-right font-body font-semibold text-gray-600 uppercase tracking-wide px-3 py-2.5 bg-gray-100">A.D.</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5">Ped. Calc.</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5">Sug. Compra</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5">OC Pend.</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5">Adicional</th>
-                  <th className="text-right font-body font-semibold text-brand-green uppercase tracking-wide px-3 py-2.5 bg-green-50">Total</th>
-                  <th className="text-right font-body font-semibold text-gray-500 uppercase tracking-wide px-3 py-2.5">Valor</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {rows.map(r => (
-                  <tr key={r.producto_id} className={`hover:bg-gray-50/50 transition-colors ${r.stock_real <= r.stock_minimo && r.stock_minimo > 0 ? 'bg-red-50/30' : ''}`}>
-                    <td className="px-3 py-2.5 font-mono text-gray-500">{r.codigo}</td>
-                    <td className="px-3 py-2.5">
-                      <p className="font-medium text-gray-900 max-w-[200px] truncate">{r.nombre}</p>
-                      <p className="text-gray-400">{r.presentacion}</p>
-                    </td>
-                    <td className="px-3 py-2.5 text-center">
-                      <span className={`font-bold px-1.5 py-0.5 rounded ${getCatColor(r.cat)}`}>{r.cat}</span>
-                    </td>
-                    <td className={`px-3 py-2.5 text-right font-bold bg-blue-50/30 ${getStockAlert(r.stock_real, r.stock_minimo)}`}>
-                      {r.stock_real}
-                      {r.stock_real <= r.stock_minimo && r.stock_minimo > 0 && (
-                        <AlertTriangle className="w-3 h-3 inline ml-1 text-red-500" />
-                      )}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-gray-500 bg-blue-50/30">{r.stock_minimo || '—'}</td>
-                    <td className="px-3 py-2.5 text-right bg-blue-50/20">{r.pedido_ca || '—'}</td>
-                    <td className="px-3 py-2.5 text-right bg-purple-50/20">{r.pedido_mo || '—'}</td>
-                    <td className="px-3 py-2.5 text-right bg-green-50/20">{r.pedido_mb || '—'}</td>
-                    <td className="px-3 py-2.5 text-right bg-orange-50/20">{r.pedido_pb || '—'}</td>
-                    <td className="px-3 py-2.5 text-right bg-gray-50">{r.pedido_ad || '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-semibold text-gray-700">{r.pedido_calculado || '—'}</td>
-                    <td className="px-3 py-2.5 text-right font-semibold">{r.sugerido_compra || '—'}</td>
-                    <td className="px-3 py-2.5 text-right text-amber-600">{r.oc_pendiente > 0 ? r.oc_pendiente : '—'}</td>
-                    <td className="px-3 py-2.5 text-right">{r.adicional > 0 ? r.adicional : '—'}</td>
-                    <td className={`px-3 py-2.5 text-right font-bold bg-green-50/50 ${r.total_compras > 0 ? 'text-brand-green' : 'text-gray-300'}`}>
-                      {r.total_compras > 0 ? r.total_compras : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 text-right text-gray-600">
-                      {r.total_compras > 0 && r.precio > 0 ? formatCOP(r.total_compras * r.precio) : '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="bg-gray-50 border-t-2 border-gray-200 font-semibold">
-                  <td colSpan={14} className="px-3 py-2.5 text-right text-sm text-gray-700">TOTALES →</td>
-                  <td className="px-3 py-2.5 text-right text-brand-green font-bold text-sm bg-green-100">{totalComprar}</td>
-                  <td className="px-3 py-2.5 text-right text-gray-700 text-sm">{formatCOP(valorTotal)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
+        <div className="p-4">
+          <PlanReabastecimientoTabla rows={rows} periodo={periodo} />
+        </div>
       </div>
 
       {/* Grupos */}

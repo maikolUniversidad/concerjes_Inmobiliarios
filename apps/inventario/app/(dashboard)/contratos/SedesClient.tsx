@@ -8,6 +8,7 @@ import { DeleteButton } from '@/components/ui/DeleteButton'
 import { grupoColor, type GrupoContrato } from '@/lib/types/database'
 import { TIPO_CONTRATO_META, TIPO_CONTRATO_OPCIONES, type Categoria, type Etiqueta, type TipoContrato } from '@/lib/clasificacion'
 import { EtiquetaPicker, TipoBadge, EtiquetaChip } from './Clasificacion'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface GrupoOpt { id: string; codigo: GrupoContrato; nombre: string }
 export interface SedeRow {
@@ -83,7 +84,51 @@ export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: 
     )
   }
 
+  const columnas: ColumnaTabla<SedeRow>[] = [
+    {
+      id: 'nombre', header: 'Sede', valor: s => s.nombre, ancho: 'min-w-[240px]', tarjeta: 'titulo',
+      celda: s => (
+        <>
+          <div className="flex items-center gap-1.5">
+            <p className="font-body font-medium text-sm text-gray-900">{s.nombre}</p>
+            {s.lat != null && s.lng != null
+              ? <MapPin className="w-3.5 h-3.5 text-brand-green" aria-label="Con ubicación" />
+              : <MapPin className="w-3.5 h-3.5 text-gray-300" aria-label="Sin ubicación" />}
+          </div>
+          {s.codigo_interno && <p className="font-body text-xs text-gray-400">N° {s.codigo_interno}</p>}
+          <div className="mt-1 flex flex-wrap items-center gap-1">
+            {s.tipo_contrato && <TipoBadge tipo={s.tipo_contrato} />}
+            {(s.etiquetaIds ?? []).map(id => {
+              const et = etiquetas.find(e => e.id === id)
+              return et ? <EtiquetaChip key={id} et={et} /> : null
+            })}
+          </div>
+        </>
+      ),
+    },
+    { id: 'codigo', header: 'N° contrato', valor: s => s.codigo_interno ?? '', prioridad: 3, className: 'text-xs text-gray-500', tarjeta: 'oculto' },
+    {
+      id: 'grupo', header: 'Grupo', prioridad: 2, tarjeta: 'meta',
+      valor: s => (s.grupo_codigo ? `${s.grupo_codigo}${s.grupo_nombre ? ' · ' + s.grupo_nombre : ''}` : ''),
+      celda: s => s.grupo_codigo ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span className={`font-body text-[11px] font-bold px-1.5 py-0.5 rounded ${grupoColor(s.grupo_codigo)}`}>{s.grupo_codigo}</span>
+          {s.grupo_nombre && <span className="font-body text-xs text-gray-500 max-w-[12rem] truncate">{s.grupo_nombre}</span>}
+        </span>
+      ) : null,
+    },
+    { id: 'zona', header: 'Zona', valor: s => s.zona ?? '', className: 'text-gray-500', prioridad: 2, tarjeta: 'meta' },
+    { id: 'ciudad', header: 'Ciudad', valor: s => s.ciudad, className: 'text-gray-500', prioridad: 2, tarjeta: 'meta' },
+    { id: 'direccion', header: 'Dirección', valor: s => s.direccion ?? '', prioridad: 3, className: 'text-xs text-gray-500 max-w-[240px] truncate', tarjeta: 'cuerpo' },
+    {
+      id: 'ubicacion', header: 'Ubicación', align: 'center', prioridad: 3, tarjeta: 'oculto',
+      valor: s => (s.lat != null && s.lng != null ? 'Con coordenadas' : 'Sin coordenadas'),
+      copiaTexto: s => (s.lat != null && s.lng != null ? `${s.lat}, ${s.lng}` : ''),
+    },
+  ]
+
   return (
+    <div className="space-y-4">
     <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -193,72 +238,37 @@ export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: 
         </form>
       )}
 
-      {sedes.length === 0 ? (
-        <div className="p-10 text-center text-gray-400">
-          <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-          <p className="font-body text-sm">No hay sedes registradas todavía.</p>
-        </div>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Sede</th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Grupo</th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Zona</th>
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3">Ciudad</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-3 w-24">Acciones</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {sedes.map(s => {
-                return (
-                  <tr key={s.id} className="hover:bg-gray-50/50 group">
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5">
-                        <p className="font-body font-medium text-sm text-gray-900">{s.nombre}</p>
-                        {s.lat != null && s.lng != null
-                          ? <MapPin className="w-3.5 h-3.5 text-brand-green" aria-label="Con ubicación" />
-                          : <MapPin className="w-3.5 h-3.5 text-gray-300" aria-label="Sin ubicación" />}
-                      </div>
-                      {s.codigo_interno && <p className="font-body text-xs text-gray-400">N° {s.codigo_interno}</p>}
-                      <div className="mt-1 flex flex-wrap items-center gap-1">
-                        {s.tipo_contrato && <TipoBadge tipo={s.tipo_contrato} />}
-                        {(s.etiquetaIds ?? []).map(id => {
-                          const et = etiquetas.find(e => e.id === id)
-                          return et ? <EtiquetaChip key={id} et={et} /> : null
-                        })}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      {s.grupo_codigo && (
-                        <span className="inline-flex items-center gap-1.5">
-                          <span className={`font-body text-[11px] font-bold px-1.5 py-0.5 rounded ${grupoColor(s.grupo_codigo)}`}>{s.grupo_codigo}</span>
-                          {s.grupo_nombre && <span className="font-body text-xs text-gray-500 max-w-[12rem] truncate">{s.grupo_nombre}</span>}
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 font-body text-sm text-gray-500">{s.zona ?? '—'}</td>
-                    <td className="px-4 py-3 font-body text-sm text-gray-500">{s.ciudad}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center justify-center gap-1">
-                        <button onClick={() => { setEditing(s); setShowForm(true) }} title="Editar"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 opacity-0 group-hover:opacity-100 transition-all">
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <DeleteButton action={eliminarSede} id={s.id} mensaje={`¿Eliminar sede “${s.nombre}”?`}
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </DeleteButton>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+    </div>
+
+      <TablaEstandar
+        id="sedes"
+        titulo="Sedes"
+        modulo="Inventario"
+        entidad="sedes"
+        datos={sedes}
+        columnas={columnas}
+        filaId={s => s.id}
+        busqueda="Buscar sede, grupo, zona o ciudad…"
+        anchoAcciones="w-24"
+        acciones={s => (
+          <>
+            <button onClick={() => { setEditing(s); setShowForm(true) }} title="Editar"
+              className="p-1.5 rounded-lg text-gray-400 hover:text-brand-green hover:bg-green-50 transition-all">
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <DeleteButton action={eliminarSede} id={s.id} mensaje={`¿Eliminar sede “${s.nombre}”?`}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-all">
+              <Trash2 className="w-3.5 h-3.5" />
+            </DeleteButton>
+          </>
+        )}
+        vacio={
+          <>
+            <MapPin className="w-8 h-8 mx-auto mb-2 text-gray-300" />
+            <p className="font-body text-sm text-gray-400">No hay sedes registradas todavía.</p>
+          </>
+        }
+      />
     </div>
   )
 }

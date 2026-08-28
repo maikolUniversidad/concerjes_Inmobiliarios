@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Save, Loader2, DollarSign } from 'lucide-react'
 import { upsertTarifa, deleteTarifa } from '../actions'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 function fmt(v?: number | null) {
   if (!v) return '—'
@@ -22,7 +23,7 @@ export default function PreciosClient({ tarifas, tipos }: { tarifas: any[]; tipo
   const router = useRouter()
   const [filtroTipo, setFiltroTipo] = useState('')
   const [modal, setModal] = useState<any | null>(null)
-  const [isPending, startTransition] = useTransition()
+  const [, startTransition] = useTransition()
   const [saving, setSaving] = useState(false)
 
   function abrir(t?: any) {
@@ -51,13 +52,42 @@ export default function PreciosClient({ tarifas, tipos }: { tarifas: any[]; tipo
 
   const filtradas = filtroTipo ? tarifas.filter((t: any) => t.tipo_id === filtroTipo) : tarifas
 
-  // Agrupar por tipo
-  const grupos: Record<string, any[]> = {}
-  filtradas.forEach((t: any) => {
-    const k = t.tipos_servicio_hogar?.nombre ?? 'Sin tipo'
-    if (!grupos[k]) grupos[k] = []
-    grupos[k].push(t)
-  })
+  const columnas: ColumnaTabla<any>[] = [
+    {
+      id: 'tipo', header: 'Tipo de servicio', prioridad: 2, tarjeta: 'subtitulo',
+      valor: (t: any) => t.tipos_servicio_hogar?.nombre ?? 'Sin tipo',
+      celda: (t: any) => (
+        <span className="inline-flex items-center gap-1.5 text-gray-700">
+          <span>{t.tipos_servicio_hogar?.icono}</span>
+          {t.tipos_servicio_hogar?.nombre ?? 'Sin tipo'}
+        </span>
+      ),
+    },
+    { id: 'nombre', header: 'Nombre', valor: (t: any) => t.nombre ?? '', className: 'font-medium text-gray-900', tarjeta: 'titulo' },
+    { id: 'duracion', header: 'Duración', valor: (t: any) => t.duracion_horas ?? 0, align: 'right', prioridad: 2, tarjeta: 'meta',
+      celda: (t: any) => <span className="text-gray-600">{t.duracion_horas}h</span> },
+    { id: 'personas', header: 'Personas', valor: (t: any) => t.personas_incluidas ?? 0, align: 'right', prioridad: 3, className: 'text-gray-600', tarjeta: 'meta' },
+    {
+      id: 'unico', header: 'Precio único', valor: (t: any) => t.precio_unico ?? 0, align: 'right', tarjeta: 'meta',
+      copiaTexto: (t: any) => (t.precio_unico != null ? String(t.precio_unico) : ''),
+      celda: (t: any) => <span className="font-semibold text-brand-green">{fmt(t.precio_unico)}</span>,
+    },
+    {
+      id: 'semanal', header: 'Semanal', valor: (t: any) => t.precio_semanal ?? 0, align: 'right', prioridad: 3, tarjeta: 'meta',
+      copiaTexto: (t: any) => (t.precio_semanal != null ? String(t.precio_semanal) : ''),
+      celda: (t: any) => <span className="text-gray-600">{fmt(t.precio_semanal)}</span>,
+    },
+    {
+      id: 'quincenal', header: 'Quincenal', valor: (t: any) => t.precio_quincenal ?? 0, align: 'right', prioridad: 3, tarjeta: 'meta',
+      copiaTexto: (t: any) => (t.precio_quincenal != null ? String(t.precio_quincenal) : ''),
+      celda: (t: any) => <span className="text-gray-600">{fmt(t.precio_quincenal)}</span>,
+    },
+    {
+      id: 'mensual', header: 'Mensual', valor: (t: any) => t.precio_mensual ?? 0, align: 'right', prioridad: 2, tarjeta: 'meta',
+      copiaTexto: (t: any) => (t.precio_mensual != null ? String(t.precio_mensual) : ''),
+      celda: (t: any) => <span className="text-gray-600">{fmt(t.precio_mensual)}</span>,
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -82,66 +112,30 @@ export default function PreciosClient({ tarifas, tipos }: { tarifas: any[]; tipo
         </button>
       </div>
 
-      {/* Grupos de tarifas */}
-      {Object.entries(grupos).map(([tipo, ts]) => {
-        const tipoData = tipos.find((t: any) => t.nombre === tipo)
-        return (
-          <div key={tipo} className="bg-white rounded-2xl border border-gray-100 overflow-hidden">
-            <div className="px-5 py-3 bg-gray-50 border-b border-gray-100 flex items-center gap-2">
-              <span>{tipoData?.icono}</span>
-              <h3 className="font-semibold text-gray-900 text-sm">{tipo}</h3>
-              <span className="ml-auto text-xs text-gray-400">{ts.length} tarifa{ts.length !== 1 ? 's' : ''}</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left border-b border-gray-50">
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Nombre</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Duración</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Personas</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Precio único</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Semanal</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Quincenal</th>
-                    <th className="px-4 py-2.5 text-xs font-semibold text-gray-500">Mensual</th>
-                    <th className="px-4 py-2.5" />
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
-                  {ts.map((t: any) => (
-                    <tr key={t.id} className="hover:bg-gray-50 transition-colors">
-                      <td className="px-4 py-3 font-medium text-gray-900">{t.nombre}</td>
-                      <td className="px-4 py-3 text-gray-600">{t.duracion_horas}h</td>
-                      <td className="px-4 py-3 text-gray-600">{t.personas_incluidas}</td>
-                      <td className="px-4 py-3 font-semibold text-brand-green">{fmt(t.precio_unico)}</td>
-                      <td className="px-4 py-3 text-gray-600">{fmt(t.precio_semanal)}</td>
-                      <td className="px-4 py-3 text-gray-600">{fmt(t.precio_quincenal)}</td>
-                      <td className="px-4 py-3 text-gray-600">{fmt(t.precio_mensual)}</td>
-                      <td className="px-4 py-3">
-                        <div className="flex gap-1.5">
-                          <button onClick={() => abrir(t)}
-                            className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
-                            <Pencil className="w-3.5 h-3.5 text-gray-400" />
-                          </button>
-                          <button onClick={() => eliminar(t.id)}
-                            className="p-1.5 rounded-lg hover:bg-red-50 transition-colors">
-                            <Trash2 className="w-3.5 h-3.5 text-red-400" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )
-      })}
-
-      {filtradas.length === 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 p-16 text-center text-gray-400 text-sm">
-          No hay tarifas configuradas. Crea la primera con el botón superior.
-        </div>
-      )}
+      <TablaEstandar
+        id="servicios-precios"
+        titulo="Tarifas de servicios"
+        modulo="Servicios del Hogar"
+        entidad="tarifas_servicio_hogar"
+        datos={filtradas}
+        columnas={columnas}
+        filaId={(t: any) => String(t.id)}
+        busqueda="Buscar tarifa por nombre o tipo…"
+        anchoAcciones="w-20"
+        acciones={(t: any) => (
+          <>
+            <button onClick={() => abrir(t)} title="Editar tarifa"
+              className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors">
+              <Pencil className="w-3.5 h-3.5 text-gray-400" />
+            </button>
+            <button onClick={() => eliminar(t.id)} title="Eliminar tarifa"
+              className="p-1.5 rounded-lg hover:bg-red-50 transition-colors">
+              <Trash2 className="w-3.5 h-3.5 text-red-400" />
+            </button>
+          </>
+        )}
+        vacio={<p className="text-sm text-gray-400">No hay tarifas configuradas. Crea la primera con el botón superior.</p>}
+      />
 
       {/* Modal */}
       {modal && (

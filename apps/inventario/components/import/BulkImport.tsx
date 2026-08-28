@@ -2,23 +2,39 @@
 import { useMemo, useRef, useState } from 'react'
 import {
   Download, Upload, FileSpreadsheet, Loader2, CheckCircle2, AlertCircle,
-  Plus, RefreshCw, X, ArrowRight,
+  Plus, RefreshCw, X, ArrowRight, Copy, Info, MinusCircle,
 } from 'lucide-react'
 import {
-  validarFila, normalizaClave, type EntityConfig, type FilaValidada,
+  validarLote, type EntityConfig, type EstadoFila, type FilaValidada,
 } from '@/lib/import/config'
-import { descargarPlantilla, parsearArchivo } from '@/lib/import/xlsx-client'
+import {
+  descargarPlantilla, parsearArchivo, descargarInformeCarga,
+} from '@/lib/import/xlsx-client'
 import { importarEntidad, type ImportResult, type FilaCommit } from '@/app/(dashboard)/importar/actions'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
-const ESTADO_META = {
+const ESTADO_META: Record<EstadoFila, { label: string; cls: string }> = {
   nuevo: { label: 'Nuevo', cls: 'bg-green-100 text-green-700' },
   actualizar: { label: 'Actualizar', cls: 'bg-blue-100 text-blue-700' },
   error: { label: 'Error', cls: 'bg-red-100 text-red-700' },
+  duplicado: { label: 'Repetida', cls: 'bg-amber-100 text-amber-700' },
+  omitido: { label: 'Ejemplo', cls: 'bg-gray-100 text-gray-500' },
+}
+
+interface Columnas { reconocidas: string[]; desconocidas: string[]; faltantes: string[] }
+
+/** Muestra el valor ya interpretado (SI/NO en vez de true/false, o un guion si no vino). */
+function formatoCelda(v: unknown): string {
+  if (v === undefined || v === null || v === '') return '—'
+  if (typeof v === 'boolean') return v ? 'SI' : 'NO'
+  if (typeof v === 'number') return v.toLocaleString('es-CO')
+  return String(v)
 }
 
 export function BulkImport({ config, existentes }: { config: EntityConfig; existentes: string[] }) {
   const existSet = useMemo(() => new Set(existentes), [existentes])
   const [filas, setFilas] = useState<FilaValidada[] | null>(null)
+  const [columnas, setColumnas] = useState<Columnas | null>(null)
   const [fileName, setFileName] = useState('')
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState('')
@@ -27,20 +43,28 @@ export function BulkImport({ config, existentes }: { config: EntityConfig; exist
   const inputRef = useRef<HTMLInputElement>(null)
 
   const resumen = useMemo(() => {
-    if (!filas) return { nuevos: 0, actualizar: 0, errores: 0 }
-    return {
-      nuevos: filas.filter(f => f.estado === 'nuevo').length,
-      actualizar: filas.filter(f => f.estado === 'actualizar').length,
-      errores: filas.filter(f => f.estado === 'error').length,
-    }
+    const base = { nuevo: 0, actualizar: 0, error: 0, duplicado: 0, omitido: 0 }
+    for (const f of filas ?? []) base[f.estado]++
+    return base
   }, [filas])
 
+  const aCargar = resumen.nuevo + resumen.actualizar
+
   async function onFile(file: File) {
-    setParsing(true); setParseError(''); setResult(null); setFilas(null); setFileName(file.name)
+    setParsing(true); setParseError(''); setResult(null); setFilas(null); setColumnas(null); setFileName(file.name)
     try {
-      const crudas = await parsearArchivo(file, config)
-      if (crudas.length === 0) { setParseError('El archivo no tiene filas de datos.'); return }
-      setFilas(crudas.map(c => validarFila(config, c, existSet)))
+      const archivo = await parsearArchivo(file, config)
+      setColumnas({
+        reconocidas: archivo.reconocidas,
+        desconocidas: archivo.desconocidas,
+        faltantes: archivo.faltantes,
+      })
+      if (archivo.reconocidas.length === 0) {
+        setParseError('No se reconoció ninguna columna. Revisa que la primera fila tenga los encabezados de la plantilla.')
+        return
+      }
+      if (archivo.filas.length === 0) { setParseError('El archivo no tiene filas de datos.'); return }
+      setFilas(validarLote(config, archivo.filas, existSet).filas)
     } catch (e) {
       setParseError(e instanceof Error ? e.message : 'No se pudo leer el archivo.')
     } finally {
@@ -50,7 +74,7 @@ export function BulkImport({ config, existentes }: { config: EntityConfig; exist
 
   async function confirmar() {
     if (!filas) return
-    const validas = filas.filter(f => f.estado !== 'error')
+    const validas = filas.filter(f => f.estado === 'nuevo' || f.estado === 'actualizar')
     if (validas.length === 0) return
     setCommitting(true)
     const commit: FilaCommit[] = validas.map(f => ({ fila: f.fila, clave: f.claveMostrada, datos: f.datos }))
@@ -59,9 +83,48 @@ export function BulkImport({ config, existentes }: { config: EntityConfig; exist
     setCommitting(false)
   }
 
-  function reset() { setFilas(null); setResult(null); setFileName(''); setParseError(''); if (inputRef.current) inputRef.current.value = '' }
+  function reset() {
+    setFilas(null); setResult(null); setFileName(''); setParseError(''); setColumnas(null)
+    if (inputRef.current) inputRef.current.value = ''
+  }
 
   const keyCols = config.columns.slice(0, 4)
+
+  // Columnas de la vista previa: fila, estado, las 4 claves del archivo y la nota.
+  const columnasPreview = useMemo<ColumnaTabla<FilaValidada>[]>(() => {
+    const notaDe = (f: FilaValidada) =>
+      f.errores.length
+        ? f.errores.join(' · ')
+        : f.avisos.length
+          ? f.avisos.join(' · ')
+          : f.estado === 'actualizar'
+            ? 'Se actualizará solo con las columnas del archivo'
+            : ''
+    return [
+      { id: 'fila', header: 'Fila', valor: (f) => f.fila, ancho: 'w-16', className: 'font-mono text-xs text-gray-400', tarjeta: 'meta' },
+      {
+        id: 'estado', header: 'Estado', valor: (f) => ESTADO_META[f.estado].label, tarjeta: 'badge',
+        celda: (f) => {
+          const meta = ESTADO_META[f.estado]
+          return <span className={`font-body text-xs font-medium px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span>
+        },
+      },
+      ...keyCols.map((c, i): ColumnaTabla<FilaValidada> => ({
+        id: c.key,
+        header: c.label,
+        valor: (f) => formatoCelda(f.datos[c.key]),
+        ancho: 'max-w-[200px]',
+        className: 'truncate text-gray-700',
+        prioridad: i === 0 ? 1 : i < 2 ? 2 : 3,
+        tarjeta: i === 0 ? 'titulo' : i === 1 ? 'subtitulo' : 'meta',
+      })),
+      {
+        id: 'nota', header: 'Observaciones', valor: notaDe, tarjeta: 'cuerpo',
+        celda: (f) => <span className={f.errores.length ? 'text-red-600' : 'text-gray-400'}>{notaDe(f)}</span>,
+        className: 'text-xs',
+      },
+    ]
+  }, [keyCols])
 
   return (
     <div className="space-y-5">
@@ -106,6 +169,29 @@ export function BulkImport({ config, existentes }: { config: EntityConfig; exist
             <p className="font-body text-sm text-red-700">{parseError}</p>
           </div>
         )}
+
+        {columnas && (columnas.faltantes.length > 0 || columnas.desconocidas.length > 0) && (
+          <div className="ml-8 mt-3 space-y-2">
+            {columnas.faltantes.length > 0 && (
+              <div className="flex items-start gap-2 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                <p className="font-body text-sm text-red-700">
+                  Faltan columnas obligatorias: <strong>{columnas.faltantes.join(', ')}</strong>.
+                  Descarga la plantilla y copia sus encabezados.
+                </p>
+              </div>
+            )}
+            {columnas.desconocidas.length > 0 && (
+              <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <p className="font-body text-sm text-amber-800">
+                  Estas columnas del archivo no se usan y se ignoran:{' '}
+                  <strong>{columnas.desconocidas.join(', ')}</strong>.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Paso 3: preview */}
@@ -116,49 +202,48 @@ export function BulkImport({ config, existentes }: { config: EntityConfig; exist
               <span className="w-6 h-6 rounded-full bg-brand-green text-white text-xs flex items-center justify-center font-bold">3</span>
               Vista previa ({filas.length} filas)
             </h3>
-            <div className="flex items-center gap-2">
-              <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><Plus className="w-3 h-3" /> {resumen.nuevos} nuevos</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1 bg-green-100 text-green-700 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><Plus className="w-3 h-3" /> {resumen.nuevo} nuevos</span>
               <span className="inline-flex items-center gap-1 bg-blue-100 text-blue-700 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><RefreshCw className="w-3 h-3" /> {resumen.actualizar} a actualizar</span>
-              {resumen.errores > 0 && <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><X className="w-3 h-3" /> {resumen.errores} con error</span>}
+              {resumen.duplicado > 0 && <span className="inline-flex items-center gap-1 bg-amber-100 text-amber-700 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><Copy className="w-3 h-3" /> {resumen.duplicado} repetidas</span>}
+              {resumen.omitido > 0 && <span className="inline-flex items-center gap-1 bg-gray-100 text-gray-500 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><MinusCircle className="w-3 h-3" /> {resumen.omitido} omitidas</span>}
+              {resumen.error > 0 && <span className="inline-flex items-center gap-1 bg-red-100 text-red-700 font-body text-xs font-semibold px-2.5 py-1 rounded-full"><X className="w-3 h-3" /> {resumen.error} con error</span>}
             </div>
           </div>
 
-          <div className="overflow-x-auto max-h-[460px]">
-            <table className="w-full">
-              <thead className="sticky top-0 bg-gray-50">
-                <tr className="border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Fila</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Estado</th>
-                  {keyCols.map(c => <th key={c.key} className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">{c.label}</th>)}
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-3 py-2">Observaciones</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filas.map((f, i) => {
-                  const meta = ESTADO_META[f.estado]
-                  return (
-                    <tr key={i} className={f.estado === 'error' ? 'bg-red-50/30' : ''}>
-                      <td className="px-3 py-2 font-mono text-xs text-gray-400">{f.fila}</td>
-                      <td className="px-3 py-2"><span className={`font-body text-xs font-medium px-2 py-0.5 rounded-full ${meta.cls}`}>{meta.label}</span></td>
-                      {keyCols.map(c => <td key={c.key} className="px-3 py-2 font-body text-sm text-gray-700 max-w-[200px] truncate">{String(f.datos[c.key] ?? '—')}</td>)}
-                      <td className="px-3 py-2 font-body text-xs text-red-600">{f.errores.join(' · ') || (f.estado === 'actualizar' ? 'Se actualizará el existente' : '')}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="p-4">
+            <TablaEstandar
+              id={`import-preview-${config.id}`}
+              titulo={`Vista previa · ${config.label}`}
+              modulo="Sistema"
+              entidad={config.id}
+              datos={filas}
+              columnas={columnasPreview}
+              filaId={(f) => String(f.fila)}
+              busqueda="Buscar en la vista previa…"
+              filasPorPagina={100}
+              filaClassName={(f) => (
+                f.estado === 'error' ? 'bg-red-50/30'
+                  : f.estado === 'duplicado' ? 'bg-amber-50/40'
+                  : f.estado === 'omitido' ? 'opacity-50' : ''
+              )}
+              vacio={<p className="font-body text-sm text-gray-400">El archivo no trae filas.</p>}
+            />
           </div>
 
           <div className="p-5 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
             <button onClick={reset} className="font-body text-sm text-gray-500 hover:text-gray-700">Cambiar archivo</button>
-            <button onClick={confirmar} disabled={committing || (resumen.nuevos + resumen.actualizar) === 0}
+            <button onClick={confirmar} disabled={committing || aCargar === 0}
               className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-5 py-2.5 rounded-lg hover:bg-brand-green-dark transition-colors disabled:opacity-50">
               {committing ? <Loader2 className="w-4 h-4 animate-spin" /> : <ArrowRight className="w-4 h-4" />}
-              {committing ? 'Procesando...' : `Confirmar carga de ${resumen.nuevos + resumen.actualizar} filas`}
+              {committing ? 'Procesando...' : `Confirmar carga de ${aCargar} filas`}
             </button>
           </div>
-          {resumen.errores > 0 && (
-            <p className="px-5 pb-4 -mt-2 font-body text-xs text-gray-400">Las filas con error se omiten; corrígelas y vuelve a subir el archivo.</p>
+          {(resumen.error > 0 || resumen.duplicado > 0) && (
+            <p className="px-5 pb-4 -mt-2 font-body text-xs text-gray-400">
+              {resumen.error > 0 && 'Las filas con error se omiten; corrígelas y vuelve a subir el archivo. '}
+              {resumen.duplicado > 0 && 'De cada clave repetida se carga solo la primera aparición.'}
+            </p>
           )}
         </div>
       )}
@@ -207,9 +292,17 @@ export function BulkImport({ config, existentes }: { config: EntityConfig; exist
             </div>
           )}
 
-          <button onClick={reset} className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-50">
-            <FileSpreadsheet className="w-4 h-4" /> Cargar otro archivo
-          </button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <button onClick={reset} className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-gray-50">
+              <FileSpreadsheet className="w-4 h-4" /> Cargar otro archivo
+            </button>
+            {result.detalle.length > 0 && (
+              <button onClick={() => descargarInformeCarga(config, fileName, result.detalle)}
+                className="flex items-center gap-2 border border-brand-green text-brand-green font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-green-50">
+                <Download className="w-4 h-4" /> Descargar informe
+              </button>
+            )}
+          </div>
         </div>
       )}
     </div>

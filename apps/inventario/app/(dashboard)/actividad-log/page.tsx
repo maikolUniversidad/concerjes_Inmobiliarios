@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRequierePermiso } from '@/components/permisos/PermisosProvider'
+import { TablaEstandar, registrarCopia, type ColumnaTabla } from '@/components/ui/tabla'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -117,71 +118,23 @@ function downloadCsv(csv: string) {
   URL.revokeObjectURL(url)
 }
 
-// ─── Row Component ─────────────────────────────────────────────────────────────
+// ─── Detalle expandible ────────────────────────────────────────────────────────
 
-function LogRow({ log }: { log: LogEntry }) {
-  const [expanded, setExpanded] = useState(false)
-  const hasDetail = log.detalle && Object.keys(log.detalle).length > 0
-
+function DetalleCelda({ detalle }: { detalle: Record<string, unknown> | null }) {
+  if (!detalle || Object.keys(detalle).length === 0) {
+    return <span className="font-body text-xs text-gray-300">—</span>
+  }
   return (
-    <>
-      <tr className="hover:bg-gray-50/60 transition-colors">
-        <td className="px-4 py-2.5 whitespace-nowrap">
-          <span className="font-body text-xs text-gray-500">{formatDateTime(log.created_at)}</span>
-        </td>
-        <td className="px-4 py-2.5">
-          <div className="flex items-center gap-2">
-            <SmallAvatar
-              url={log.usuarios?.avatar_url ?? null}
-              nombre={log.usuarios?.nombre ?? log.usuario_nombre}
-            />
-            <span className="font-body text-xs text-gray-700 leading-tight">
-              {log.usuarios?.nombre ?? log.usuario_nombre ?? log.usuario_email ?? '—'}
-            </span>
-          </div>
-        </td>
-        <td className="px-4 py-2.5">
-          <span className={`font-body text-xs font-medium px-2 py-0.5 rounded-full ${moduloColor(log.modulo)}`}>
-            {log.modulo}
-          </span>
-        </td>
-        <td className="px-4 py-2.5">
-          <span className="font-body text-xs font-semibold text-gray-700 uppercase tracking-wide">
-            {log.accion}
-          </span>
-        </td>
-        <td className="px-4 py-2.5 max-w-xs">
-          <span className="font-body text-xs text-gray-600 line-clamp-2">{log.descripcion}</span>
-        </td>
-        <td className="px-4 py-2.5 hidden lg:table-cell">
-          <span className="font-body text-xs text-gray-400">{log.entidad ?? '—'}</span>
-        </td>
-        <td className="px-4 py-2.5 w-8">
-          {hasDetail ? (
-            <button
-              type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-600 transition-colors"
-            >
-              {expanded ? (
-                <ChevronDown className="w-3.5 h-3.5" />
-              ) : (
-                <ChevronRight className="w-3.5 h-3.5" />
-              )}
-            </button>
-          ) : null}
-        </td>
-      </tr>
-      {expanded && hasDetail && (
-        <tr>
-          <td colSpan={7} className="px-4 pb-3">
-            <pre className="bg-gray-50 border border-gray-100 rounded-lg p-3 text-xs font-mono text-gray-600 overflow-x-auto whitespace-pre-wrap">
-              {JSON.stringify(log.detalle, null, 2)}
-            </pre>
-          </td>
-        </tr>
-      )}
-    </>
+    <details className="group">
+      <summary className="cursor-pointer list-none font-body text-xs text-gray-400 hover:text-gray-600">
+        <ChevronRight className="inline w-3.5 h-3.5 group-open:hidden" />
+        <ChevronDown className="hidden w-3.5 h-3.5 group-open:inline" />
+        Ver
+      </summary>
+      <pre className="mt-1 max-w-[320px] overflow-x-auto whitespace-pre-wrap rounded-lg border border-gray-100 bg-gray-50 p-2 font-mono text-[11px] text-gray-600">
+        {JSON.stringify(detalle, null, 2)}
+      </pre>
+    </details>
   )
 }
 
@@ -199,7 +152,6 @@ export default function ActividadLogPage() {
   const [accionFilter, setAccionFilter] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [search, setSearch] = useState('')
 
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -248,20 +200,50 @@ export default function ActividadLogPage() {
     }
     if (dateFrom && l.created_at < dateFrom) return false
     if (dateTo && l.created_at > dateTo + 'T23:59:59') return false
-    if (search) {
-      const q = search.toLowerCase()
-      if (
-        !l.descripcion.toLowerCase().includes(q) &&
-        !(l.accion ?? '').toLowerCase().includes(q) &&
-        !(l.entidad ?? '').toLowerCase().includes(q)
-      )
-        return false
-    }
     return true
   })
 
   const selectCls =
     'border border-gray-200 rounded-lg px-2.5 py-1.5 font-body text-xs outline-none focus:border-[#2E7D32] bg-white text-gray-700'
+
+  const columnas: ColumnaTabla<LogEntry>[] = [
+    {
+      id: 'fecha', header: 'Fecha / Hora', valor: (l) => formatDateTime(l.created_at),
+      className: 'whitespace-nowrap text-xs text-gray-500', tarjeta: 'meta',
+    },
+    {
+      id: 'usuario', header: 'Usuario', tarjeta: 'titulo',
+      valor: (l) => l.usuarios?.nombre ?? l.usuario_nombre ?? l.usuario_email ?? '',
+      celda: (l) => (
+        <div className="flex items-center gap-2">
+          <SmallAvatar url={l.usuarios?.avatar_url ?? null} nombre={l.usuarios?.nombre ?? l.usuario_nombre} />
+          <span className="font-body text-xs text-gray-700 leading-tight">
+            {l.usuarios?.nombre ?? l.usuario_nombre ?? l.usuario_email ?? '—'}
+          </span>
+        </div>
+      ),
+    },
+    { id: 'email', header: 'Correo', valor: (l) => l.usuario_email ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'oculto' },
+    {
+      id: 'modulo', header: 'Módulo', valor: (l) => l.modulo, tarjeta: 'badge',
+      celda: (l) => (
+        <span className={`font-body text-xs font-medium px-2 py-0.5 rounded-full ${moduloColor(l.modulo)}`}>{l.modulo}</span>
+      ),
+    },
+    {
+      id: 'accion', header: 'Acción', valor: (l) => l.accion, prioridad: 2, tarjeta: 'meta',
+      className: 'font-semibold uppercase tracking-wide text-xs text-gray-700',
+    },
+    {
+      id: 'descripcion', header: 'Descripción', valor: (l) => l.descripcion, ancho: 'max-w-xs',
+      className: 'text-xs text-gray-600', tarjeta: 'cuerpo',
+    },
+    { id: 'entidad', header: 'Entidad', valor: (l) => l.entidad ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'oculto' },
+    {
+      id: 'detalle', header: 'Detalle', copiable: false, filtrable: false, prioridad: 3, tarjeta: 'oculto',
+      valor: () => '', celda: (l) => <DetalleCelda detalle={l.detalle} />,
+    },
+  ]
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -285,7 +267,14 @@ export default function ActividadLogPage() {
           </button>
           <button
             type="button"
-            onClick={() => downloadCsv(buildCsv(filtered))}
+            onClick={() => {
+              downloadCsv(buildCsv(filtered))
+              void registrarCopia({
+                modulo: 'Sistema', entidad: 'actividad_log', titulo: 'Log de actividad',
+                filas: filtered.length, columnas: ['Fecha', 'Usuario', 'Email', 'Módulo', 'Acción', 'Descripción', 'Entidad', 'Entidad ID'],
+                origen: 'descarga',
+              })
+            }}
             className="flex items-center gap-1.5 bg-[#2E7D32] hover:bg-[#1B5E20] text-white font-body font-semibold text-xs px-3 py-2 rounded-xl transition-colors"
           >
             <Download className="w-3.5 h-3.5" />
@@ -350,15 +339,7 @@ export default function ActividadLogPage() {
           />
         </div>
 
-        <input
-          type="text"
-          placeholder="Buscar en descripción..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className={`${selectCls} flex-1 min-w-[160px]`}
-        />
-
-        {(moduloFilter || accionFilter || usuarioFilter || dateFrom || dateTo || search) && (
+        {(moduloFilter || accionFilter || usuarioFilter || dateFrom || dateTo) && (
           <button
             type="button"
             onClick={() => {
@@ -367,7 +348,6 @@ export default function ActividadLogPage() {
               setUsuarioFilter('')
               setDateFrom('')
               setDateTo('')
-              setSearch('')
             }}
             className="font-body text-xs text-gray-400 hover:text-gray-600 underline"
           >
@@ -376,69 +356,35 @@ export default function ActividadLogPage() {
         )}
       </div>
 
-      {/* Table */}
-      <div className="rounded-2xl border border-gray-100 shadow-sm bg-white overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-24">
-            <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[760px]">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3 whitespace-nowrap">
-                    Fecha / Hora
-                  </th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                    Usuario
-                  </th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                    Módulo
-                  </th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                    Acción
-                  </th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">
-                    Descripción
-                  </th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3 hidden lg:table-cell">
-                    Entidad
-                  </th>
-                  <th className="px-4 py-3 w-8" />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="py-20 text-center">
-                      <Activity className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                      <p className="font-body text-sm text-gray-400">No hay registros de actividad</p>
-                    </td>
-                  </tr>
-                )}
-                {filtered.map((log) => (
-                  <LogRow key={log.id} log={log} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-        {!loading && filtered.length > 0 && (
-          <div className="border-t border-gray-50 px-4 py-2.5 flex items-center justify-between">
-            <span className="font-body text-xs text-gray-400">
-              {filtered.length} registro{filtered.length !== 1 ? 's' : ''}{' '}
-              {filtered.length !== logs.length ? `(filtrado de ${logs.length})` : ''}
+      {/* Tabla */}
+      {loading ? (
+        <div className="flex items-center justify-center py-24">
+          <Loader2 className="w-8 h-8 animate-spin text-[#2E7D32]" />
+        </div>
+      ) : (
+        <TablaEstandar
+          id="actividad-log"
+          titulo="Log de actividad"
+          modulo="Sistema"
+          entidad="actividad_log"
+          datos={filtered}
+          columnas={columnas}
+          filaId={(l) => l.id}
+          busqueda="Buscar en descripción, acción o entidad…"
+          descargable={false}
+          vacio={
+            <>
+              <Activity className="w-10 h-10 text-gray-200 mx-auto mb-3" />
+              <p className="font-body text-sm text-gray-400">No hay registros de actividad</p>
+            </>
+          }
+          herramientas={refreshing ? (
+            <span className="flex items-center gap-1.5 font-body text-xs text-gray-400">
+              <Loader2 className="w-3 h-3 animate-spin" /> Actualizando…
             </span>
-            {refreshing && (
-              <span className="flex items-center gap-1.5 font-body text-xs text-gray-400">
-                <Loader2 className="w-3 h-3 animate-spin" />
-                Actualizando…
-              </span>
-            )}
-          </div>
-        )}
-      </div>
+          ) : null}
+        />
+      )}
     </div>
   )
 }

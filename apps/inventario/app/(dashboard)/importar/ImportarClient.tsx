@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { Package, Truck, Users, History, Building2, MapPin } from 'lucide-react'
 import { BulkImport } from '@/components/import/BulkImport'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import {
   PRODUCTOS_CONFIG, PROVEEDORES_CONFIG, USUARIOS_CONFIG,
   EMPRESAS_USUARIAS_CONFIG, SEDES_CONFIG,
@@ -43,6 +44,20 @@ export function ImportarClient({ existentes, historial }: Props) {
   const [tab, setTab] = useState<TabId>('productos')
   const activa = TABS.find(t => t.id === tab)!
 
+  const columnasHistorial: ColumnaTabla<HistorialCarga>[] = [
+    { id: 'entidad', header: 'Entidad', valor: (h) => ENTIDAD_LABEL[h.entidad] ?? h.entidad, className: 'text-gray-900', tarjeta: 'titulo' },
+    { id: 'archivo', header: 'Archivo', valor: (h) => h.archivo_nombre ?? '', ancho: 'max-w-[180px]', className: 'truncate text-xs text-gray-500', tarjeta: 'subtitulo' },
+    { id: 'total', header: 'Filas', valor: (h) => h.total, align: 'right', prioridad: 3, className: 'text-gray-600', tarjeta: 'meta' },
+    { id: 'creados', header: 'Creados', valor: (h) => h.creados, align: 'right', className: 'font-semibold text-green-700', tarjeta: 'meta' },
+    { id: 'actualizados', header: 'Actualizados', valor: (h) => h.actualizados, align: 'right', prioridad: 2, className: 'font-semibold text-blue-700', tarjeta: 'meta' },
+    { id: 'errores', header: 'Errores', valor: (h) => h.errores, align: 'right', className: 'font-semibold text-red-600', tarjeta: 'badge' },
+    { id: 'usuario', header: 'Usuario', valor: (h) => h.usuario_email ?? '', prioridad: 2, ancho: 'max-w-[160px]', className: 'truncate text-xs text-gray-500', tarjeta: 'meta' },
+    {
+      id: 'fecha', header: 'Fecha', align: 'right', prioridad: 2, className: 'text-xs text-gray-400 whitespace-nowrap', tarjeta: 'meta',
+      valor: (h) => new Date(h.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }),
+    },
+  ]
+
   return (
     <div className="space-y-6">
       {/* Tabs */}
@@ -68,38 +83,19 @@ export function ImportarClient({ existentes, historial }: Props) {
           <History className="w-4 h-4 text-brand-green" />
           <h3 className="font-heading font-semibold text-sm text-gray-900">Historial de cargas recientes</h3>
         </div>
-        {historial.length === 0 ? (
-          <p className="px-5 py-8 text-center font-body text-sm text-gray-400">Aún no se han realizado cargas masivas.</p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50 border-b border-gray-100">
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Entidad</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Archivo</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Creados</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Actualizados</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Errores</th>
-                  <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Usuario</th>
-                  <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Fecha</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {historial.map(h => (
-                  <tr key={h.id} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-2.5 font-body text-sm text-gray-900">{ENTIDAD_LABEL[h.entidad] ?? h.entidad}</td>
-                    <td className="px-4 py-2.5 font-body text-xs text-gray-500 max-w-[180px] truncate">{h.archivo_nombre ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-right font-body text-sm text-green-700 font-semibold">{h.creados}</td>
-                    <td className="px-4 py-2.5 text-right font-body text-sm text-blue-700 font-semibold">{h.actualizados}</td>
-                    <td className="px-4 py-2.5 text-right font-body text-sm text-red-600 font-semibold">{h.errores}</td>
-                    <td className="px-4 py-2.5 font-body text-xs text-gray-500 max-w-[160px] truncate">{h.usuario_email ?? '—'}</td>
-                    <td className="px-4 py-2.5 text-right font-body text-xs text-gray-400">{new Date(h.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+        <div className="p-4">
+          <TablaEstandar
+            id="importar-historial"
+            titulo="Historial de cargas"
+            modulo="Sistema"
+            entidad="cargas_masivas"
+            datos={historial}
+            columnas={columnasHistorial}
+            filaId={(h) => h.id}
+            busqueda="Buscar por entidad, archivo o usuario…"
+            vacio={<p className="font-body text-sm text-gray-400">Aún no se han realizado cargas masivas.</p>}
+          />
+        </div>
       </div>
     </div>
   )

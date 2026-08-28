@@ -11,6 +11,8 @@ import {
 import { toast } from 'sonner'
 import { avanzarEstadoOC, registrarRecepcionOC, comentarOC, actualizarItemsOC } from '../actions'
 
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
 export interface OCDetalle {
@@ -176,6 +178,51 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
     if (cambios.length === 0) { toast.message('No hay cambios de recepción.'); return }
     accion(() => registrarRecepcionOC(oc.id, cambios), 'Recepción registrada.')
   }
+
+  const columnasItems: ColumnaTabla<OCItem>[] = [
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
+      ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: (it) => (
+        <>
+          <p className="font-body text-sm text-gray-800">{it.producto?.nombre_estandar ?? '—'}</p>
+          <p className="font-body text-xs text-gray-400">{it.producto?.presentacion}</p>
+        </>
+      ),
+    },
+    { id: 'presentacion', header: 'Presentación', valor: (it) => it.producto?.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    { id: 'pedido', header: 'Pedido', valor: (it) => Number(it.cantidad_ped), align: 'right', className: 'text-gray-700', tarjeta: 'meta' },
+    {
+      id: 'precio', header: 'Precio', align: 'right', prioridad: 2, className: 'text-gray-600', tarjeta: 'meta',
+      valor: (it) => Number(it.precio_unit),
+      copiaTexto: (it) => String(Number(it.precio_unit)),
+      celda: (it) => <>{cop.format(Number(it.precio_unit))}</>,
+    },
+    {
+      id: 'subtotal', header: 'Subtotal', align: 'right', className: 'font-semibold text-gray-900', tarjeta: 'meta',
+      valor: (it) => Number(it.subtotal ?? Number(it.cantidad_ped) * Number(it.precio_unit)),
+      copiaTexto: (it) => String(Number(it.subtotal ?? Number(it.cantidad_ped) * Number(it.precio_unit))),
+      celda: (it) => <>{cop.format(Number(it.subtotal ?? Number(it.cantidad_ped) * Number(it.precio_unit)))}</>,
+    },
+    {
+      id: 'recibido', header: 'Recibido', align: 'center', ancho: 'w-28', interactiva: puedeRecibir, tarjeta: 'badge',
+      valor: (it) => Number(it.cantidad_rec),
+      copiaTexto: (it) => `${Number(it.cantidad_rec)}/${Number(it.cantidad_ped)}`,
+      celda: (it) => {
+        const rec = puedeRecibir ? (recepcion[it.id] ?? 0) : Number(it.cantidad_rec)
+        const completo = Number(it.cantidad_rec) >= Number(it.cantidad_ped)
+        return puedeRecibir ? (
+          <input type="number" min={0} max={Number(it.cantidad_ped)} value={rec}
+            onChange={(e) => setRecepcion(p => ({ ...p, [it.id]: Number(e.target.value) }))}
+            className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-sm text-right outline-none focus:border-brand-green" />
+        ) : (
+          <span className={`font-body text-sm ${completo ? 'text-green-600 font-semibold' : Number(it.cantidad_rec) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+            {Number(it.cantidad_rec)} / {Number(it.cantidad_ped)}
+          </span>
+        )
+      },
+    },
+  ]
 
   return (
     <div className="space-y-5">
@@ -352,46 +399,19 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
             </div>
           </div>
         ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead>
-              <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Producto</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Pedido</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Precio</th>
-                <th className="text-right font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Subtotal</th>
-                <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase px-4 py-2.5">Recibido</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {items.map(it => {
-                const rec = puedeRecibir ? (recepcion[it.id] ?? 0) : Number(it.cantidad_rec)
-                const completo = Number(it.cantidad_rec) >= Number(it.cantidad_ped)
-                return (
-                  <tr key={it.id} className="hover:bg-gray-50/50">
-                    <td className="px-4 py-2.5">
-                      <p className="font-body text-sm text-gray-800">{it.producto?.nombre_estandar ?? '—'}</p>
-                      <p className="font-body text-xs text-gray-400">{it.producto?.presentacion}</p>
-                    </td>
-                    <td className="px-4 py-2.5 text-right font-body text-sm text-gray-700">{Number(it.cantidad_ped)}</td>
-                    <td className="px-4 py-2.5 text-right font-body text-sm text-gray-600">{cop.format(Number(it.precio_unit))}</td>
-                    <td className="px-4 py-2.5 text-right font-body text-sm text-gray-900 font-semibold">{cop.format(Number(it.subtotal ?? Number(it.cantidad_ped) * Number(it.precio_unit)))}</td>
-                    <td className="px-4 py-2.5 text-center">
-                      {puedeRecibir ? (
-                        <input type="number" min={0} max={Number(it.cantidad_ped)} value={rec}
-                          onChange={(e) => setRecepcion(p => ({ ...p, [it.id]: Number(e.target.value) }))}
-                          className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-sm text-right outline-none focus:border-brand-green" />
-                      ) : (
-                        <span className={`font-body text-sm ${completo ? 'text-green-600 font-semibold' : Number(it.cantidad_rec) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
-                          {Number(it.cantidad_rec)} / {Number(it.cantidad_ped)}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        <div className="p-4">
+          <TablaEstandar
+            id="oc-items"
+            titulo={`Ítems OC ${oc.numero_oc}`}
+            modulo="Compras"
+            entidad="oc_items"
+            datos={items}
+            columnas={columnasItems}
+            filaId={(it) => it.id}
+            busqueda="Buscar producto de la orden…"
+            filasPorPagina={0}
+            vacio={<p className="font-body text-sm text-gray-400">La orden no tiene ítems.</p>}
+          />
         </div>
         )}
         {puedeRecibir && (

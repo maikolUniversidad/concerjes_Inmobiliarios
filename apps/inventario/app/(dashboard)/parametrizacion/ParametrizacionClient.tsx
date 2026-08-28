@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { insertarPorLotes } from '@/lib/supabase/paginado'
 import { logActivity } from '@/lib/activity'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 export interface SedeOpt {
   id: string
@@ -36,6 +37,8 @@ export interface ParamRow {
   activo: boolean
   observacion: string | null
 }
+
+type FilaParam = ParamRow & { prod?: ProductoOpt }
 
 const inputCls =
   'w-full border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white transition-colors'
@@ -160,6 +163,50 @@ export function ParametrizacionClient({
     }
   }
 
+  const columnas: ColumnaTabla<FilaParam>[] = [
+    {
+      id: 'producto', header: 'Producto', valor: (r) => r.prod?.nombre_estandar ?? '', ancho: 'min-w-[240px]', tarjeta: 'titulo',
+      celda: (r) => (
+        <>
+          <p className="font-body text-sm font-medium text-gray-900 truncate max-w-[280px]">{r.prod?.nombre_estandar ?? '—'}</p>
+          <p className="font-mono text-[11px] text-gray-400">
+            {r.prod?.codigo ? `Cód ${r.prod.codigo}` : r.prod?.ref ? `REF ${r.prod.ref}` : ''}{r.prod?.presentacion ? ` · ${r.prod.presentacion}` : ''}
+          </p>
+        </>
+      ),
+    },
+    { id: 'codigo', header: 'Código', valor: (r) => r.prod?.codigo ?? r.prod?.ref ?? '', prioridad: 3, className: 'font-mono text-xs text-gray-400', tarjeta: 'meta' },
+    { id: 'presentacion', header: 'Presentación', valor: (r) => r.prod?.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
+    {
+      id: 'minima', header: 'Cant. mínima', valor: (r) => r.cantidad_minima ?? 0, align: 'center', ancho: 'w-28',
+      interactiva: true, tarjeta: 'meta',
+      celda: (r) => (
+        <input type="number" min={0} step="1" defaultValue={r.cantidad_minima ?? 0} disabled={!puedeGestionar}
+          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (r.cantidad_minima ?? 0)) actualizar(r.id, { cantidad_minima: v }) }}
+          className={`${inputCls} text-center disabled:bg-gray-50`} />
+      ),
+    },
+    {
+      id: 'maxima', header: 'Cant. máxima', valor: (r) => r.cantidad_maxima, align: 'center', ancho: 'w-28',
+      interactiva: true, tarjeta: 'meta',
+      celda: (r) => (
+        <input type="number" min={0} step="1" defaultValue={r.cantidad_maxima} disabled={!puedeGestionar}
+          onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.cantidad_maxima) actualizar(r.id, { cantidad_maxima: v }) }}
+          className={`${inputCls} text-center font-semibold disabled:bg-gray-50`} />
+      ),
+    },
+    {
+      id: 'activo', header: 'Activo', valor: (r) => (r.activo ? 'Activo' : 'Inactivo'), align: 'center', ancho: 'w-20',
+      interactiva: true, tarjeta: 'badge',
+      celda: (r) => (
+        <button type="button" disabled={!puedeGestionar} onClick={() => actualizar(r.id, { activo: !r.activo })}
+          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${r.activo ? 'bg-brand-green' : 'bg-gray-200'} disabled:opacity-60`}>
+          <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${r.activo ? 'translate-x-4' : 'translate-x-0.5'}`} />
+        </button>
+      ),
+    },
+  ]
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-[320px_minmax(0,1fr)] gap-4 sm:gap-5">
 
@@ -260,62 +307,30 @@ export function ParametrizacionClient({
             )}
 
             {/* Tabla de parametrización */}
-            <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px]">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-4 py-3">Producto</th>
-                      <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-3 py-3 w-28">Cant. mínima</th>
-                      <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-3 py-3 w-28">Cant. máxima</th>
-                      <th className="text-center font-body font-semibold text-xs text-gray-500 uppercase tracking-wide px-3 py-3 w-20">Activo</th>
-                      {puedeGestionar && <th className="px-3 py-3 w-10" />}
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {rowsSede.length === 0 && (
-                      <tr><td colSpan={puedeGestionar ? 5 : 4} className="py-14 text-center">
-                        <Package className="w-10 h-10 text-gray-200 mx-auto mb-2" />
-                        <p className="font-body text-sm text-gray-400">Esta sede aún no tiene productos parametrizados.</p>
-                      </td></tr>
-                    )}
-                    {rowsSede.map((r) => (
-                      <tr key={r.id} className="hover:bg-gray-50/60">
-                        <td className="px-4 py-2.5">
-                          <p className="font-body text-sm font-medium text-gray-900 truncate max-w-[280px]">{r.prod?.nombre_estandar ?? '—'}</p>
-                          <p className="font-mono text-[11px] text-gray-400">
-                            {r.prod?.codigo ? `Cód ${r.prod.codigo}` : r.prod?.ref ? `REF ${r.prod.ref}` : ''}{r.prod?.presentacion ? ` · ${r.prod.presentacion}` : ''}
-                          </p>
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <input type="number" min={0} step="1" defaultValue={r.cantidad_minima ?? 0} disabled={!puedeGestionar}
-                            onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== (r.cantidad_minima ?? 0)) actualizar(r.id, { cantidad_minima: v }) }}
-                            className={`${inputCls} text-center disabled:bg-gray-50`} />
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <input type="number" min={0} step="1" defaultValue={r.cantidad_maxima} disabled={!puedeGestionar}
-                            onBlur={(e) => { const v = Number(e.target.value) || 0; if (v !== r.cantidad_maxima) actualizar(r.id, { cantidad_maxima: v }) }}
-                            className={`${inputCls} text-center font-semibold disabled:bg-gray-50`} />
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          <button type="button" disabled={!puedeGestionar} onClick={() => actualizar(r.id, { activo: !r.activo })}
-                            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${r.activo ? 'bg-brand-green' : 'bg-gray-200'} disabled:opacity-60`}>
-                            <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white shadow transition-transform ${r.activo ? 'translate-x-4' : 'translate-x-0.5'}`} />
-                          </button>
-                        </td>
-                        {puedeGestionar && (
-                          <td className="px-3 py-2.5 text-center">
-                            <button onClick={() => eliminar(r.id)} className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </td>
-                        )}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
+            <TablaEstandar
+              id="parametrizacion"
+              titulo={`Parametrización · ${sede?.nombre ?? ''}`}
+              modulo="Parametrización"
+              entidad="sede_productos"
+              datos={rowsSede}
+              columnas={columnas}
+              filaId={(r) => r.id}
+              busqueda="Buscar producto parametrizado…"
+              filasPorPagina={0}
+              anchoAcciones="w-12"
+              acciones={puedeGestionar ? (r) => (
+                <button onClick={() => eliminar(r.id)} title="Quitar de la sede"
+                  className="p-1.5 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 transition-colors">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              ) : undefined}
+              vacio={
+                <>
+                  <Package className="w-10 h-10 text-gray-200 mx-auto mb-2" />
+                  <p className="font-body text-sm text-gray-400">Esta sede aún no tiene productos parametrizados.</p>
+                </>
+              }
+            />
           </>
         )}
       </div>
