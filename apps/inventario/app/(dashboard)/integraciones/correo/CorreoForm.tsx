@@ -5,16 +5,42 @@ import { useFormStatus } from 'react-dom'
 import { toast } from 'sonner'
 import Link from 'next/link'
 import {
-  Mail, Send, Inbox, Save, Loader2, CheckCircle2, AlertCircle, RefreshCw, Plug, ShieldCheck, BellRing,
+  Mail, Send, Inbox, Save, Loader2, CheckCircle2, AlertCircle, RefreshCw, Plug, ShieldCheck, BellRing, KeyRound,
 } from 'lucide-react'
-import { guardarCorreo, probarConexion, enviarPrueba, leerBandeja, procesarPendientes, type ActionResult, type MensajeBandeja } from '../actions'
+import { guardarCorreo, probarConexion, enviarPrueba, leerBandeja, procesarPendientes, desconectarOauth, type ActionResult, type MensajeBandeja } from '../actions'
 
 export interface CorreoDefaults {
   nombre: string; from_nombre: string; from_email: string
+  auth_tipo: 'PASSWORD' | 'OAUTH2'
+  oauth_proveedor: string; oauth_client_id: string; oauth_tenant: string; oauth_cuenta: string
+  tieneClientSecret: boolean; autorizado: boolean
   smtp_host: string; smtp_port: number; smtp_secure: boolean; smtp_user: string; envio_activo: boolean
   imap_host: string; imap_port: number; imap_secure: boolean; imap_user: string; recepcion_activa: boolean
   tieneSmtpPass: boolean; tieneImapPass: boolean
   estado: string; ultimo_test: string | null; ultimo_error: string | null; configurado: boolean
+  /** URL que debe registrarse como redirección autorizada en Google/Azure. */
+  redirectUri: string
+}
+
+/** Servidores y ayuda de cada proveedor OAuth (espejo de `lib/email/oauth`). */
+const OAUTH_PROVEEDORES: Record<string, { label: string; consola: string; ayuda: string }> = {
+  GOOGLE: {
+    label: 'Google (Gmail / Workspace)',
+    consola: 'https://console.cloud.google.com/apis/credentials',
+    ayuda: 'Crea un “ID de cliente de OAuth” de tipo Aplicación web y habilita la API de Gmail.',
+  },
+  MICROSOFT: {
+    label: 'Microsoft 365 / Outlook',
+    consola: 'https://portal.azure.com',
+    ayuda: 'Registra una aplicación en Entra ID con permisos SMTP.Send e IMAP.AccessAsUser.All.',
+  },
+}
+
+const MENSAJES_OAUTH: Record<string, { tipo: 'ok' | 'error'; texto: string }> = {
+  ok:           { tipo: 'ok',    texto: 'Cuenta autorizada correctamente. Ya puedes probar la conexión.' },
+  falta_client: { tipo: 'error', texto: 'Guarda primero el Client ID y el Client Secret del proveedor.' },
+  sin_refresh:  { tipo: 'error', texto: 'El proveedor no entregó un token de refresco. Revoca el acceso anterior y vuelve a autorizar.' },
+  error:        { tipo: 'error', texto: 'No se pudo completar la autorización.' },
 }
 
 const PRESETS: Record<string, { smtp_host: string; smtp_port: number; smtp_secure: boolean; imap_host: string; imap_port: number }> = {
@@ -41,10 +67,34 @@ export function CorreoForm({ defaults: d, pendientes }: { defaults: CorreoDefaul
   const [state, action] = useActionState<ActionResult, FormData>(guardarCorreo, {})
   const [smtp, setSmtp] = useState({ host: d.smtp_host, port: d.smtp_port, secure: d.smtp_secure })
   const [imap, setImap] = useState({ host: d.imap_host, port: d.imap_port, secure: d.imap_secure })
+  const [authTipo, setAuthTipo] = useState<'PASSWORD' | 'OAUTH2'>(d.auth_tipo)
+  const [proveedor, setProveedor] = useState(d.oauth_proveedor || 'GOOGLE')
   const [probando, startProbar] = useTransition()
   const [bandeja, setBandeja] = useState<MensajeBandeja[] | null>(null)
   const [cargandoBandeja, startBandeja] = useTransition()
   const [procesando, startProcesar] = useTransition()
+  const [desconectando, startDesconectar] = useTransition()
+
+  // Resultado del vínculo OAuth: el callback vuelve con ?oauth=… en la URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const clave = params.get('oauth')
+    if (!clave) return
+    const msg = MENSAJES_OAUTH[clave] ?? MENSAJES_OAUTH.error
+    const detalle = params.get('detalle')
+    if (msg.tipo === 'ok') toast.success(msg.texto)
+    else toast.error(detalle ? `${msg.texto} ${detalle}` : msg.texto)
+    window.history.replaceState({}, '', window.location.pathname)
+  }, [])
+
+  function desconectar() {
+    if (!confirm('¿Desconectar la cuenta? Habrá que volver a autorizarla para enviar correos.')) return
+    startDesconectar(async () => {
+      const r = await desconectarOauth()
+      if (r.error) toast.error(r.error)
+      else toast.success('Cuenta desconectada')
+    })
+  }
 
   function enviarPendientes() {
     startProcesar(async () => {
@@ -127,6 +177,89 @@ export function CorreoForm({ defaults: d, pendientes }: { defaults: CorreoDefaul
           <input type="hidden" name="nombre" value={d.nombre} />
         </div>
 
+        {/* Método de autenticación */}
+        <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
+          <div className="flex items-center gap-2">
+            <KeyRound className="w-4 h-4 text-brand-green" />
+            <h2 className="font-heading font-semibold text-base text-gray-900">Cómo se autentica</h2>
+          </div>
+          <input type="hidden" name="auth_tipo" value={authTipo} />
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <button type="button" onClick={() => setAuthTipo('PASSWORD')}
+              className={`text-left rounded-xl border p-3 transition-colors ${authTipo === 'PASSWORD' ? 'border-brand-green bg-green-50/40' : 'border-gray-200 hover:border-gray-300'}`}>
+              <p className="font-heading font-semibold text-sm text-gray-900">Contraseña de aplicación</p>
+              <p className="font-body text-xs text-gray-500 mt-0.5">
+                Usuario y contraseña SMTP/IMAP. Sirve con cualquier proveedor y con dominio propio.
+              </p>
+            </button>
+            <button type="button" onClick={() => setAuthTipo('OAUTH2')}
+              className={`text-left rounded-xl border p-3 transition-colors ${authTipo === 'OAUTH2' ? 'border-brand-green bg-green-50/40' : 'border-gray-200 hover:border-gray-300'}`}>
+              <p className="font-heading font-semibold text-sm text-gray-900">Autorización con Google u Outlook</p>
+              <p className="font-body text-xs text-gray-500 mt-0.5">
+                OAuth 2.0: se autoriza la cuenta una vez y la plataforma renueva el acceso sola. Sin contraseñas guardadas.
+              </p>
+            </button>
+          </div>
+
+          {authTipo === 'OAUTH2' && (
+            <div className="space-y-4 border-t border-gray-50 pt-4">
+              <div className="grid sm:grid-cols-2 gap-4">
+                <label><span className={labelCls}>Proveedor *</span>
+                  <select name="oauth_proveedor" value={proveedor} onChange={(e) => setProveedor(e.target.value)}
+                    className={inputCls + ' mt-1 bg-white'}>
+                    {Object.entries(OAUTH_PROVEEDORES).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+                  </select>
+                </label>
+                {proveedor === 'MICROSOFT' && (
+                  <label><span className={labelCls}>Tenant (o «common»)</span>
+                    <input name="oauth_tenant" defaultValue={d.oauth_tenant} placeholder="common" className={inputCls + ' mt-1'} /></label>
+                )}
+                <label><span className={labelCls}>Client ID *</span>
+                  <input name="oauth_client_id" defaultValue={d.oauth_client_id} placeholder="1234-abc.apps.googleusercontent.com" className={inputCls + ' mt-1'} /></label>
+                <label><span className={labelCls}>Client Secret {d.tieneClientSecret && <span className="text-green-600">(guardado)</span>}</span>
+                  <input name="oauth_client_secret" type="password" placeholder={d.tieneClientSecret ? '•••••••• (deja vacío para conservar)' : 'Secreto de la aplicación'} className={inputCls + ' mt-1'} /></label>
+              </div>
+
+              <div className="bg-gray-50 rounded-xl p-3 space-y-1">
+                <p className="font-body text-xs text-gray-600">
+                  {OAUTH_PROVEEDORES[proveedor]?.ayuda} Consola:{' '}
+                  <a href={OAUTH_PROVEEDORES[proveedor]?.consola} target="_blank" rel="noreferrer" className="text-brand-green font-semibold hover:underline">
+                    {OAUTH_PROVEEDORES[proveedor]?.consola}
+                  </a>
+                </p>
+                <p className="font-body text-xs text-gray-600">
+                  URL de redirección autorizada: <code className="bg-white border border-gray-200 rounded px-1.5 py-0.5">{d.redirectUri}</code>
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                {d.autorizado ? (
+                  <>
+                    <span className="inline-flex items-center gap-1.5 font-body text-xs px-2.5 py-1.5 rounded-lg bg-green-50 text-green-700">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Autorizada{d.oauth_cuenta ? `: ${d.oauth_cuenta}` : ''}
+                    </span>
+                    <a href={`/api/integraciones/correo/oauth/iniciar?proveedor=${proveedor}`}
+                      className="font-body text-xs text-gray-600 border border-gray-200 rounded-lg px-3 py-1.5 hover:bg-gray-50">
+                      Volver a autorizar
+                    </a>
+                    <button type="button" onClick={desconectar} disabled={desconectando}
+                      className="font-body text-xs text-red-500 border border-red-100 rounded-lg px-3 py-1.5 hover:bg-red-50 disabled:opacity-50">
+                      {desconectando ? 'Desconectando…' : 'Desconectar'}
+                    </button>
+                  </>
+                ) : (
+                  <a href={`/api/integraciones/correo/oauth/iniciar?proveedor=${proveedor}`}
+                    className="inline-flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark">
+                    <ShieldCheck className="w-4 h-4" /> Conectar con {proveedor === 'GOOGLE' ? 'Google' : 'Microsoft'}
+                  </a>
+                )}
+                <span className="font-body text-xs text-gray-400">Guarda los datos antes de conectar.</span>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* SMTP */}
         <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm space-y-4">
           <div className="flex items-center justify-between">
@@ -147,10 +280,16 @@ export function CorreoForm({ defaults: d, pendientes }: { defaults: CorreoDefaul
             </div>
             <label><span className={labelCls}>Usuario</span>
               <input name="smtp_user" defaultValue={d.smtp_user} placeholder="usuario@dominio.com" className={inputCls + ' mt-1'} /></label>
-            <label><span className={labelCls}>Contraseña {d.tieneSmtpPass && <span className="text-green-600">(guardada)</span>}</span>
-              <input name="smtp_pass" type="password" placeholder={d.tieneSmtpPass ? '•••••••• (deja vacío para conservar)' : 'Contraseña de aplicación'} className={inputCls + ' mt-1'} /></label>
+            {authTipo === 'PASSWORD' && (
+              <label><span className={labelCls}>Contraseña {d.tieneSmtpPass && <span className="text-green-600">(guardada)</span>}</span>
+                <input name="smtp_pass" type="password" placeholder={d.tieneSmtpPass ? '•••••••• (deja vacío para conservar)' : 'Contraseña de aplicación'} className={inputCls + ' mt-1'} /></label>
+            )}
           </div>
-          <p className="font-body text-xs text-gray-400">Con Gmail/Outlook usa una <strong>contraseña de aplicación</strong> (no la de tu cuenta) y verificación en dos pasos activada.</p>
+          <p className="font-body text-xs text-gray-400">
+            {authTipo === 'OAUTH2'
+              ? 'Con OAuth no se guarda ninguna contraseña: el acceso se renueva con el token de la cuenta autorizada.'
+              : 'Con Gmail/Outlook usa una contraseña de aplicación (no la de tu cuenta) y verificación en dos pasos activada.'}
+          </p>
         </div>
 
         {/* IMAP */}
@@ -173,8 +312,10 @@ export function CorreoForm({ defaults: d, pendientes }: { defaults: CorreoDefaul
             </div>
             <label><span className={labelCls}>Usuario</span>
               <input name="imap_user" defaultValue={d.imap_user} placeholder="usuario@dominio.com" className={inputCls + ' mt-1'} /></label>
-            <label><span className={labelCls}>Contraseña {d.tieneImapPass && <span className="text-green-600">(guardada)</span>}</span>
-              <input name="imap_pass" type="password" placeholder={d.tieneImapPass ? '•••••••• (deja vacío para conservar)' : 'Contraseña de aplicación'} className={inputCls + ' mt-1'} /></label>
+            {authTipo === 'PASSWORD' && (
+              <label><span className={labelCls}>Contraseña {d.tieneImapPass && <span className="text-green-600">(guardada)</span>}</span>
+                <input name="imap_pass" type="password" placeholder={d.tieneImapPass ? '•••••••• (deja vacío para conservar)' : 'Contraseña de aplicación'} className={inputCls + ' mt-1'} /></label>
+            )}
           </div>
           {/* imap_secure debe llegar como 'off' cuando se desmarca */}
           {!imap.secure && <input type="hidden" name="imap_secure" value="off" />}

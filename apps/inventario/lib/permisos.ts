@@ -87,6 +87,16 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    grupo: 'Notificaciones y Correo',
+    permisos: [
+      { key: 'gestionar_integraciones',      label: 'Configurar la cuenta de correo (SMTP / OAuth)' },
+      { key: 'gestionar_plantillas_correo',  label: 'Crear / editar plantillas de correo' },
+      { key: 'ver_flujos_notificacion',      label: 'Ver eventos, flujos y su historial' },
+      { key: 'gestionar_flujos_notificacion', label: 'Crear / editar eventos y flujos de notificación' },
+      { key: 'gestionar_alertas',            label: 'Configurar reglas de alerta' },
+    ],
+  },
+  {
     grupo: 'Gestión Humana',
     permisos: [
       { key: 'ver_personas',              label: 'Ver personas / colaboradores' },
@@ -153,7 +163,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
   },
 ]
 
-export const ALL_PERMISOS: PermisoDef[] = GRUPOS_PERMISOS.flatMap((g) => g.permisos)
+// Una misma clave puede figurar en dos grupos (p. ej. las órdenes de insumo se
+// listan en "Gestión" y en "Alistamiento y Despacho"). El catálogo plano se
+// deduplica por clave: si no, el contador "X de Y permisos activos" nunca llega
+// al tope y "Seleccionar todos" se queda pegado.
+export const ALL_PERMISOS: PermisoDef[] = [
+  ...new Map(GRUPOS_PERMISOS.flatMap((g) => g.permisos).map((p) => [p.key, p])).values(),
+]
 
 export const TOTAL_PERMISOS = ALL_PERMISOS.length
 

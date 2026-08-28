@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
+import { redirectUri } from '@/lib/email/oauth'
 import { CorreoForm, type CorreoDefaults } from './CorreoForm'
 
 export const metadata: Metadata = { title: 'Integración · Correo' }
@@ -18,11 +19,18 @@ export default async function CorreoIntegracionPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const c = data as any
 
-  // No enviamos las contraseñas al cliente: solo si existen.
+  // No enviamos las contraseñas ni los tokens al cliente: solo si existen.
   const defaults: CorreoDefaults = {
     nombre: c?.nombre ?? 'Correo principal',
     from_nombre: c?.from_nombre ?? '',
     from_email: c?.from_email ?? '',
+    auth_tipo: c?.auth_tipo === 'OAUTH2' ? 'OAUTH2' : 'PASSWORD',
+    oauth_proveedor: c?.oauth_proveedor ?? '',
+    oauth_client_id: c?.oauth_client_id ?? '',
+    oauth_tenant: c?.oauth_tenant ?? 'common',
+    oauth_cuenta: c?.oauth_cuenta ?? '',
+    tieneClientSecret: !!c?.oauth_client_secret,
+    autorizado: !!c?.oauth_refresh_token,
     smtp_host: c?.smtp_host ?? '',
     smtp_port: c?.smtp_port ?? 587,
     smtp_secure: c?.smtp_secure ?? false,
@@ -39,6 +47,7 @@ export default async function CorreoIntegracionPage() {
     ultimo_test: c?.ultimo_test ?? null,
     ultimo_error: c?.ultimo_error ?? null,
     configurado: !!c?.from_email,
+    redirectUri: redirectUri(),
   }
 
   return (

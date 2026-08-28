@@ -5,7 +5,8 @@ import {
   UploadCloud, History, ClipboardCheck, Barcode, PackageCheck, Split,
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
-  Home, CalendarDays, Star, DollarSign, Wrench, Wallet, type LucideIcon,
+  Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow,
+  type LucideIcon,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -136,6 +137,8 @@ export const navigation: NavModule[] = [
       { label: 'Historial de Cambios', href: '/historial',      icon: History,       permiso: 'ver_historial' },
       { label: 'Documentos/Galería', href: '/documentos',      icon: FolderOpen,     permiso: 'ver_documentos' },
       { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell,          permiso: 'ver_notificaciones' },
+      { label: 'Plantillas de correo', href: '/notificaciones/plantillas', icon: MailPlus, permiso: 'gestionar_plantillas_correo' },
+      { label: 'Eventos y flujos',   href: '/notificaciones/flujos', icon: Workflow,  permiso: 'ver_flujos_notificacion' },
       { label: 'Usuarios',           href: '/usuarios',         icon: Users,         permiso: 'ver_usuarios' },
       { label: 'Roles y Permisos',   href: '/roles',            icon: Shield,        permiso: 'gestionar_roles' },
       { label: 'Integraciones',      href: '/integraciones',    icon: Plug,          permiso: 'gestionar_integraciones' },

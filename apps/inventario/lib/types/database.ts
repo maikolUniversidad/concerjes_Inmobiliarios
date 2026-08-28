@@ -824,6 +824,170 @@ export interface MaquinariaEvento {
   created_at: string
 }
 
+// ── Correo, plantillas y flujos de notificación ──────────────────────────────
+// La plantilla vive en `lib/email/plantillas`, donde además están el render de
+// variables y el saneado del HTML; se reexporta aquí para tenerla junto al
+// resto del esquema.
+export type { PlantillaCorreo, VariablePlantilla } from '@/lib/email/plantillas'
+
+export type AuthCorreo = 'PASSWORD' | 'OAUTH2'
+export type ProveedorCorreo = 'GOOGLE' | 'MICROSOFT'
+
+/** Evento del catálogo: lo que puede disparar un flujo. */
+export interface EventoNotificacion {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  modulo: string | null
+  variables: { clave: string; descripcion?: string }[]
+  payload_ejemplo: Record<string, unknown>
+  activo: boolean
+  es_sistema: boolean
+  created_at: string
+  updated_at: string
+}
+
+/** Condición sobre el payload del evento. */
+export interface ReglaCondicion {
+  campo: string
+  operador: OperadorCondicion
+  valor: string
+}
+
+export type OperadorCondicion =
+  | '=' | '!=' | '>' | '>=' | '<' | '<='
+  | 'contiene' | 'no_contiene' | 'en' | 'existe' | 'vacio'
+
+export interface Condiciones {
+  modo: 'AND' | 'OR'
+  reglas: ReglaCondicion[]
+}
+
+export const OPERADOR_LABELS: Record<OperadorCondicion, string> = {
+  '=':           'es igual a',
+  '!=':          'es distinto de',
+  '>':           'es mayor que',
+  '>=':          'es mayor o igual que',
+  '<':           'es menor que',
+  '<=':          'es menor o igual que',
+  contiene:      'contiene',
+  no_contiene:   'no contiene',
+  en:            'está en la lista (separada por comas)',
+  existe:        'tiene algún valor',
+  vacio:         'está vacío',
+}
+
+/** Workflow: qué hacer cuando ocurre un evento. */
+export interface FlujoNotificacion {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  evento_codigo: string
+  condiciones: Condiciones
+  activo: boolean
+  prioridad: number
+  creado_por: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type TipoPasoFlujo = 'EMAIL' | 'APP' | 'ESPERA' | 'WEBHOOK'
+
+export interface DestinatariosPaso {
+  roles: RolUsuario[]
+  usuarios: string[]
+  correos: string[]
+  /** Campos del payload que traen un correo (p. ej. `cliente_email`). */
+  campos: string[]
+}
+
+/**
+ * Verificación de estado antes de ejecutar el paso: relee el registro y sigue
+ * solo si la condición se mantiene. Es lo que permite los escalamientos
+ * ("si a las 24 h sigue PENDIENTE, avisa al coordinador").
+ */
+export interface VerificacionPaso {
+  tabla?: string
+  columna_id?: string
+  campo_payload?: string
+  campo?: string
+  operador?: OperadorCondicion
+  valor?: string
+}
+
+export interface FlujoPaso {
+  id: string
+  flujo_id: string
+  orden: number
+  nombre: string | null
+  tipo: TipoPasoFlujo
+  demora_minutos: number
+  plantilla_id: string | null
+  asunto: string | null
+  mensaje: string | null
+  destinatarios: DestinatariosPaso
+  severidad: SeveridadNotificacion
+  enlace: string | null
+  webhook_url: string | null
+  verificacion: VerificacionPaso
+  detener_si_falla: boolean
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export type EstadoEjecucion = 'EN_CURSO' | 'COMPLETADA' | 'CANCELADA' | 'ERROR'
+export type EstadoPasoEjecucion = 'PROGRAMADO' | 'EJECUTADO' | 'OMITIDO' | 'ERROR'
+
+export interface FlujoEjecucion {
+  id: string
+  flujo_id: string
+  evento_codigo: string
+  payload: Record<string, unknown>
+  entidad: string | null
+  entidad_id: string | null
+  estado: EstadoEjecucion
+  created_at: string
+  updated_at: string
+}
+
+export interface FlujoEjecucionPaso {
+  id: string
+  ejecucion_id: string
+  paso_id: string | null
+  orden: number
+  estado: EstadoPasoEjecucion
+  programado_para: string
+  ejecutado_at: string | null
+  intentos: number
+  resultado: string | null
+  detalle: Record<string, unknown>
+  created_at: string
+}
+
+export const TIPO_PASO_LABELS: Record<TipoPasoFlujo, { label: string; descripcion: string }> = {
+  EMAIL:   { label: 'Enviar correo',        descripcion: 'Envía un correo con una plantilla a los destinatarios del paso.' },
+  APP:     { label: 'Notificar en la app',  descripcion: 'Deja la notificación en la bandeja de los usuarios destino.' },
+  ESPERA:  { label: 'Esperar',              descripcion: 'Pausa el flujo el tiempo indicado antes del siguiente paso.' },
+  WEBHOOK: { label: 'Llamar un webhook',    descripcion: 'Envía el payload del evento a una URL externa (POST JSON).' },
+}
+
+export const ESTADO_EJECUCION_LABELS: Record<EstadoEjecucion, { label: string; color: string }> = {
+  EN_CURSO:   { label: 'En curso',   color: 'bg-blue-50 text-blue-700' },
+  COMPLETADA: { label: 'Completada', color: 'bg-green-50 text-green-700' },
+  CANCELADA:  { label: 'Cancelada',  color: 'bg-gray-100 text-gray-600' },
+  ERROR:      { label: 'Con error',  color: 'bg-red-50 text-red-700' },
+}
+
+export const ESTADO_PASO_LABELS: Record<EstadoPasoEjecucion, { label: string; color: string }> = {
+  PROGRAMADO: { label: 'Programado', color: 'bg-amber-50 text-amber-700' },
+  EJECUTADO:  { label: 'Ejecutado',  color: 'bg-green-50 text-green-700' },
+  OMITIDO:    { label: 'Omitido',    color: 'bg-gray-100 text-gray-600' },
+  ERROR:      { label: 'Con error',  color: 'bg-red-50 text-red-700' },
+}
+
 export type Database = {
   public: {
     Tables: {
@@ -836,6 +1000,11 @@ export type Database = {
       reglas_alerta: { Row: ReglaAlerta; Insert: Partial<ReglaAlerta>; Update: Partial<ReglaAlerta> }
       notificaciones: { Row: Notificacion; Insert: Partial<Notificacion>; Update: Partial<Notificacion> }
       notificaciones_preferencias: { Row: NotificacionPreferencias; Insert: Partial<NotificacionPreferencias>; Update: Partial<NotificacionPreferencias> }
+      eventos_notificacion: { Row: EventoNotificacion; Insert: Partial<EventoNotificacion>; Update: Partial<EventoNotificacion> }
+      flujos_notificacion: { Row: FlujoNotificacion; Insert: Partial<FlujoNotificacion>; Update: Partial<FlujoNotificacion> }
+      flujo_pasos: { Row: FlujoPaso; Insert: Partial<FlujoPaso>; Update: Partial<FlujoPaso> }
+      flujo_ejecuciones: { Row: FlujoEjecucion; Insert: Partial<FlujoEjecucion>; Update: Partial<FlujoEjecucion> }
+      flujo_ejecucion_pasos: { Row: FlujoEjecucionPaso; Insert: Partial<FlujoEjecucionPaso>; Update: Partial<FlujoEjecucionPaso> }
       ia_carpetas: { Row: IACarpeta; Insert: Partial<IACarpeta>; Update: Partial<IACarpeta> }
       ia_conversaciones: { Row: IAConversacion; Insert: Partial<IAConversacion>; Update: Partial<IAConversacion> }
       ia_mensajes: { Row: IAMensaje; Insert: Partial<IAMensaje>; Update: Partial<IAMensaje> }

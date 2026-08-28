@@ -1,6 +1,7 @@
 {
   "framework": "nextjs",
   "crons": [
-    { "path": "/api/cron/correo", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/correo", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/flujos", "schedule": "*/5 * * * *" }
   ]
 }
