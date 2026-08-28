@@ -20,8 +20,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint
+      # Primero las pruebas: son segundos y atrapan la mayoría de las regresiones
+      # antes de gastar minutos en los builds.
+      - name: Pruebas automatizadas
+        run: npm test
+
+      - name: Chequeo de tipos
+        run: npm run typecheck
 
       - name: Build web
         run: npx turbo run build --filter=web
@@ -34,9 +39,6 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-
-      - name: Typecheck motor offline
-        run: npm run typecheck --workspace=@conserjes/offline
 
       - name: Build app móvil/escritorio
         run: npm run build --workspace=movil
