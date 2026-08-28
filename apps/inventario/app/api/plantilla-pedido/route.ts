@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import ExcelJS from 'exceljs'
 
 // Paleta visual igual a los Excel originales
@@ -35,30 +36,40 @@ export async function GET(req: NextRequest) {
 
   // ── Consultas a BD ─────────────────────────────────────────────────────────
   // 1. Sedes seleccionadas (o todas las activas), con su grupo/contrato.
-  let sedesQ = supabase.from('sedes').select('id, nombre, grupo:grupos_contrato ( nombre )').eq('activo', true).order('nombre')
-  if (sedeIds.length > 0) sedesQ = sedesQ.in('id', sedeIds)
-  const { data: sedesData } = await sedesQ
+  const sedesData = await traerTodo((desde, hasta) => {
+    let q = supabase.from('sedes').select('id, nombre, grupo:grupos_contrato ( nombre )')
+      .eq('activo', true).order('nombre').order('id')
+    if (sedeIds.length > 0) q = q.in('id', sedeIds)
+    return q.range(desde, hasta)
+  })
 
-  // 2. Productos activos
-  const { data: productosData } = await supabase
+  // 2. Productos activos (paginado: la plantilla necesita el catálogo COMPLETO
+  //    y PostgREST devuelve máximo 1.000 filas por respuesta)
+  const productosData = await traerTodo((desde, hasta) => supabase
     .from('productos')
     .select('id, nombre_estandar, presentacion, complemento, cat_rotacion')
     .eq('activo', true)
-    .order('nombre_estandar')
+    .order('nombre_estandar').order('id')
+    .range(desde, hasta))
 
   // 3. Parametrización sede_productos (cantidades máximas)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sedeIdsUsados = ((sedesData ?? []) as any[]).map(s => s.id)
-  const { data: paramData } = await supabase
+  // Paginado: es una matriz sedes × productos, hoy ya pasa de 800 filas.
+  const paramData = await traerTodo((desde, hasta) => supabase
     .from('sede_productos')
     .select('sede_id, producto_id, cantidad_maxima')
     .in('sede_id', sedeIdsUsados)
     .eq('activo', true)
+    .order('id')
+    .range(desde, hasta))
 
   // 4. Stock actual
-  const { data: stockData } = await supabase
+  const stockData = await traerTodo((desde, hasta) => supabase
     .from('stock')
-    .select('producto_id, cantidad')
+    .select('producto_id, cantidad_real')
+    .order('producto_id')
+    .range(desde, hasta))
 
   // 5. Usuario actual
   const { data: usuarioData } = await supabase
@@ -81,8 +92,8 @@ export async function GET(req: NextRequest) {
 
   // Mapa stock: producto_id → cantidad
   const stockMap = new Map<string, number>()
-  for (const s of (stockData ?? []) as { producto_id: string; cantidad: number }[]) {
-    stockMap.set(s.producto_id, (stockMap.get(s.producto_id) ?? 0) + (s.cantidad ?? 0))
+  for (const s of stockData as { producto_id: string; cantidad_real: number }[]) {
+    stockMap.set(s.producto_id, (stockMap.get(s.producto_id) ?? 0) + (Number(s.cantidad_real) || 0))
   }
 
   const solicitante = (usuarioData as { nombre?: string } | null)?.nombre ?? ''

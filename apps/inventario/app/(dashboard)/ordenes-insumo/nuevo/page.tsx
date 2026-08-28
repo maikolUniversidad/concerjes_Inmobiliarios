@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { NuevaOrdenClient, type SedeOpt, type BodegaOpt, type UsuarioOpt } from './NuevaOrdenClient'
 
@@ -11,7 +12,7 @@ export default async function NuevaOrdenPage() {
   const supabase = await createClient()
 
   const [{ data: sedes }, { data: bodegas }, { data: usuarios }] = await Promise.all([
-    supabase.from('sedes').select('id, nombre, grupo:grupos_contrato ( nombre )').eq('activo', true).order('nombre'),
+    traerTodo((desde, hasta) => supabase.from('sedes').select('id, nombre, grupo:grupos_contrato ( nombre )').eq('activo', true).order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
     supabase.from('bodegas').select('id, nombre').order('nombre'),
     supabase.from('usuarios').select('id, nombre').eq('activo', true).order('nombre'),
   ])

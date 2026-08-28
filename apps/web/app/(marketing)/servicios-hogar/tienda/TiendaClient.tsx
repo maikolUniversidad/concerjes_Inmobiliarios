@@ -7,6 +7,7 @@ import {
   BadgeCheck, Sparkles, ImageIcon, Loader2, ShieldCheck,
 } from 'lucide-react'
 import { getPublico } from '@/lib/supabase/publico'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 interface Tipo { id: string; nombre: string; descripcion: string | null; icono: string | null; color: string | null; incluye: string[] | null }
 interface Tarifa { tipo_id: string; precio_unico: number; duracion_horas: number }
@@ -49,7 +50,11 @@ export function TiendaClient() {
       sb.from('tipos_servicio_hogar').select('id, nombre, descripcion, icono, color, incluye').eq('activo', true).order('orden'),
       sb.from('tarifas_servicio_hogar').select('tipo_id, precio_unico, duracion_horas').eq('activo', true),
       sb.from('galeria_servicio_hogar').select('id, tipo_id, media_tipo, url, poster_url, titulo').eq('activo', true).order('orden'),
-      sb.from('resenas_servicio_hogar').select('tipo_id, calificacion').eq('aprobada', true),
+      // Paginada: de aquí sale el promedio de calificación por servicio y
+      // PostgREST devuelve máximo 1.000 filas por respuesta.
+      traerTodo((desde, hasta) => sb.from('resenas_servicio_hogar')
+        .select('tipo_id, calificacion').eq('aprobada', true).order('id').range(desde, hasta))
+        .then((data) => ({ data })),
       sb.from('concerjes_hogar').select('id, nombre, foto_url, bio, anios_experiencia, ciudad, calificacion_prom, servicios_count, disponible').eq('activo', true).order('orden'),
       sb.from('concerje_servicio_hogar').select('concerje_id, tipo_id').eq('activo', true),
     ]).then(([t, ta, g, r, c, cs]) => {

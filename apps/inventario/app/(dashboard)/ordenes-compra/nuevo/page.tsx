@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { OCForm } from '../OCForm'
 
 export const metadata: Metadata = { title: 'Nueva orden de compra' }
@@ -13,9 +14,13 @@ export default async function NuevaOCPage({
 }) {
   const sp = await searchParams
   const supabase = await createClient()
-  const [{ data: proveedores }, { data: productos }] = await Promise.all([
+  const [{ data: proveedores }, productos] = await Promise.all([
     supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre'),
-    supabase.from('productos').select('id, nombre_estandar, presentacion, precio_lista, precios:precios_proveedor ( proveedor_id, precio )').eq('activo', true).order('nombre_estandar'),
+    // Paginado: PostgREST devuelve máximo 1.000 filas por respuesta.
+    traerTodo((desde, hasta) => supabase
+      .from('productos')
+      .select('id, nombre_estandar, presentacion, precio_lista, precios:precios_proveedor ( proveedor_id, precio )')
+      .eq('activo', true).order('nombre_estandar').order('id').range(desde, hasta)),
   ])
 
   return (

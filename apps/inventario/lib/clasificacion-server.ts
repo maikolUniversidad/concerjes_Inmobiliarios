@@ -1,4 +1,5 @@
 import type { TipoContrato } from '@/lib/clasificacion'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Sb = any
@@ -16,13 +17,18 @@ export async function sedesPorClasificacion(supabase: Sb, filtro: FiltroClasif):
   const etiquetaIds = (filtro.etiquetaIds ?? []).filter(Boolean)
   if (!tipo && etiquetaIds.length === 0) return null
 
-  const { data } = await supabase
+  // Paginado: este resultado se convierte en el filtro `sede_id IN (…)` de las
+  // pantallas. Si PostgREST lo cortara en 1.000 filas, las sedes que quedaran
+  // fuera harían desaparecer sus órdenes del listado sin ningún aviso.
+  const data = await traerTodo((desde, hasta) => supabase
     .from('sedes')
     .select('id, tipo_contrato, sede_etiquetas ( etiqueta_id ), grupo:grupos_contrato ( tipo_contrato, grupo_etiquetas ( etiqueta_id ) )')
     .eq('activo', true)
+    .order('id')
+    .range(desde, hasta))
 
   const ids: string[] = []
-  for (const s of (data ?? []) as Array<{
+  for (const s of data as Array<{
     id: string; tipo_contrato: TipoContrato | null
     sede_etiquetas?: { etiqueta_id: string }[] | null
     grupo?: { tipo_contrato: TipoContrato | null; grupo_etiquetas?: { etiqueta_id: string }[] | null } | null

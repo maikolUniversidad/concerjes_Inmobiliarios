@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { type GrupoContrato } from '@/lib/types/database'
 import type { Categoria, Etiqueta, TipoContrato } from '@/lib/clasificacion'
@@ -25,7 +26,7 @@ export default async function ContratosPage() {
   const supabase = await createClient()
   const [{ data: gruposData }, { data: sedesData }, { data: catsData }, { data: etsData }] = await Promise.all([
     supabase.from('grupos_contrato').select('id, codigo, nombre, descripcion, tipo_contrato, grupo_etiquetas ( etiqueta_id )').eq('activo', true).order('codigo'),
-    supabase.from('sedes').select('*, grupo:grupos_contrato ( codigo ), sede_etiquetas ( etiqueta_id )').eq('activo', true).order('nombre'),
+    traerTodo((desde, hasta) => supabase.from('sedes').select('*, grupo:grupos_contrato ( codigo ), sede_etiquetas ( etiqueta_id )').eq('activo', true).order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
     supabase.from('etiqueta_categorias').select('id, nombre, descripcion, color, multiple, orden').eq('activo', true).order('orden'),
     supabase.from('etiquetas').select('id, categoria_id, nombre, color, orden').eq('activo', true).order('orden'),
   ])

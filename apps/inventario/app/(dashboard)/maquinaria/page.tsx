@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { Wrench } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { MaquinariaClient, type MaquinariaRow, type SedeOpt } from './MaquinariaClient'
 
@@ -16,7 +17,7 @@ export default async function MaquinariaPage() {
     supabase.from('maquinaria')
       .select('id, codigo, nombre, tipo, marca, modelo, serial, estado, ubicacion_sede_id, ubicacion_texto, responsable, imagen_url, fecha_adquisicion, valor, observaciones, created_at, sedes:ubicacion_sede_id(id, nombre)')
       .order('codigo'),
-    supabase.from('sedes').select('id, nombre').order('nombre'),
+    traerTodo((desde, hasta) => supabase.from('sedes').select('id, nombre').order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
   ])
 
   return (

@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { OCDetalleClient, type OCDetalle, type OCItem, type OCEvento, type ProductoLite, type ProveedorLite } from './OCDetalleClient'
 
@@ -26,7 +27,12 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
     supabase.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec, precio_unit, subtotal, producto:productos ( nombre_estandar, presentacion )').eq('oc_id', id),
     supabase.from('oc_eventos').select('*').eq('oc_id', id).order('created_at', { ascending: false }),
     esBorrador
-      ? supabase.from('productos').select('id, nombre_estandar, presentacion, precio_lista, precios:precios_proveedor ( proveedor_id, precio )').eq('activo', true).order('nombre_estandar')
+      // Paginado: PostgREST devuelve máximo 1.000 filas por respuesta.
+      ? traerTodo((desde, hasta) => supabase
+          .from('productos')
+          .select('id, nombre_estandar, presentacion, precio_lista, precios:precios_proveedor ( proveedor_id, precio )')
+          .eq('activo', true).order('nombre_estandar').order('id').range(desde, hasta))
+          .then((data) => ({ data }))
       : Promise.resolve({ data: [] }),
     esBorrador
       ? supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre')

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 export interface ActionResult { error?: string; ok?: boolean; mensaje?: string }
 
@@ -60,15 +61,23 @@ export async function importarDesdeProductos(): Promise<ActionResult> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
 
-  const { data: productos, error: readErr } = await supabase
-    .from('productos')
-    .select('id, proveedor_id, precio_lista, proveedor2_id, precio_lista2')
-    .eq('activo', true)
-  if (readErr) return { error: 'No se pudieron leer los productos: ' + readErr.message }
+  // Paginado: la importación debe recorrer el catálogo COMPLETO; sin esto solo
+  // se importaban los precios de los primeros 1.000 productos.
+  let productos: unknown[]
+  try {
+    productos = await traerTodo((desde, hasta) => supabase
+      .from('productos')
+      .select('id, proveedor_id, precio_lista, proveedor2_id, precio_lista2')
+      .eq('activo', true)
+      .order('id')
+      .range(desde, hasta))
+  } catch (e) {
+    return { error: 'No se pudieron leer los productos: ' + (e instanceof Error ? e.message : String(e)) }
+  }
 
   // Deduplica por (producto, proveedor); el último gana.
   const mapa = new Map<string, { producto_id: string; proveedor_id: string; precio: number; vigente: boolean }>()
-  for (const p of (productos ?? []) as {
+  for (const p of productos as {
     id: string; proveedor_id: string | null; precio_lista: number | null
     proveedor2_id: string | null; precio_lista2: number | null
   }[]) {

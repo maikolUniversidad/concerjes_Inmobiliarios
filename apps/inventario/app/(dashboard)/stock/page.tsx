@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion } from '@/lib/types/database'
 import { StockClient, type StockRow } from './StockClient'
@@ -23,11 +24,20 @@ export default async function StockPage() {
   await requirePermiso('ver_stock')
   const supabase = await createClient()
 
-  const { data, error } = await supabase
-    .from('productos')
-    .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cce_tipo, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ), stock_cce ( cantidad_real, cantidad_disp )')
-    .eq('activo', true)
-    .order('ref', { ascending: false })
+  // Paginado: el listado de stock debe traer el catálogo COMPLETO y PostgREST
+  // corta en 1.000 filas por respuesta.
+  let data: Row[] = []
+  let error: { message: string } | null = null
+  try {
+    data = await traerTodo<Row>((desde, hasta) => supabase
+      .from('productos')
+      .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cce_tipo, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ), stock_cce ( cantidad_real, cantidad_disp )')
+      .eq('activo', true)
+      .order('ref', { ascending: false }).order('id')
+      .range(desde, hasta) as never)
+  } catch (e) {
+    error = { message: e instanceof Error ? e.message : String(e) }
+  }
 
   if (error) {
     return (
@@ -39,7 +49,7 @@ export default async function StockPage() {
     )
   }
 
-  const rows: StockRow[] = (data as unknown as Row[] ?? []).map(p => ({
+  const rows: StockRow[] = data.map(p => ({
     id: p.id,
     ref: p.ref,
     nombre: p.nombre_estandar,

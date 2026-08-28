@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import UsuariosClient from './UsuariosClient'
 
@@ -50,10 +51,11 @@ export default async function UsuariosPage() {
     .select('id, codigo, nombre')
     .order('nombre')
 
-  const { data: sedes } = await supabase
+  const sedes = await traerTodo((desde, hasta) => supabase
     .from('sedes')
     .select('id, grupo_id, nombre')
-    .order('nombre')
+    .order('nombre').order('id')
+    .range(desde, hasta))
 
   // Roles dinámicos (catálogo asignable) desde la tabla `roles`
   const { data: roles } = await supabase

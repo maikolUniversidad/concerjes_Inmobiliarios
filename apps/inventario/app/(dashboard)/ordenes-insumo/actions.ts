@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario } from '@/lib/permisos-server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { emitirNotificacion } from '@/lib/notificaciones'
 
 export interface ActionResult { error?: string; ok?: boolean; id?: string }
@@ -683,10 +684,14 @@ export async function despacharOrden(
   if (orden.estado === 'DESPACHADO') return { error: 'La orden ya fue despachada.' }
   if (orden.estado === 'ANULADA') return { error: 'La orden está anulada.' }
 
-  const { data: items } = await sb.from('orden_insumo_items')
-    .select('id, producto_id, cantidad_solicitada, cantidad_alistada, alistado')
-    .eq('orden_id', ordenId)
-  const lista = (items ?? []) as { id: string; producto_id: string; cantidad_solicitada: number; cantidad_alistada: number; alistado: boolean }[]
+  // Paginado: una orden puede tener un ítem por producto del catálogo y
+  // PostgREST corta en 1.000 filas. Si aquí faltaran ítems, se despacharía la
+  // orden descontando stock de menos.
+  const lista = await traerTodo<{ id: string; producto_id: string; cantidad_solicitada: number; cantidad_alistada: number; alistado: boolean }>(
+    (desde, hasta) => sb.from('orden_insumo_items')
+      .select('id, producto_id, cantidad_solicitada, cantidad_alistada, alistado')
+      .eq('orden_id', ordenId).order('id').range(desde, hasta),
+  )
   if (lista.length === 0) return { error: 'La orden no tiene ítems para despachar.' }
 
   // Cantidad efectiva: la alistada y, si quedó en cero, lo solicitado.
@@ -950,11 +955,11 @@ export async function registrarEnvioRestante(
     return { error: 'El envío restante solo aplica a órdenes ya despachadas.' }
   }
 
-  const { data: items } = await sb.from('orden_insumo_items')
-    .select('id, producto_id, cantidad_solicitada, cantidad_alistada, producto:productos ( nombre_estandar )')
-    .eq('orden_id', ordenId)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapItems = new Map(((items ?? []) as any[]).map((it) => [it.id, it]))
+  const items = await traerTodo<any>((desde, hasta) => sb.from('orden_insumo_items')
+    .select('id, producto_id, cantidad_solicitada, cantidad_alistada, producto:productos ( nombre_estandar )')
+    .eq('orden_id', ordenId).order('id').range(desde, hasta))
+  const mapItems = new Map(items.map((it) => [it.id, it]))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const detalle: any[] = []

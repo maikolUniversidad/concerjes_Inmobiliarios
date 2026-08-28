@@ -6,6 +6,7 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { insertarPorLotes } from '@/lib/supabase/paginado'
 import { logActivity } from '@/lib/activity'
 
 export interface SedeOpt {
@@ -131,11 +132,29 @@ export function ParametrizacionClient({
         sede_id: selId, producto_id: r.producto_id,
         cantidad_maxima: r.cantidad_maxima, cantidad_minima: r.cantidad_minima ?? 0, activo: true,
       }))
-      const { data, error } = await sb.from('sede_productos').insert(payload).select('id, sede_id, producto_id, cantidad_maxima, cantidad_minima, activo, observacion')
-      if (error || !data) { toast.error('No se pudo copiar la parametrización.'); return }
-      setRows((prev) => [...prev, ...(data as ParamRow[])])
+      // Por lotes: el `.select()` de un insert también se corta en 1.000 filas,
+      // así que copiar un catálogo grande dejaba la lista en pantalla (y el
+      // conteo del aviso) por debajo de lo que realmente quedó en la base.
+      const { devueltas, insertadas, error } = await insertarPorLotes<typeof payload[number], ParamRow>(
+        payload,
+        (lote) => sb.from('sede_productos').insert(lote)
+          .select('id, sede_id, producto_id, cantidad_maxima, cantidad_minima, activo, observacion'),
+      )
+      // Cada lote es su propia transacción: si falla a mitad, lo ya insertado
+      // queda. Se refresca la pantalla con eso y se dice cuánto alcanzó a pasar.
+      if (devueltas.length > 0) setRows((prev) => [...prev, ...devueltas])
+      if (error) {
+        toast.error(
+          /row-level security|permission/i.test(error)
+            ? 'Sin permisos para gestionar parametrización.'
+            : insertadas > 0
+              ? `Se copiaron ${insertadas} de ${payload.length} producto(s); el resto falló.`
+              : 'No se pudo copiar la parametrización.',
+        )
+        return
+      }
       setCopyFrom('')
-      toast.success(`${data.length} producto(s) copiados.`)
+      toast.success(`${insertadas} producto(s) copiados.`)
     } finally {
       setCopiando(false)
     }

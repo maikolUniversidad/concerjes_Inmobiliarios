@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { ReembasadoClient } from './ReembasadoClient'
 
@@ -11,15 +12,19 @@ export default async function ReembasadoPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = (await createClient()) as any
 
-  const [{ data: recetas }, { data: productos }, { data: stock }] = await Promise.all([
+  const [{ data: recetas }, productos, stock] = await Promise.all([
     sb.from('reembasados').select(`
       id, nombre, descripcion, cantidad_origen, activo, producto_origen_id, created_at,
       origen:producto_origen_id ( id, nombre_estandar, presentacion, ref ),
       items:reembasado_items ( id, cantidad, producto_destino_id,
         destino:producto_destino_id ( id, nombre_estandar, presentacion, ref ) )
     `).order('created_at', { ascending: false }),
-    sb.from('productos').select('id, nombre_estandar, presentacion, ref').eq('activo', true).order('nombre_estandar'),
-    sb.from('stock').select('producto_id, cantidad_disp'),
+    // Paginados: catálogo y stock se necesitan completos (PostgREST: 1.000/resp.)
+    traerTodo<never>((desde, hasta) => sb.from('productos')
+      .select('id, nombre_estandar, presentacion, ref').eq('activo', true)
+      .order('nombre_estandar').order('id').range(desde, hasta)),
+    traerTodo<never>((desde, hasta) => sb.from('stock')
+      .select('producto_id, cantidad_disp').order('producto_id').range(desde, hasta)),
   ])
 
   return (
@@ -32,8 +37,8 @@ export default async function ReembasadoPage() {
       </div>
       <ReembasadoClient
         recetas={recetas ?? []}
-        productos={productos ?? []}
-        stock={stock ?? []}
+        productos={productos}
+        stock={stock}
       />
     </div>
   )

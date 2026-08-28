@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PackageCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo, traerTodoPorIds } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { AlistamientoClient, type Fila } from './AlistamientoClient'
 
@@ -15,23 +16,31 @@ export default async function AlistamientoPage() {
   await requirePermiso('ver_alistamiento')
   const supabase = await createClient()
 
-  const { data } = await supabase
+  // Paginado: la cola de alistamiento se muestra completa y PostgREST corta en
+  // 1.000 filas por respuesta.
+  const ordenes = (await traerTodo((desde, hasta) => supabase
     .from('ordenes_insumo')
     .select('id, numero, estado, created_at, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado, cantidad_solicitada, cantidad_alistada )')
     .in('estado', ESTADOS_ALISTAMIENTO)
-    .order('aprobado_at', { ascending: false, nullsFirst: false })
-
-  const ordenes = (data as unknown as Fila[]) ?? []
+    .order('aprobado_at', { ascending: false, nullsFirst: false }).order('id')
+    .range(desde, hasta))) as unknown as Fila[]
   const pendientes = ordenes.filter((o) => o.estado !== 'DESPACHADO').length
 
   // Responsables por orden (vista que salta la RLS de usuarios para exponer solo el nombre)
   const responsables: Record<string, string[]> = {}
   if (ordenes.length > 0) {
-    const { data: resp } = await supabase
-      .from('responsables_opciones')
-      .select('orden_id, nombre')
-      .in('orden_id', ordenes.map((o) => o.id))
-    for (const r of ((resp ?? []) as { orden_id: string; nombre: string }[])) {
+    const resp = await traerTodoPorIds<{ orden_id: string; nombre: string }>(
+      ordenes.map((o) => o.id),
+      (lote, desde, hasta) => supabase
+        .from('responsables_opciones')
+        .select('orden_id, nombre')
+        .in('orden_id', lote)
+        // (orden_id, usuario_id) es la clave única de la vista: hace falta un
+        // desempate único para que la paginación por OFFSET sea estable.
+        .order('orden_id').order('usuario_id')
+        .range(desde, hasta),
+    )
+    for (const r of resp) {
       (responsables[r.orden_id] ??= []).push(r.nombre)
     }
   }

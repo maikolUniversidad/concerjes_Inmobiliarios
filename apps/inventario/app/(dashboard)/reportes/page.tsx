@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { Package, AlertTriangle, TrendingUp, ArrowLeftRight, Boxes, Users, Share2, ChevronRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
 import { ReportesExport } from './ReportesExport'
@@ -27,11 +28,14 @@ export default async function ReportesPage() {
   await requirePermiso('ver_reportes')
   const supabase = await createClient()
 
-  const { data: prodRaw } = await supabase
+  // Paginado: los totales del reporte agregan el catálogo COMPLETO y PostgREST
+  // devuelve máximo 1.000 filas por respuesta (`.limit()` no levanta ese tope).
+  const productos = (await traerTodo((desde, hasta) => supabase
     .from('productos')
     .select('tipo_insumo, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real )')
     .eq('activo', true)
-  const productos = (prodRaw as unknown as Prod[]) ?? []
+    .order('id')
+    .range(desde, hasta))) as unknown as Prod[]
 
   const desde = new Date(); desde.setDate(desde.getDate() - 30)
   const { count: movs30 } = await supabase
@@ -40,12 +44,11 @@ export default async function ReportesPage() {
     .gte('created_at', desde.toISOString())
 
   // Actividad por usuario (qué ha hecho cada quien)
-  const { data: actsRaw } = await supabase
+  const acts = (await traerTodo((desde, hasta) => supabase
     .from('actividad_log')
     .select('usuario_nombre, usuario_email, modulo, created_at')
-    .order('created_at', { ascending: false })
-    .limit(5000)
-  const acts = (actsRaw as unknown as ActLog[]) ?? []
+    .order('created_at', { ascending: false }).order('id')
+    .range(desde, hasta), { maximo: 20_000 })) as unknown as ActLog[]
   const mapaUsuarios = new Map<string, UsuarioActividad>()
   for (const a of acts) {
     const clave = a.usuario_email || a.usuario_nombre || '—'

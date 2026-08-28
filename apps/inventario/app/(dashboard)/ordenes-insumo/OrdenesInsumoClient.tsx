@@ -6,6 +6,7 @@ import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2
 import { toast } from 'sonner'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { createClient } from '@/lib/supabase/client'
+import { traerTodoPorIds } from '@/lib/supabase/paginado'
 import { calcularUrgencia, fmtFecha } from './urgencia'
 import { exportarOrdenesExcel, type ItemExport } from './exportarExcel'
 
@@ -231,17 +232,23 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const sb = createClient() as any
       const ids = lista.map((o) => o.id)
-      // Detalle de ítems de las órdenes filtradas (en lotes por si son muchas).
+      // Detalle de ítems de las órdenes filtradas. Va por lotes de órdenes Y
+      // paginado dentro de cada lote: 120 órdenes son ~2.600 ítems y PostgREST
+      // corta en 1.000 filas, así que sin `.range()` el Excel salía incompleto.
       const items: ItemExport[] = []
-      for (let i = 0; i < ids.length; i += 120) {
-        const chunk = ids.slice(i, i + 120)
-        const { data, error } = await sb
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const filas = await traerTodoPorIds<any>(ids, (lote, desde, hasta) =>
+        sb
           .from('orden_insumo_items')
           .select('orden_id, cantidad_solicitada, cantidad_alistada, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion )')
-          .in('orden_id', chunk)
-        if (error) throw error
+          .in('orden_id', lote)
+          .order('id', { ascending: true })
+          .range(desde, hasta),
+        { tamanoLote: 120, etiqueta: 'No se pudo leer el detalle de las órdenes' },
+      )
+      {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        for (const r of ((data ?? []) as any[])) {
+        for (const r of filas as any[]) {
           items.push({
             orden_id: r.orden_id,
             codigo: r.producto?.codigo ?? null,

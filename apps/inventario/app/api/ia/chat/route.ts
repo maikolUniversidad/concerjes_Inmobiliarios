@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server'
 import OpenAI from 'openai'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -37,10 +38,17 @@ async function construirContexto(personaId?: string) {
   try {
     const supabase = await createClient()
     const [prodRes, persRes, empRes, sedeRes, grupoRes, usrRes, tiposRes, docsCount] = await Promise.all([
-      supabase.from('productos').select('nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )').eq('activo', true),
+      // Paginado: si el contexto de la IA se corta en 1.000 filas, responde
+      // sobre un catálogo incompleto sin avisar.
+      traerTodo((desde, hasta) => supabase
+        .from('productos')
+        .select('nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
+        .eq('activo', true).order('nombre_estandar').range(desde, hasta))
+        .then((data) => ({ data })),
       supabase.from('personas').select('documento, nombres, apellidos, cargo, estado, empresas_usuarias(nombre), sedes(nombre)').order('apellidos'),
       supabase.from('empresas_usuarias').select('nombre, ciudad').order('nombre'),
-      supabase.from('sedes').select('nombre'),
+      traerTodo((desde, hasta) => supabase.from('sedes').select('nombre').order('nombre').order('id').range(desde, hasta))
+        .then((data) => ({ data })),
       supabase.from('grupos_contrato').select('codigo, nombre'),
       supabase.from('usuarios').select('rol'),
       supabase.from('tipos_documentales').select('id, nombre'),

@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 // Las nuevas tablas del módulo conductor no están en el tipo Database generado.
 // Usamos 'any' para estas tablas hasta regenerar tipos con `supabase gen types`.
@@ -115,13 +116,13 @@ export async function actualizarConductor(id: string, form: {
 export async function getPuntosEntrega() {
   await requirePermiso('ver_logistica')
   const s = await db()
-  const { data, error } = await s
+  // Paginado (PostgREST devuelve máximo 1.000 filas por respuesta).
+  return traerTodo<never>((desde, hasta) => s
     .from('sedes')
     .select('*, grupo:grupos_contrato(id, codigo, nombre)')
     .eq('activo', true)
-    .order('nombre', { ascending: true })
-  if (error) throw new Error(error.message)
-  return data ?? []
+    .order('nombre', { ascending: true }).order('id')
+    .range(desde, hasta))
 }
 
 // ─── Horarios de Entrega ────────────────────────────────────────────────────

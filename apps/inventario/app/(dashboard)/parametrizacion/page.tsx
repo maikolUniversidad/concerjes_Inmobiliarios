@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { ParametrizacionClient, type SedeOpt, type ProductoOpt, type ParamRow } from './ParametrizacionClient'
 
@@ -11,20 +12,27 @@ export default async function ParametrizacionPage() {
   const supabase = await createClient()
   const perm = await getPermisosUsuario()
 
-  const [{ data: sedes }, { data: productos }, { data: params }] = await Promise.all([
-    supabase
+  // Los tres conjuntos se necesitan COMPLETOS (la matriz de parametrización
+  // cruza todas las sedes contra todos los productos): van paginados, porque
+  // PostgREST corta en 1.000 filas y sede_productos ya pasa de 800.
+  const [sedes, productos, params] = await Promise.all([
+    traerTodo((desde, hasta) => supabase
       .from('sedes')
       .select('id, nombre, zona, codigo_interno, grupo:grupos_contrato ( codigo, nombre )')
       .eq('activo', true)
-      .order('nombre'),
-    supabase
+      .order('nombre').order('id')
+      .range(desde, hasta)),
+    traerTodo((desde, hasta) => supabase
       .from('productos')
       .select('id, ref, codigo, nombre_estandar, presentacion, tipo_insumo')
       .eq('activo', true)
-      .order('nombre_estandar'),
-    supabase
+      .order('nombre_estandar').order('id')
+      .range(desde, hasta)),
+    traerTodo((desde, hasta) => supabase
       .from('sede_productos')
-      .select('id, sede_id, producto_id, cantidad_maxima, cantidad_minima, activo, observacion'),
+      .select('id, sede_id, producto_id, cantidad_maxima, cantidad_minima, activo, observacion')
+      .order('id')
+      .range(desde, hasta)),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

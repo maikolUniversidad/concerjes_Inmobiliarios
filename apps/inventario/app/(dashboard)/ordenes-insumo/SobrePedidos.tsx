@@ -27,12 +27,12 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
   // Hoja 1: resumen por producto
   const wsResumen = wb.addWorksheet('Resumen')
   wsResumen.columns = [
-    { header: 'Producto',      key: 'nombre',       width: 42 },
-    { header: 'Presentación',  key: 'presentacion', width: 20 },
-    { header: 'Stock real',    key: 'stock_real',   width: 14 },
-    { header: 'Comprometido',  key: 'comprometido', width: 14 },
-    { header: 'Déficit',       key: 'disponible',   width: 12 },
-    { header: '# Órdenes',     key: 'num_ordenes',  width: 12 },
+    { header: 'Producto',                    key: 'nombre',       width: 42 },
+    { header: 'Presentación',                key: 'presentacion', width: 20 },
+    { header: 'Stock real',                  key: 'stock_real',   width: 14 },
+    { header: 'Total pedido (órdenes en cola)', key: 'comprometido', width: 26 },
+    { header: 'Faltante (stock − pedido)',   key: 'disponible',   width: 24 },
+    { header: '# Órdenes',                   key: 'num_ordenes',  width: 12 },
   ]
   const hResumen = wsResumen.getRow(1)
   hResumen.font = { bold: true, color: { argb: 'FFFFFFFF' } }
@@ -56,18 +56,22 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
   // Hoja 2: detalle por orden
   const wsDetalle = wb.addWorksheet('Detalle por orden')
   wsDetalle.columns = [
-    { header: 'Producto',      key: 'nombre',      width: 42 },
-    { header: 'Presentación',  key: 'presentacion',width: 20 },
-    { header: 'Orden',         key: 'numero',      width: 18 },
-    { header: 'Estado',        key: 'estado',      width: 18 },
-    { header: 'Sede',          key: 'sede',        width: 30 },
-    { header: 'Cantidad pedida', key: 'cantidad',  width: 16 },
-    { header: 'Déficit total', key: 'disponible',  width: 14 },
+    { header: 'Producto',       key: 'nombre',      width: 42 },
+    { header: 'Presentación',   key: 'presentacion',width: 20 },
+    { header: 'Orden',          key: 'numero',      width: 18 },
+    { header: 'Estado',         key: 'estado',      width: 18 },
+    { header: 'Sede',           key: 'sede',        width: 30 },
+    { header: 'Cantidad pedida',key: 'cantidad',    width: 16 },
+    // Estas tres van repetidas en cada fila del producto: son su TOTAL, no el de
+    // la fila. Sumar "Cantidad pedida" de un producto debe dar "Total pedido".
+    { header: 'Total pedido del producto', key: 'comprometido', width: 24 },
+    { header: 'Stock real del producto',   key: 'stock_real',   width: 22 },
+    { header: 'Faltante del producto',     key: 'disponible',   width: 22 },
   ]
   const hDetalle = wsDetalle.getRow(1)
   hDetalle.font = { bold: true, color: { argb: 'FFFFFFFF' } }
   hDetalle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } }
-  hDetalle.alignment = { vertical: 'middle' }
+  hDetalle.alignment = { vertical: 'middle', wrapText: true }
 
   for (const p of items) {
     for (const o of p.ordenes) {
@@ -78,11 +82,13 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
         estado: ESTADO_LABEL[o.estado] ?? o.estado,
         sede: o.sede ?? '—',
         cantidad: o.cantidad,
+        comprometido: p.comprometido,
+        stock_real: p.stock_real,
         disponible: p.disponible,
       })
     }
   }
-  wsDetalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } }
+  wsDetalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 9 } }
 
   const buf = await wb.xlsx.writeBuffer()
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -91,6 +97,10 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
   const fecha = new Date().toISOString().slice(0, 10)
   a.href = url; a.download = `sobre-pedidos-${fecha}.xlsx`; a.click()
   URL.revokeObjectURL(url)
+}
+
+function sumaPedida(p: ProductoSobrePedido) {
+  return p.ordenes.reduce((t, o) => t + o.cantidad, 0)
 }
 
 export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
@@ -146,9 +156,12 @@ export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
                   </div>
                   <div className="hidden sm:flex items-center gap-4 shrink-0 font-body text-xs">
                     <span className="text-gray-500">Stock <span className="font-semibold text-gray-700">{p.stock_real}</span></span>
-                    <span className="text-gray-500">Pedido <span className="font-semibold text-gray-700">{p.comprometido}</span></span>
+                    <span className="text-gray-500">Pedido <span className="font-semibold text-gray-700">{p.comprometido}</span> <span className="text-gray-400">({p.ordenes.length} órd.)</span></span>
                   </div>
-                  <span className="shrink-0 rounded-lg bg-red-100 px-2 py-1 font-heading font-bold text-sm text-red-700" title="Faltante proyectado">
+                  <span
+                    className="shrink-0 rounded-lg bg-red-100 px-2 py-1 font-heading font-bold text-sm text-red-700"
+                    title={`Faltante = stock ${p.stock_real} − pedido ${p.comprometido}`}
+                  >
                     {p.disponible}
                   </span>
                   {open ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
@@ -156,7 +169,14 @@ export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
 
                 {open && (
                   <div className="px-4 pb-3 pl-11">
-                    <p className="mb-1 font-body text-[11px] font-semibold uppercase tracking-wide text-gray-400">Órdenes en cola que lo piden</p>
+                    <p className="mb-1 font-body text-[11px] font-semibold uppercase tracking-wide text-gray-400">
+                      Órdenes en cola que lo piden ({p.ordenes.length})
+                    </p>
+                    <p className="mb-2 font-body text-[11px] text-gray-500">
+                      Suma de estas órdenes <strong className="text-gray-700">{sumaPedida(p)}</strong>
+                      {' − '}stock <strong className="text-gray-700">{p.stock_real}</strong>
+                      {' = '}faltante <strong className="text-red-600">{p.disponible}</strong>
+                    </p>
                     <div className="space-y-1">
                       {p.ordenes.map(o => (
                         <Link key={o.orden_id} href={`/ordenes-insumo/${o.orden_id}`}

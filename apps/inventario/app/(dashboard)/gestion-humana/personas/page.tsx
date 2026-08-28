@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { PersonasClient } from './PersonasClient'
 
@@ -22,7 +23,7 @@ export default async function PersonasPage() {
       `)
       .order('apellidos', { ascending: true }),
     supabase.from('empresas_usuarias').select('*').order('nombre'),
-    supabase.from('sedes').select('id, nombre').order('nombre'),
+    traerTodo((desde, hasta) => supabase.from('sedes').select('id, nombre').order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
     supabase.from('roles').select('id, nombre, descripcion, permisos').eq('activo', true).order('nombre'),
   ])
 

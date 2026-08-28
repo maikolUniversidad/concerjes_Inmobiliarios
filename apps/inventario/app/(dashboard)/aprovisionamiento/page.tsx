@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { RefreshCw, FileText, AlertTriangle, Download, ChevronRight, Sparkles, ShoppingCart, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Aprovisionamiento' }
@@ -38,7 +39,7 @@ export default async function AprovisionamientoPage() {
   const periodo = 'JUNIO 2026'
 
   // Traer productos activos con su stock y datos de aprovisionamiento
-  const [{ data: aprovData }, { data: gruposData }] = await Promise.all([
+  const [{ data: aprovData }, gruposData] = await Promise.all([
     supabase
       .from('aprovisionamiento')
       .select(`
@@ -53,13 +54,17 @@ export default async function AprovisionamientoPage() {
       .eq('productos.activo', true)
       .order('producto_id')
       .limit(300),
-    supabase
+    // Paginado: los pedidos de un periodo pasan de las 1.000 filas que devuelve
+    // PostgREST por respuesta, y aquí se agregan TODOS para repartir por grupo.
+    traerTodo((desde, hasta) => supabase
       .from('pedidos_sede')
       .select(`
         producto_id, cantidad,
         sedes!inner ( grupo_id, grupos_contrato!inner ( codigo ) )
       `)
-      .eq('periodo', '2026-06-01'),
+      .eq('periodo', '2026-06-01')
+      .order('id')
+      .range(desde, hasta)),
   ])
 
   // Recomendación de compra EN VIVO (no depende de la tabla CMI): qué comprar

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Loader2, Package, MapPin, AlertCircle, Search } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { crearOrdenInsumo } from '../actions'
 import { ProductoThumb } from '../[id]/ProductoThumb'
 
@@ -53,14 +54,19 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
 
   useEffect(() => {
     let vivo = true
-    sb.from('v_stock_proyectado').select('producto_id, stock_real, comprometido, disponible').limit(10000)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data }: { data: any[] | null }) => {
-        if (!vivo) return
-        const m = new Map<string, { real: number; comprometido: number; disponible: number }>()
-        for (const r of data ?? []) m.set(r.producto_id, { real: Number(r.stock_real), comprometido: Number(r.comprometido), disponible: Number(r.disponible) })
-        setStock(m)
-      })
+    // Paginado: PostgREST corta en 1.000 filas y `.limit(10000)` no levanta ese
+    // tope; sin paginar, a los productos del final se les mostraba stock 0.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    traerTodo<any>((desde, hasta) =>
+      sb.from('v_stock_proyectado')
+        .select('producto_id, stock_real, comprometido, disponible')
+        .order('producto_id').range(desde, hasta),
+    ).then((filas) => {
+      if (!vivo) return
+      const m = new Map<string, { real: number; comprometido: number; disponible: number }>()
+      for (const r of filas) m.set(r.producto_id, { real: Number(r.stock_real), comprometido: Number(r.comprometido), disponible: Number(r.disponible) })
+      setStock(m)
+    })
     return () => { vivo = false }
   }, [sb])
 
@@ -112,15 +118,20 @@ export function NuevaOrdenClient({ sedes, bodegas }: { sedes: SedeOpt[]; bodegas
     if (!id) return
     setCargando(true)
     try {
-      const [{ data }, { data: prods }] = await Promise.all([
-        sb.from('sede_productos')
+      // Ambas paginadas: PostgREST corta en 1.000 filas por respuesta y
+      // `.limit(5000)` no lo evita (el tope es del servidor, no del cliente).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const [data, prods] = await Promise.all([
+        traerTodo<any>((desde, hasta) => sb.from('sede_productos')
           .select('cantidad_maxima, producto:productos ( id, nombre_estandar, presentacion, imagen_url )')
-          .eq('sede_id', id).eq('activo', true),
-        // limit alto: PostgREST corta en 1000 filas por defecto y el catálogo puede ser mayor.
-        sb.from('productos').select('id, nombre_estandar, presentacion, codigo, imagen_url').eq('activo', true).order('nombre_estandar').limit(5000),
+          .eq('sede_id', id).eq('activo', true).order('id').range(desde, hasta)),
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        traerTodo<any>((desde, hasta) => sb.from('productos')
+          .select('id, nombre_estandar, presentacion, codigo, imagen_url')
+          .eq('activo', true).order('nombre_estandar').order('id').range(desde, hasta)),
       ])
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const rows = ((data ?? []) as any[])
+      const rows = (data as any[])
         .filter((r) => r.producto)
         .map((r) => ({
           producto_id: r.producto.id,

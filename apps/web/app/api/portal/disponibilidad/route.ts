@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAdmin } from '@/lib/supabase/admin'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 // Disponibilidad agregada (sin datos personales). Devuelve, por día y franja
 // horaria, cuántas sesiones/solicitudes ya están ocupadas frente a la capacidad
@@ -19,20 +20,28 @@ export async function GET(req: NextRequest) {
     const sb = getAdmin() as any
 
     // Solicitudes confirmadas/en servicio en el rango.
-    const { data: sols } = await sb
+    // Paginado: la ocupación se calcula sobre TODAS las solicitudes del rango
+    // y PostgREST devuelve máximo 1.000 filas por respuesta.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const sols = await traerTodo<any>((d, h) => sb
       .from('solicitudes_servicio_hogar')
       .select('fecha_deseada, hora_inicio, estado')
       .gte('fecha_deseada', desde)
       .lte('fecha_deseada', hasta)
       .in('estado', ['CONFIRMADA', 'EN_SERVICIO'])
+      .order('id')
+      .range(d, h))
 
     // Sesiones ya agendadas en el rango.
-    const { data: ses } = await sb
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const ses = await traerTodo<any>((d, h) => sb
       .from('agenda_servicio_hogar')
       .select('fecha, hora_inicio, estado')
       .gte('fecha', desde)
       .lte('fecha', hasta)
       .in('estado', ['PROGRAMADO', 'EN_CURSO'])
+      .order('id')
+      .range(d, h))
 
     // Conteo por "YYYY-MM-DD HH:00".
     const ocupacion: Record<string, number> = {}

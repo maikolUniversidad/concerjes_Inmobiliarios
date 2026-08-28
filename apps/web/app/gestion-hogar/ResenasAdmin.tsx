@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, Star, Check, EyeOff, Trash2, MessageSquare } from 'lucide-react'
 import { toast } from 'sonner'
 import { getGestionSupabase } from '@/lib/supabase/gestion'
+import { traerTodo } from '@/lib/supabase/paginado'
 
 interface Resena {
   id: string; cliente_nombre: string; servicio_nombre: string | null
@@ -17,10 +18,12 @@ export function ResenasAdmin() {
 
   async function cargar() {
     const sb = getGestionSupabase()
-    const { data } = await sb.from('resenas_servicio_hogar')
+    // Paginado (PostgREST devuelve máximo 1.000 filas por respuesta).
+    const data = await traerTodo((desde, hasta) => sb.from('resenas_servicio_hogar')
       .select('id, cliente_nombre, servicio_nombre, calificacion, comentario, aprobada, created_at')
-      .order('created_at', { ascending: false })
-    setItems((data as Resena[]) ?? [])
+      .order('created_at', { ascending: false }).order('id')
+      .range(desde, hasta))
+    setItems(data as Resena[])
     setCargando(false)
   }
   useEffect(() => { cargar() }, [])

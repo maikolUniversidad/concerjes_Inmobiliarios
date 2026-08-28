@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { MovimientosBatchClient } from './MovimientosBatchClient'
 import type { TipoMovimiento } from '@/lib/types/database'
 
@@ -15,9 +16,12 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const { producto, tipo } = await searchParams
   const supabase = await createClient()
 
-  const [{ data: productos }, { data: sedes }, { data: ubicData }, { data: ordData }, { data: usuData }, { data: borrData }] = await Promise.all([
-    supabase.from('productos').select('id, nombre_estandar, presentacion, codigo, imagen_url').eq('activo', true).order('nombre_estandar').limit(5000),
-    supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre'),
+  const [productos, { data: sedes }, { data: ubicData }, { data: ordData }, { data: usuData }, { data: borrData }] = await Promise.all([
+    // `.limit(5000)` NO sirve: PostgREST corta en 1.000 filas. Hay que paginar.
+    traerTodo((desde, hasta) => supabase
+      .from('productos').select('id, nombre_estandar, presentacion, codigo, imagen_url')
+      .eq('activo', true).order('nombre_estandar').order('id').range(desde, hasta)),
+    traerTodo((desde, hasta) => supabase.from('sedes').select('id, nombre').eq('activo', true).order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
     supabase.from('ubicaciones').select('id, codigo, nombre, bodega:bodegas ( nombre )').eq('activo', true).order('codigo'),
     // Órdenes de insumo (para cargar devoluciones): recientes, no anuladas.
     // Se traen bastantes porque el selector busca en el cliente (número/sede/estado).

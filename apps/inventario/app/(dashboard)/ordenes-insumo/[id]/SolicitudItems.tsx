@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { Package, Plus, Trash2, Search, Loader2, User2, AlertTriangle } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { actualizarItemSolicitado, agregarItemSolicitado, quitarItemSolicitado } from '../actions'
 import { ProductoThumb } from './ProductoThumb'
 
@@ -52,14 +53,17 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
 
   useEffect(() => {
     let vivo = true
-    sb.from('v_stock_proyectado').select('producto_id, stock_real, disponible').limit(10000)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data }: { data: any[] | null }) => {
-        if (!vivo) return
-        const m = new Map<string, { real: number; disponible: number }>()
-        for (const r of data ?? []) m.set(r.producto_id, { real: Number(r.stock_real), disponible: Number(r.disponible) })
-        setStock(m)
-      })
+    // Paginado: PostgREST corta en 1.000 filas (`.limit()` no levanta el tope).
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    traerTodo<any>((desde, hasta) =>
+      sb.from('v_stock_proyectado').select('producto_id, stock_real, disponible')
+        .order('producto_id').range(desde, hasta),
+    ).then((filas) => {
+      if (!vivo) return
+      const m = new Map<string, { real: number; disponible: number }>()
+      for (const r of filas) m.set(r.producto_id, { real: Number(r.stock_real), disponible: Number(r.disponible) })
+      setStock(m)
+    })
     return () => { vivo = false }
   }, [sb])
 
@@ -71,12 +75,13 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
   // Catálogo para agregar productos (solo si se puede editar).
   useEffect(() => {
     if (!puedeEditar) return
-    sb.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true)
-      .order('nombre_estandar').limit(5000)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .then(({ data }: { data: any[] | null }) => {
-        setCatalogo((data ?? []).map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null })))
-      })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    traerTodo<any>((desde, hasta) =>
+      sb.from('productos').select('id, nombre_estandar, presentacion').eq('activo', true)
+        .order('nombre_estandar').order('id').range(desde, hasta),
+    ).then((filas) => {
+      setCatalogo(filas.map((p) => ({ id: p.id, nombre: p.nombre_estandar, presentacion: p.presentacion ?? null })))
+    })
   }, [sb, puedeEditar])
 
   const yaEnOrden = useMemo(() => new Set(items.map((i) => i.producto_id)), [items])

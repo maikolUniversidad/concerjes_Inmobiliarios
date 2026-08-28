@@ -5,6 +5,7 @@ import {
   ClipboardList, PackageCheck, Truck, ClipboardCheck, CheckCircle2, ChevronRight,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario } from '@/lib/permisos-server'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { MovimientosChart, type ChartPoint } from './MovimientosChart'
@@ -38,8 +39,10 @@ export default async function DashboardPage() {
   let pedidosBodega: PedidoFila[] = []
   let responsables: Record<string, string[]> = {}
   if (verPedidos) {
-    const { data: est } = await supabase.from('ordenes_insumo').select('estado')
-    const e = ((est ?? []) as { estado: string }[]).map((r) => r.estado)
+    // Paginado: se cuentan TODAS las órdenes y PostgREST corta en 1.000 filas.
+    const est = await traerTodo<{ estado: string }>((desde, hasta) =>
+      supabase.from('ordenes_insumo').select('estado').order('id').range(desde, hasta))
+    const e = est.map((r) => r.estado)
     const c = (fn: (s: string) => boolean) => e.filter(fn).length
     ped = {
       porAlistar:     c((s) => s === 'APROBADA' || s === 'PENDIENTE'),
@@ -78,11 +81,13 @@ export default async function DashboardPage() {
   // ── Inventario (productos + stock) ───────────────────────────────────────
   let productos: ProductoDash[] = []
   if (verInventario) {
-    const { data } = await supabase
+    // Paginado: el valor del inventario suma el catálogo COMPLETO.
+    productos = (await traerTodo((desde, hasta) => supabase
       .from('productos')
       .select('id, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
       .eq('activo', true)
-    productos = (data ?? []) as unknown as ProductoDash[]
+      .order('id')
+      .range(desde, hasta))) as unknown as ProductoDash[]
   }
   const criticos = productos.filter((p) => (p.stock_minimo_def > 0) && (p.stock?.cantidad_real ?? 0) <= p.stock_minimo_def)
   const unidadesStock = productos.reduce((a, p) => a + (p.stock?.cantidad_real ?? 0), 0)
@@ -91,8 +96,13 @@ export default async function DashboardPage() {
   // ── Movimientos (14 días + hoy) ──────────────────────────────────────────
   let movs: { tipo: string; cantidad: number; created_at: string }[] = []
   if (verMovs) {
-    const { data } = await supabase.from('movimientos').select('tipo, cantidad, created_at').gte('created_at', startOfDay(13).toISOString())
-    movs = (data ?? []) as unknown as typeof movs
+    // Paginado: 14 días de movimientos pueden pasar de las 1.000 filas.
+    movs = (await traerTodo((desde, hasta) => supabase
+      .from('movimientos')
+      .select('tipo, cantidad, created_at')
+      .gte('created_at', startOfDay(13).toISOString())
+      .order('id')
+      .range(desde, hasta))) as unknown as typeof movs
   }
   const hoy = startOfDay(0)
   const movsHoy = movs.filter((m) => new Date(m.created_at) >= hoy)

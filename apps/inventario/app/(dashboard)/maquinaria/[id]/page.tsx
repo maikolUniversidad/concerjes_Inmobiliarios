@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { MaquinariaDetalleClient, type MaqDetalle, type MaqEvento, type SedeOpt } from './MaquinariaDetalleClient'
 
@@ -24,7 +25,7 @@ export default async function MaquinariaDetallePage({ params }: { params: Promis
 
   const [{ data: eventos }, { data: sedes }] = await Promise.all([
     supabase.from('maquinaria_eventos').select('id, tipo, estado_anterior, estado_nuevo, ubicacion, descripcion, foto_path, usuario_nombre, usuario_email, created_at').eq('maquinaria_id', id).order('created_at', { ascending: false }),
-    supabase.from('sedes').select('id, nombre').order('nombre'),
+    traerTodo((desde, hasta) => supabase.from('sedes').select('id, nombre').order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
   ])
 
   return (

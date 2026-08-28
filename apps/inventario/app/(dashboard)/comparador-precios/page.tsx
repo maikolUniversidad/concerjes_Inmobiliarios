@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { ComparadorClient, type ProductoPrecios, type ProveedorLite } from './ComparadorClient'
 
@@ -10,8 +11,9 @@ export default async function ComparadorPreciosPage() {
   await requirePermiso('ver_proveedores')
   const supabase = await createClient()
 
-  const [{ data: productos }, { data: proveedores }] = await Promise.all([
-    supabase
+  const [productos, { data: proveedores }] = await Promise.all([
+    // Paginado: PostgREST devuelve máximo 1.000 filas por respuesta.
+    traerTodo((desde, hasta) => supabase
       .from('productos')
       .select(
         'id, ref, codigo, nombre_estandar, presentacion, tipo_insumo, precio_lista, ' +
@@ -19,7 +21,8 @@ export default async function ComparadorPreciosPage() {
         'precios_proveedor(id, proveedor_id, precio, vigente, fecha_cotiz)',
       )
       .eq('activo', true)
-      .order('nombre_estandar'),
+      .order('nombre_estandar').order('id')
+      .range(desde, hasta)),
     supabase.from('proveedores').select('id, nombre, es_principal').eq('activo', true).order('nombre'),
   ])
 
