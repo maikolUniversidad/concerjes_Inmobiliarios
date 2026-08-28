@@ -181,7 +181,7 @@ function TipoCard({
         <ul className="mt-3 space-y-1.5">
           {docs.map((d, i) => (
             <li key={d.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-              <span className="flex items-center gap-2 truncate text-xs text-gray-600">
+              <span className="flex min-w-0 items-center gap-2 text-xs text-gray-600">
                 <FileText className="h-4 w-4 shrink-0 text-brand-green" />
                 <span className="truncate">{d.nombre_original ?? `Archivo${etiquetaSlot(i)}`}{etiquetaSlot(i)}</span>
               </span>

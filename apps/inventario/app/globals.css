@@ -31,6 +31,11 @@
   h1, h2, h3, h4, h5, h6 { @apply font-heading; }
 }
 
+/* Un elemento con `truncate` casi siempre vive dentro de un flex o un grid, y
+   ahí no puede encoger por debajo de su contenido (min-width: auto), así que en
+   vez de recortarse desborda y arrastra la tarjeta fuera de la pantalla. */
+.truncate { min-width: 0; }
+
 /* Sidebar scrollbar */
 .sidebar-scroll::-webkit-scrollbar { width: 4px; }
 .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }

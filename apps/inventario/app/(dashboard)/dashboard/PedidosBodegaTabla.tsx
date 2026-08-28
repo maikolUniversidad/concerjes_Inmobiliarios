@@ -70,7 +70,7 @@ export function PedidosBodegaTabla({ pedidos, responsables }: {
       celda: (p) => {
         const resp = responsables[p.id] ?? []
         return resp.length > 0 ? (
-          <span className="flex items-center gap-1.5 truncate font-body text-sm text-gray-700">
+          <span className="flex min-w-0 items-center gap-1.5 font-body text-sm text-gray-700">
             <User2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
             <span className="truncate">{resp[0]}{resp.length > 1 ? ` +${resp.length - 1}` : ''}</span>
           </span>

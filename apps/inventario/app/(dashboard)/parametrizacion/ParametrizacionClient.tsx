@@ -226,7 +226,7 @@ export function ParametrizacionClient({
               <button key={s.id} onClick={() => setSelId(s.id)}
                 className={`w-full text-left px-3 py-2.5 rounded-xl transition-colors ${active ? 'bg-green-50 border border-brand-green' : 'hover:bg-gray-50 border border-transparent'}`}>
                 <div className="flex items-center justify-between gap-2">
-                  <p className="font-body text-sm font-medium text-gray-900 truncate flex items-center gap-1.5">
+                  <p className="font-body text-sm font-medium text-gray-900 flex min-w-0 items-center gap-1.5">
                     <MapPin className="w-3.5 h-3.5 text-brand-green shrink-0" /> {s.nombre}
                   </p>
                   <span className={`shrink-0 font-body text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${n > 0 ? 'bg-brand-green/10 text-brand-green' : 'bg-gray-100 text-gray-400'}`}>{n}</span>

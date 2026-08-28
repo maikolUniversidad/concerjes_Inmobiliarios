@@ -221,8 +221,9 @@ export function ScannerCaptura({ personaId, personaNombre, tipo, yaExiste, onClo
       {/* Header */}
       <div className="flex items-center justify-between gap-2 bg-black/90 px-4 py-3 text-white">
         <div className="min-w-0">
-          <p className="flex items-center gap-1.5 font-heading font-semibold text-sm truncate">
-            <ScanLine className="w-4 h-4 text-brand-green shrink-0" /> {tipo.label}
+          <p className="flex min-w-0 items-center gap-1.5 font-heading font-semibold text-sm">
+            <ScanLine className="w-4 h-4 text-brand-green shrink-0" />
+            <span className="truncate">{tipo.label}</span>
           </p>
           <p className="text-[11px] text-white/60 truncate">{personaNombre} · {yaExiste ? 'Reemplazar existente' : 'Nuevo documento'}</p>
         </div>

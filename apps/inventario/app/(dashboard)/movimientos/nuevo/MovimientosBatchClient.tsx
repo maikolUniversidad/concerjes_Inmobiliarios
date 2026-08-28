@@ -318,7 +318,7 @@ export function MovimientosBatchClient({
                     {b.nombre || 'Sin nombre'} <span className="font-normal text-gray-400">· {b.items.length} ítem(s)</span>
                   </p>
                   {b.responsableIds.length > 0 && (
-                    <p className="flex items-center gap-1 font-body text-[11px] text-gray-400 truncate">
+                    <p className="flex min-w-0 items-center gap-1 font-body text-[11px] text-gray-400">
                       <Users className="w-3 h-3 shrink-0" /> {b.responsableIds.map(id => usuariosMap.get(id) ?? '—').join(', ')}
                     </p>
                   )}

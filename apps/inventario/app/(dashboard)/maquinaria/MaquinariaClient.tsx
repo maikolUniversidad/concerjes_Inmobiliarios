@@ -119,7 +119,7 @@ export function MaquinariaClient({ maquinas: init, sedes, puedeGestionar }: Prop
                   {m.tipo && <span className="font-body text-xs text-gray-400 truncate">{m.tipo}</span>}
                 </div>
                 <p className="mt-1 font-body font-semibold text-sm text-gray-900 truncate">{m.nombre}</p>
-                <p className="mt-0.5 flex items-center gap-1 font-body text-xs text-gray-500 truncate">
+                <p className="mt-0.5 flex min-w-0 items-center gap-1 font-body text-xs text-gray-500">
                   <MapPin className="w-3 h-3 text-gray-400 shrink-0" /> {ubic || 'Sin ubicación'}
                 </p>
               </div>

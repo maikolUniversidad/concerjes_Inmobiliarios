@@ -686,14 +686,16 @@ export function TablaEstandar<T>({
       {filasPagina.length === 0 ? (
         sinDatos
       ) : vista === 'tarjetas' ? (
-        <div className={gridTarjetas}>
+        // `[&>*]:min-w-0`: sin esto los ítems del grid no bajan de su ancho
+        // de contenido y una sede larga empuja la tarjeta fuera de la pantalla.
+        <div className={`${gridTarjetas} [&>*]:min-w-0`}>
           {filasPagina.map((fila) => tarjetaSinMarco && renderTarjeta ? (
             <Fragment key={filaId(fila)}>{renderTarjeta(fila)}</Fragment>
           ) : (
             <div
               key={filaId(fila)}
               onClick={onFilaClick ? () => onFilaClick(fila) : undefined}
-              className={`rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all ${
+              className={`min-w-0 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition-all ${
                 onFilaClick ? 'cursor-pointer hover:border-brand-green/40 hover:shadow' : ''
               } ${filaClassName?.(fila) ?? ''}`}
             >

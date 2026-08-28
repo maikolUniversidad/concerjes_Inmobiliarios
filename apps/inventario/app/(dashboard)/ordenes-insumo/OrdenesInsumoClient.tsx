@@ -448,8 +448,9 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
                   <p className="font-heading font-bold text-sm text-gray-900">{o.numero}</p>
-                  <p className="font-body text-xs text-gray-500 truncate flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3 text-brand-green shrink-0" /> {o.sede}
+                  <p className="font-body text-xs text-gray-500 flex items-center gap-1 mt-0.5 min-w-0">
+                    <MapPin className="w-3 h-3 text-brand-green shrink-0" />
+                    <span className="truncate" title={o.sede}>{o.sede}</span>
                   </p>
                 </div>
                 <div className="flex flex-col items-end gap-1 shrink-0">

@@ -186,7 +186,7 @@ export function PersonasClient({ personas: init, empresas: initEmpresas, sedes, 
                       </span>
                     )}
                   </div>
-                  <p className="font-body text-xs text-gray-500 truncate flex items-center gap-1">
+                  <p className="font-body text-xs text-gray-500 flex min-w-0 items-center gap-1">
                     <IdCard className="w-3 h-3 text-gray-400" /> {p.tipo_doc} {p.documento}
                     {p.cargo && <span className="text-gray-300">·</span>}
                     {p.cargo && <span className="truncate">{p.cargo}</span>}

@@ -100,7 +100,7 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
       id: 'responsable', header: 'Responsable', prioridad: 2, ancho: 'max-w-[180px]', tarjeta: 'meta',
       valor: (o) => (responsables[o.id] ?? []).join(', '),
       celda: (o) => (responsables[o.id]?.length ?? 0) > 0 ? (
-        <span className="flex items-center gap-1.5 truncate font-body text-sm text-gray-700">
+        <span className="flex min-w-0 items-center gap-1.5 font-body text-sm text-gray-700">
           <User2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           <span className="truncate">
             {responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}
@@ -219,12 +219,14 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
                 <span className="font-heading text-base font-bold text-gray-900">{o.numero}</span>
                 <span className={`rounded-full px-2 py-0.5 font-body text-[11px] font-semibold ${m.color}`}>{m.label}</span>
               </div>
-              <p className="mt-1 flex items-center gap-1 truncate font-body text-xs text-gray-500">
-                <MapPin className="h-3 w-3 shrink-0" /> {o.sede?.nombre ?? 'Sin sede'}
+              <p className="mt-1 flex min-w-0 items-center gap-1 font-body text-xs text-gray-500">
+                <MapPin className="h-3 w-3 shrink-0" />
+                <span className="truncate">{o.sede?.nombre ?? 'Sin sede'}</span>
               </p>
               {(responsables[o.id]?.length ?? 0) > 0 && (
-                <p className="mt-0.5 flex items-center gap-1 truncate font-body text-xs text-gray-400">
-                  <User2 className="h-3 w-3 shrink-0" /> {responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}
+                <p className="mt-0.5 flex min-w-0 items-center gap-1 font-body text-xs text-gray-400">
+                  <User2 className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}</span>
                 </p>
               )}
               <div className="mt-3">
