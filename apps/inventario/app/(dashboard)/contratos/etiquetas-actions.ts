@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -22,6 +23,9 @@ async function sb() {
 export async function guardarCategoria(input: {
   id?: string; nombre: string; descripcion?: string | null; color?: string; multiple?: boolean
 }): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const { db, user } = await sb()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const nombre = input.nombre.trim()
@@ -36,6 +40,9 @@ export async function guardarCategoria(input: {
 }
 
 export async function eliminarCategoria(id: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const { db, user } = await sb()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const { error } = await db.from('etiqueta_categorias').delete().eq('id', id)
@@ -48,6 +55,9 @@ export async function eliminarCategoria(id: string): Promise<ActionResult> {
 export async function guardarEtiqueta(input: {
   id?: string; categoria_id: string; nombre: string; color?: string | null
 }): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const { db, user } = await sb()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const nombre = input.nombre.trim()
@@ -63,6 +73,9 @@ export async function guardarEtiqueta(input: {
 }
 
 export async function eliminarEtiqueta(id: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const { db, user } = await sb()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const { error } = await db.from('etiquetas').delete().eq('id', id)
@@ -73,6 +86,9 @@ export async function eliminarEtiqueta(id: string): Promise<ActionResult> {
 
 // ── Clasificación a nivel de grupo de contrato ────────────────────────────────
 export async function setTipoGrupo(grupoId: string, tipo: 'DIRECTO' | 'PRIVADO' | null): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const { db, user } = await sb()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const { error } = await db.from('grupos_contrato').update({ tipo_contrato: tipo }).eq('id', grupoId)
@@ -82,6 +98,9 @@ export async function setTipoGrupo(grupoId: string, tipo: 'DIRECTO' | 'PRIVADO' 
 }
 
 export async function asignarEtiquetasGrupo(grupoId: string, etiquetaIds: string[]): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const { db, user } = await sb()
   if (!user) return { error: 'Debes iniciar sesión.' }
   await db.from('grupo_etiquetas').delete().eq('grupo_id', grupoId)

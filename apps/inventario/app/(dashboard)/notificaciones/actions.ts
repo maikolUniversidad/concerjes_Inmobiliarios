@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
 import type { RolUsuario, SeveridadNotificacion, TipoNotificacion } from '@/lib/types/database'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -15,6 +16,9 @@ const SEVERIDADES: SeveridadNotificacion[] = ['INFO', 'EXITO', 'ADVERTENCIA', 'C
 
 /** Actualiza una regla de alerta (solo admin, garantizado por RLS). */
 export async function guardarRegla(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_alertas')
+  if (falta) return { error: falta }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createClient() as any
   const { data: { user } } = await supabase.auth.getUser()
@@ -91,6 +95,9 @@ export async function guardarPreferencias(_prev: ActionResult, formData: FormDat
 
 /** Envía un anuncio manual (regla SISTEMA) a los roles configurados. */
 export async function enviarAnuncio(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_alertas')
+  if (falta) return { error: falta }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const supabase = await createClient() as any
   const { data: { user } } = await supabase.auth.getUser()

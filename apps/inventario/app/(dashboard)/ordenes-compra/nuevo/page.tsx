@@ -4,6 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { OCForm } from '../OCForm'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Nueva orden de compra' }
 
@@ -12,6 +13,7 @@ export default async function NuevaOCPage({
 }: {
   searchParams: Promise<{ proveedor?: string; producto?: string; precio?: string }>
 }) {
+  await requirePermiso('crear_ordenes_compra', '/ordenes-compra')
   const sp = await searchParams
   const supabase = await createClient()
   const [{ data: proveedores }, productos] = await Promise.all([

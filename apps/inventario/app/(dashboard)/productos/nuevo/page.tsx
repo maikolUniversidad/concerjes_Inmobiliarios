@@ -2,6 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { ProductoForm } from '../ProductoForm'
 import { crearProducto } from '../actions'
 import { cargarUbicaciones } from '../ubicaciones'
@@ -9,6 +10,7 @@ import { cargarUbicaciones } from '../ubicaciones'
 export const metadata: Metadata = { title: 'Nuevo producto' }
 
 export default async function NuevoProductoPage() {
+  await requirePermiso('editar_productos', '/productos')
   const supabase = await createClient()
   const [{ data: proveedores }, ubicaciones] = await Promise.all([
     supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre'),

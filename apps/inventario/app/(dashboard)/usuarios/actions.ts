@@ -4,12 +4,16 @@ import { revalidatePath } from 'next/cache'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import type { RolUsuario } from '@/lib/types/database'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
 const ROLES: RolUsuario[] = ['SUPER_ADMIN', 'ADMIN', 'SUPERVISOR', 'COORDINADOR_COMPRAS', 'BODEGUERO', 'AUDITOR', 'OPERADOR_SEDE']
 
 export async function actualizarUsuario(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_usuarios')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -38,6 +42,9 @@ export async function actualizarUsuario(_prev: ActionResult, formData: FormData)
 }
 
 export async function invitarUsuario(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_usuarios')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }

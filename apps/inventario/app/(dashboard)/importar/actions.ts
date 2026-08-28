@@ -5,6 +5,7 @@ import { createClient as createAdminSb } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
 import { IMPORT_CONFIGS, aFecha, normalizaClave, type EntityConfig } from '@/lib/import/config'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface FilaCommit { fila: number; clave: string; datos: Record<string, unknown> }
 export interface ImportResultRow { fila: number; clave: string; accion: 'creado' | 'actualizado' | 'error'; error?: string }
@@ -261,6 +262,9 @@ async function upsertSede(supabase: DB, datos: Record<string, unknown>, id: stri
 }
 
 export async function importarEntidad(entidad: string, rows: FilaCommit[], archivo: string): Promise<ImportResult> {
+  const falta = await faltaPermiso('importar_datos')
+  if (falta) return { ok: false, total: 0, creados: 0, actualizados: 0, errores: 0, detalle: [], error: falta }
+
   const config = IMPORT_CONFIGS[entidad]
   if (!config) return { ok: false, total: 0, creados: 0, actualizados: 0, errores: 0, detalle: [], error: 'Entidad no válida.' }
 

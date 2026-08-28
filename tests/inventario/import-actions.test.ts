@@ -70,6 +70,9 @@ const db = vi.hoisted(() => {
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }))
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => db.cliente }))
 vi.mock('@/lib/activity', () => ({ logActivity: async () => {} }))
+// El permiso se prueba aparte (scripts/verificar-permisos.mjs); aquí interesa
+// la lógica de importación, así que el guard se deja pasar.
+vi.mock('@/lib/permisos-server', () => ({ faltaPermiso: async () => null }))
 vi.mock('@supabase/supabase-js', () => ({ createClient: () => db.cliente }))
 
 const { importarEntidad } = await import('@/app/(dashboard)/importar/actions')

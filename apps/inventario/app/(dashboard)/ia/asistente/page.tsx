@@ -2,11 +2,13 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import type { IACarpeta, IAConversacion } from '@/lib/types/database'
 import { AsistenteClient } from './AsistenteClient'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Asistente IA' }
 export const dynamic = 'force-dynamic'
 
 export default async function AsistentePage() {
+  await requirePermiso('usar_ia_asistente', '/dashboard')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

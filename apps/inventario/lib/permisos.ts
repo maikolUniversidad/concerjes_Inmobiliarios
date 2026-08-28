@@ -29,7 +29,6 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'realizar_arqueo',     label: 'Realizar arqueo / conteo' },
       { key: 'ver_bodegas',         label: 'Ver bodegas y ubicaciones' },
       { key: 'gestionar_bodegas',   label: 'Gestionar bodegas y ubicaciones' },
-      { key: 'usar_scanner',        label: 'Usar buscador / escáner' },
       { key: 'generar_codigos',     label: 'Generar códigos de barras' },
       { key: 'ver_reembasado',      label: 'Ver reembasado / decantado' },
       { key: 'gestionar_reembasado', label: 'Definir y ejecutar reembasado' },
@@ -134,14 +133,17 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_agenda_hogar',       label: 'Ver y gestionar agenda de servicios' },
       { key: 'gestionar_tipos_servicio',     label: 'Crear / editar tipos de servicio' },
       { key: 'gestionar_precios_servicio',   label: 'Crear / editar tarifas y precios' },
+      { key: 'ver_pagos_hogar',              label: 'Ver cobros y pagos' },
+      { key: 'gestionar_pagos_hogar',        label: 'Gestionar cobros y registrar pagos' },
+      { key: 'parametrizar_pagos_hogar',     label: 'Parametrizar medios de pago' },
     ],
   },
   {
+    // Solo queda el asistente: las pantallas de visión y análisis se retiraron,
+    // así que sus claves salieron del catálogo (activarlas no hacía nada).
     grupo: 'Inteligencia Artificial',
     permisos: [
-      { key: 'usar_ia_vision',    label: 'Usar visión IA' },
       { key: 'usar_ia_asistente', label: 'Usar asistente IA' },
-      { key: 'ver_ia_analisis',   label: 'Ver análisis IA' },
     ],
   },
   {

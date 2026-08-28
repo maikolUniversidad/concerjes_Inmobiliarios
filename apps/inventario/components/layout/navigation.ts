@@ -116,7 +116,7 @@ export const navigation: NavModule[] = [
       { label: 'Agenda',          href: '/servicios-hogar/agenda',      icon: CalendarDays,  permiso: 'gestionar_agenda_hogar' },
       { label: 'Tipos de Servicio', href: '/servicios-hogar/tipos',    icon: Star,          permiso: 'gestionar_tipos_servicio' },
       { label: 'Precios',         href: '/servicios-hogar/precios',     icon: DollarSign,    permiso: 'gestionar_precios_servicio' },
-      { label: 'Pagos',           href: '/servicios-hogar/pagos',       icon: Wallet,        permiso: 'gestionar_pagos_hogar' },
+      { label: 'Pagos',           href: '/servicios-hogar/pagos',       icon: Wallet,        permiso: 'ver_pagos_hogar' },
       { label: 'Parámetros de Pago', href: '/servicios-hogar/parametros-pago', icon: SlidersHorizontal, permiso: 'parametrizar_pagos_hogar' },
     ],
   },

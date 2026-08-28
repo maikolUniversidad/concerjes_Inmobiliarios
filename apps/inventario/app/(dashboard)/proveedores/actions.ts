@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -24,6 +25,9 @@ function traducir(msg: string): string {
 }
 
 export async function crearProveedor(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_proveedores')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -40,6 +44,9 @@ export async function crearProveedor(_prev: ActionResult, formData: FormData): P
 }
 
 export async function actualizarProveedor(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_proveedores')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -58,6 +65,8 @@ export async function actualizarProveedor(_prev: ActionResult, formData: FormDat
 }
 
 export async function eliminarProveedor(formData: FormData): Promise<void> {
+  if (await faltaPermiso('editar_proveedores')) return
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return

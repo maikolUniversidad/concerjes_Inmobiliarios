@@ -8,6 +8,7 @@ import { ProductoGaleria, type FotoItem } from '@/components/ui/ProductoGaleria'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { eliminarProducto } from '../actions'
 import { formatCOP } from '@/lib/utils'
+import { usePermisos } from '@/components/permisos/PermisosProvider'
 
 interface Movimiento {
   tipo: string
@@ -109,6 +110,8 @@ function MovIcon({ tipo }: { tipo: string }) {
 }
 
 export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo: initialCceTipo, stockCce: initialStockCce }: Props) {
+  const { puede } = usePermisos()
+  const puedeEditar = puede('editar_productos')
   const [imagenUrl, setImagenUrl] = useState(initial.imagen_url)
   const [cceOpen, setCceOpen] = useState(false)
   const [cceTipo, setCceTipoState] = useState<CceTipo>(initialCceTipo)
@@ -220,19 +223,21 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
                 <p className="font-body text-sm text-gray-500 mt-0.5">{initial.presentacion}</p>
               )}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <Link href={`/productos/${initial.id}/editar`}
-                className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
-                <Edit2 className="w-3.5 h-3.5" />
-                Editar
-              </Link>
-              <DeleteButton action={eliminarProducto} id={initial.id}
-                mensaje={`¿Eliminar “${initial.nombre_estandar}”? Se ocultará del catálogo (se conserva el historial).`}
-                className="flex items-center gap-2 border border-red-200 text-red-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-red-50 transition-colors">
-                <Trash2 className="w-3.5 h-3.5" />
-                Eliminar
-              </DeleteButton>
-            </div>
+            {puedeEditar && (
+              <div className="flex items-center gap-2 shrink-0">
+                <Link href={`/productos/${initial.id}/editar`}
+                  className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-gray-50 transition-colors">
+                  <Edit2 className="w-3.5 h-3.5" />
+                  Editar
+                </Link>
+                <DeleteButton action={eliminarProducto} id={initial.id}
+                  mensaje={`¿Eliminar “${initial.nombre_estandar}”? Se ocultará del catálogo (se conserva el historial).`}
+                  className="flex items-center gap-2 border border-red-200 text-red-600 font-body text-sm px-3 py-2 rounded-xl hover:bg-red-50 transition-colors">
+                  <Trash2 className="w-3.5 h-3.5" />
+                  Eliminar
+                </DeleteButton>
+              </div>
+            )}
           </div>
         </div>
 

@@ -13,9 +13,28 @@ export interface Rol {
   nombre: string
   descripcion: string | null
   permisos: Record<string, boolean>
+  /** Rol enum base que usan las políticas RLS. `null` = mínimo privilegio. */
+  rol_base: string | null
   activo: boolean
   created_at: string
 }
+
+/**
+ * Roles enum de la base de datos. Sirven de "nivel base" del rol: los permisos
+ * marcados abajo son los que mandan, pero SUPER_ADMIN y ADMIN tienen acceso
+ * completo implícito, así que asignarlos ignora la selección de permisos.
+ */
+const ROLES_BASE: { valor: string; label: string }[] = [
+  { valor: '',                    label: 'Sin rol base — solo los permisos marcados (recomendado)' },
+  { valor: 'SUPER_ADMIN',         label: 'SUPER_ADMIN — acceso total, ignora los permisos' },
+  { valor: 'ADMIN',               label: 'ADMIN — acceso total, ignora los permisos' },
+  { valor: 'SUPERVISOR',          label: 'SUPERVISOR' },
+  { valor: 'COORDINADOR_COMPRAS', label: 'COORDINADOR_COMPRAS' },
+  { valor: 'BODEGUERO',           label: 'BODEGUERO' },
+  { valor: 'OPERADOR_SEDE',       label: 'OPERADOR_SEDE' },
+  { valor: 'CONDUCTOR',           label: 'CONDUCTOR' },
+  { valor: 'AUDITOR',             label: 'AUDITOR — solo lectura' },
+]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,6 +55,7 @@ function DrawerForm({ rol, onClose, onSaved, onDeleted }: DrawerFormProps) {
 
   const [nombre, setNombre] = useState(rol?.nombre ?? '')
   const [descripcion, setDescripcion] = useState(rol?.descripcion ?? '')
+  const [rolBase, setRolBase] = useState(rol?.rol_base ?? '')
   const [permisos, setPermisos] = useState<Record<string, boolean>>(
     rol?.permisos ? { ...emptyPermisos(), ...rol.permisos } : emptyPermisos()
   )
@@ -56,9 +76,14 @@ function DrawerForm({ rol, onClose, onSaved, onDeleted }: DrawerFormProps) {
   }
 
   function toggleTodo() {
-    const total = countActivos(permisos)
-    const allOn = total === ALL_PERMISOS.length
-    setPermisos(Object.fromEntries(ALL_PERMISOS.map((p) => [p.key, !allOn])))
+    const allOn = ALL_PERMISOS.every((p) => permisos[p.key])
+    setPermisos((prev) => {
+      // Conserva claves que no estén en el catálogo (permisos de módulos nuevos
+      // sembrados en la BD): reemplazar el objeto entero las borraría.
+      const next = { ...prev }
+      ALL_PERMISOS.forEach((p) => { next[p.key] = !allOn })
+      return next
+    })
   }
 
   async function handleSave() {
@@ -68,7 +93,7 @@ function DrawerForm({ rol, onClose, onSaved, onDeleted }: DrawerFormProps) {
       if (isNew) {
         const { data, error: err } = await (supabase as any)
           .from('roles')
-          .insert({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, permisos, activo: true })
+          .insert({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, rol_base: rolBase || null, permisos, activo: true })
           .select()
           .single()
         if (err || !data) { setError(err?.message ?? 'Error al crear rol.'); return }
@@ -77,7 +102,7 @@ function DrawerForm({ rol, onClose, onSaved, onDeleted }: DrawerFormProps) {
       } else {
         const { data, error: err } = await (supabase as any)
           .from('roles')
-          .update({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, permisos })
+          .update({ nombre: nombre.trim(), descripcion: descripcion.trim() || null, rol_base: rolBase || null, permisos })
           .eq('id', rol!.id)
           .select()
           .single()
@@ -130,6 +155,16 @@ function DrawerForm({ rol, onClose, onSaved, onDeleted }: DrawerFormProps) {
           <div>
             <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Descripción</label>
             <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${inputCls} resize-none`} rows={2} placeholder="Qué puede hacer este rol..." />
+          </div>
+          <div>
+            <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Nivel base en la base de datos</label>
+            <select value={rolBase} onChange={(e) => setRolBase(e.target.value)} className={inputCls}>
+              {ROLES_BASE.map((r) => <option key={r.valor} value={r.valor}>{r.label}</option>)}
+            </select>
+            <p className="font-body text-[11px] text-gray-500 mt-1">
+              Déjalo en «Sin rol base» salvo que necesites un rol administrativo:
+              SUPER_ADMIN y ADMIN saltan todos los filtros y ven el sistema completo.
+            </p>
           </div>
         </div>
 

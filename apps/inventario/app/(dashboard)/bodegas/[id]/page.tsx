@@ -7,6 +7,7 @@ import { traerTodo } from '@/lib/supabase/paginado'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import { eliminarBodega } from '../actions'
 import { BodegaPlano, type Ubic, type ProdMin } from './BodegaPlano'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Bodega' }
 export const revalidate = 0
@@ -14,6 +15,7 @@ export const revalidate = 0
 interface Props { params: Promise<{ id: string }> }
 
 export default async function BodegaDetallePage({ params }: Props) {
+  await requirePermiso('ver_bodegas', '/dashboard')
   const { id } = await params
   const supabase = await createClient()
 

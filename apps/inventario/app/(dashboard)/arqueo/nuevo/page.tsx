@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
+import { requirePermiso } from '@/lib/permisos-server'
 import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { ArqueoNuevoForm } from './ArqueoNuevoForm'
 
 export const metadata: Metadata = { title: 'Nuevo arqueo' }
 
-export default function NuevoArqueoPage() {
+export default async function NuevoArqueoPage() {
+  await requirePermiso('realizar_arqueo', '/arqueo')
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
       <div>

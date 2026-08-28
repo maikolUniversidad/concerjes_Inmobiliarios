@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { MovimientosBatchClient } from './MovimientosBatchClient'
 import type { TipoMovimiento } from '@/lib/types/database'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Registrar movimiento' }
 
@@ -13,6 +14,7 @@ const TIPOS_VALIDOS: TipoMovimiento[] = ['ENTRADA', 'SALIDA', 'DEVOLUCION', 'AJU
 interface Props { searchParams: Promise<{ producto?: string; tipo?: string }> }
 
 export default async function NuevoMovimientoPage({ searchParams }: Props) {
+  await requirePermiso('crear_movimientos', '/movimientos')
   const { producto, tipo } = await searchParams
   const supabase = await createClient()
 

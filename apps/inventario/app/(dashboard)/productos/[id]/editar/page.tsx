@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { ProductoForm, type ProductoDefaults } from '../../ProductoForm'
 import { actualizarProducto } from '../../actions'
 import { cargarUbicaciones } from '../../ubicaciones'
@@ -13,6 +14,7 @@ interface Props { params: Promise<{ id: string }> }
 
 export default async function EditarProductoPage({ params }: Props) {
   const { id } = await params
+  await requirePermiso('editar_productos', '/productos')
   const supabase = await createClient()
 
   const [{ data, error }, { data: proveedores }, { data: fotosData }, ubicaciones] = await Promise.all([

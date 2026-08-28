@@ -6,6 +6,7 @@ import {
   CheckCircle2, AlertCircle, ExternalLink, RefreshCw,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { usePermisos } from '@/components/permisos/PermisosProvider'
 
 type Tab = 'sst' | 'galeria'
 
@@ -34,6 +35,8 @@ function formatSize(bytes?: number) {
 }
 
 export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
+  const { puede } = usePermisos()
+  const puedeSubir                = puede('subir_documentos')
   const [tab, setTab]             = useState<Tab>('sst')
   const [sstFiles, setSst]        = useState<Archivo[]>(sstInicial)
   const [galeriaFiles, setGal]    = useState<Archivo[]>(galeriaInicial)
@@ -135,6 +138,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
       </div>
 
       {/* Drop zone */}
+      {puedeSubir && (
       <div
         onDragEnter={e => { e.preventDefault(); setDragging(true) }}
         onDragOver={e  => { e.preventDefault(); setDragging(true) }}
@@ -173,6 +177,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
           </>
         )}
       </div>
+      )}
       <input
         ref={inputRef}
         type="file"
@@ -237,6 +242,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
                   >
                     <ExternalLink className="w-4 h-4" />
                   </a>
+                  {puedeSubir && (
                   <button
                     onClick={() => eliminar(f.name)}
                     disabled={deleting === f.name}
@@ -247,6 +253,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
                       ? <Loader2 className="w-4 h-4 animate-spin" />
                       : <Trash2  className="w-4 h-4" />}
                   </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -274,6 +281,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
                   >
                     <ExternalLink className="w-4 h-4" />
                   </a>
+                  {puedeSubir && (
                   <button
                     onClick={() => eliminar(f.name)}
                     disabled={deleting === f.name}
@@ -283,6 +291,7 @@ export function DocumentosClient({ sstInicial, galeriaInicial }: Props) {
                       ? <Loader2 className="w-4 h-4 animate-spin" />
                       : <Trash2  className="w-4 h-4" />}
                   </button>
+                  )}
                 </div>
                 <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/50 to-transparent p-2 opacity-0 group-hover:opacity-100 transition-opacity">
                   <p className="font-body text-xs text-white truncate">{f.name.replace(/^\d+_/, '')}</p>

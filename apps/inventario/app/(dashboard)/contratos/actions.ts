@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -106,6 +107,9 @@ async function codigoUnico(sb: any, codigo: string, excluirId?: string): Promise
 }
 
 export async function crearGrupo(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -123,6 +127,9 @@ export async function crearGrupo(_prev: ActionResult, formData: FormData): Promi
 }
 
 export async function actualizarGrupo(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -142,6 +149,8 @@ export async function actualizarGrupo(_prev: ActionResult, formData: FormData): 
 }
 
 export async function eliminarGrupo(formData: FormData): Promise<void> {
+  if (await faltaPermiso('editar_contratos')) return
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
@@ -161,6 +170,9 @@ export async function eliminarGrupo(formData: FormData): Promise<void> {
 }
 
 export async function crearSede(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -179,6 +191,9 @@ export async function crearSede(_prev: ActionResult, formData: FormData): Promis
 }
 
 export async function actualizarSede(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_contratos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -199,6 +214,8 @@ export async function actualizarSede(_prev: ActionResult, formData: FormData): P
 }
 
 export async function eliminarSede(formData: FormData): Promise<void> {
+  if (await faltaPermiso('editar_contratos')) return
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return

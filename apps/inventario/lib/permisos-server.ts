@@ -36,7 +36,10 @@ export const getPermisosUsuario = cache(async (): Promise<PermisosUsuario> => {
     .single()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const u = data as any
-  if (!u) return construir('', {}, true) // sin perfil → no bloquear
+  // Hay sesión pero no hay perfil (o no se pudo leer): sin permisos. Antes se
+  // devolvía `sinGating: true`, que daba acceso total y permitía saltarse todo
+  // el filtro de la app; la BD igual lo frena, pero la UI mostraba de más.
+  if (!u) return construir('', {}, false)
 
   const permisos = { ...(u.roles?.permisos ?? {}), ...(u.permisos ?? {}) }
   return construir(u.rol ?? '', permisos, false)
@@ -50,4 +53,24 @@ export async function requirePermiso(permiso: string, redirectTo = '/dashboard')
   const p = await getPermisosUsuario()
   if (!p.puede(permiso)) redirect(redirectTo)
   return p
+}
+
+/** Mensaje estándar cuando falta un permiso (mismo texto en toda la app). */
+export const SIN_PERMISO =
+  'No tienes permiso para esta acción. Pide a un administrador que lo habilite en Roles y Permisos.'
+
+/**
+ * Guard para server actions: devuelve el mensaje de error si NO se tiene
+ * ninguno de los permisos indicados, o `null` si sí se puede.
+ *
+ *   const falta = await faltaPermiso('editar_productos')
+ *   if (falta) return { error: falta }
+ *
+ * Es la contraparte de `requirePermiso` para acciones (que devuelven `{error}`
+ * en vez de redirigir) y evita depender solo de RLS, cuyo mensaje crudo
+ * ("row-level security") no le dice nada al usuario.
+ */
+export async function faltaPermiso(...permisos: string[]): Promise<string | null> {
+  const p = await getPermisosUsuario()
+  return permisos.some((x) => p.puede(x)) ? null : SIN_PERMISO
 }

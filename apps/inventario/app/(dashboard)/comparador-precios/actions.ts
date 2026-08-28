@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean; mensaje?: string }
 
@@ -14,6 +15,9 @@ function traducir(msg: string): string {
 
 /** Crea o actualiza el precio de un proveedor para un producto (matriz precios_proveedor). */
 export async function guardarPrecio(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_proveedores')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -40,6 +44,8 @@ export async function guardarPrecio(_prev: ActionResult, formData: FormData): Pr
 
 /** Elimina un precio de proveedor de la matriz. */
 export async function eliminarPrecio(formData: FormData): Promise<void> {
+  if (await faltaPermiso('editar_proveedores')) return
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
@@ -57,6 +63,9 @@ export async function eliminarPrecio(formData: FormData): Promise<void> {
  * de inmediato, sin duplicar (upsert por producto+proveedor).
  */
 export async function importarDesdeProductos(): Promise<ActionResult> {
+  const falta = await faltaPermiso('editar_proveedores')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }

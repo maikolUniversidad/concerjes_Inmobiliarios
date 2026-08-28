@@ -10,7 +10,7 @@ export const metadata: Metadata = { title: 'Productos' }
 export const revalidate = 30
 
 export default async function ProductosPage() {
-  await requirePermiso('ver_productos')
+  const perm = await requirePermiso('ver_productos')
   const supabase = await createClient()
 
   const SELECT = `
@@ -62,10 +62,13 @@ export default async function ProductosPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <button className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
-            <Download className="w-4 h-4" />
-            Exportar
-          </button>
+          {perm.puede('exportar_datos') && (
+            <button className="flex items-center gap-2 border border-gray-200 text-gray-600 font-body text-sm px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors">
+              <Download className="w-4 h-4" />
+              Exportar
+            </button>
+          )}
+          {perm.puede('editar_productos') && (
           <Link
             href="/productos/nuevo"
             className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark transition-colors shadow-sm"
@@ -73,6 +76,7 @@ export default async function ProductosPage() {
             <Plus className="w-4 h-4" />
             Nuevo producto
           </Link>
+          )}
         </div>
       </div>
 

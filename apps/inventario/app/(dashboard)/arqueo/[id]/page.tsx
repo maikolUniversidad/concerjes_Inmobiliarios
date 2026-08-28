@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { ArqueoClient, type ArqueoHeader, type ItemRow } from './ArqueoClient'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Arqueo' }
 export const revalidate = 0
@@ -23,6 +24,7 @@ interface RawItem {
 }
 
 export default async function ArqueoDetallePage({ params }: Props) {
+  await requirePermiso('ver_arqueo', '/dashboard')
   const { id } = await params
   const supabase = await createClient()
 

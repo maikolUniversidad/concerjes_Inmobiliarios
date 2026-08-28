@@ -1,6 +1,7 @@
 'use server'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 async function db() {
   return (await createClient()) as any
@@ -67,6 +68,9 @@ export async function getSolicitudes(params?: { estado?: string; search?: string
 }
 
 export async function updateEstadoSolicitud(id: string, estado: string, motivo?: string) {
+  const falta = await faltaPermiso('gestionar_solicitudes_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const updates: any = { estado }
   if (estado === 'CONFIRMADA') updates.confirmado_at = new Date().toISOString()
@@ -81,6 +85,9 @@ export async function updateEstadoSolicitud(id: string, estado: string, motivo?:
 }
 
 export async function asignarConcierje(solicitudId: string, userId: string) {
+  const falta = await faltaPermiso('gestionar_solicitudes_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s
     .from('solicitudes_servicio_hogar')
@@ -119,6 +126,9 @@ export async function crearSesionAgenda(payload: {
   concierje_id?: string
   notas?: string
 }) {
+  const falta = await faltaPermiso('gestionar_agenda_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s.from('agenda_servicio_hogar').insert(payload)
   if (error) throw error
@@ -137,6 +147,9 @@ export async function getTiposServicio() {
 }
 
 export async function upsertTipoServicio(tipo: any) {
+  const falta = await faltaPermiso('gestionar_tipos_servicio')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { id, ...rest } = tipo
   if (id) {
@@ -149,6 +162,9 @@ export async function upsertTipoServicio(tipo: any) {
 }
 
 export async function toggleTipoServicioActivo(id: string, activo: boolean) {
+  const falta = await faltaPermiso('gestionar_tipos_servicio')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s.from('tipos_servicio_hogar').update({ activo }).eq('id', id)
   if (error) throw error
@@ -170,6 +186,9 @@ export async function getTarifas(tipoId?: string) {
 }
 
 export async function upsertTarifa(tarifa: any) {
+  const falta = await faltaPermiso('gestionar_precios_servicio')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { id, ...rest } = tarifa
   if (id) {
@@ -182,6 +201,9 @@ export async function upsertTarifa(tarifa: any) {
 }
 
 export async function deleteTarifa(id: string) {
+  const falta = await faltaPermiso('gestionar_precios_servicio')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s.from('tarifas_servicio_hogar').delete().eq('id', id)
   if (error) throw error

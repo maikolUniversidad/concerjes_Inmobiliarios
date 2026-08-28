@@ -5,6 +5,7 @@ import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { PlanoDesigner } from './PlanoDesigner'
 import type { PlanoPiso } from './plano-tipos'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Diseñador de plano' }
 export const revalidate = 0
@@ -12,6 +13,7 @@ export const revalidate = 0
 interface Props { params: Promise<{ id: string }> }
 
 export default async function PlanoPage({ params }: Props) {
+  await requirePermiso('ver_bodegas', '/dashboard')
   const { id } = await params
   const supabase = await createClient()
 

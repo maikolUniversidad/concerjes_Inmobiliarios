@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso, SIN_PERMISO } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
 
 export interface ActionResult { error?: string }
@@ -37,7 +38,7 @@ function leerCampos(formData: FormData) {
 function traducirError(msg: string): string {
   if (msg.includes('duplicate key') && msg.includes('ref')) return 'Ya existe un producto con esa REF.'
   if (msg.includes('duplicate key') && msg.includes('codigo')) return 'Ya existe un producto con ese código.'
-  if (msg.includes('row-level security')) return 'No tienes permisos para esta acción (requiere rol Admin).'
+  if (msg.includes('row-level security')) return SIN_PERMISO
   return 'Operación fallida: ' + msg
 }
 
@@ -45,6 +46,8 @@ export async function crearProducto(_prev: ActionResult, formData: FormData): Pr
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
+  const falta = await faltaPermiso('editar_productos')
+  if (falta) return { error: falta }
 
   const { fotos_extra, ...camposSinFotos } = leerCampos(formData)
   if (camposSinFotos.nombre_estandar.length < 3) return { error: 'El nombre debe tener al menos 3 caracteres.' }
@@ -81,6 +84,8 @@ export async function actualizarProducto(_prev: ActionResult, formData: FormData
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
+  const falta = await faltaPermiso('editar_productos')
+  if (falta) return { error: falta }
 
   const id = String(formData.get('id') ?? '')
   if (!id) return { error: 'Producto no especificado.' }
@@ -117,6 +122,8 @@ export async function setCceTipo(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
+  const falta = await faltaPermiso('editar_productos')
+  if (falta) return { error: falta }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
@@ -148,6 +155,8 @@ export async function setCceStockPropio(
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
+  const falta = await faltaPermiso('ajustar_stock', 'editar_productos')
+  if (falta) return { error: falta }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any)
@@ -165,6 +174,7 @@ export async function eliminarProducto(formData: FormData): Promise<void> {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
+  if (await faltaPermiso('editar_productos')) return
   const id = String(formData.get('id') ?? '')
   if (!id) return
 

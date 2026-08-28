@@ -1,6 +1,7 @@
 'use server'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 async function db() {
   return (await createClient()) as any
@@ -26,6 +27,9 @@ export async function getParametrosPago() {
 }
 
 export async function guardarParametrosPago(payload: any) {
+  const falta = await faltaPermiso('parametrizar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { id, codigo, consecutivo, created_at, updated_at, ...rest } = payload
   const { error } = await s
@@ -46,6 +50,9 @@ export async function getMetodosPago() {
 }
 
 export async function upsertMetodoPago(metodo: any) {
+  const falta = await faltaPermiso('parametrizar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { id, created_at, updated_at, ...rest } = metodo
   if (!rest.codigo?.trim() || !rest.nombre?.trim()) throw new Error('El código y el nombre son obligatorios.')
@@ -61,6 +68,9 @@ export async function upsertMetodoPago(metodo: any) {
 }
 
 export async function eliminarMetodoPago(id: string) {
+  const falta = await faltaPermiso('parametrizar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s.from('metodos_pago_hogar').delete().eq('id', id)
   if (error) throw error
@@ -163,6 +173,9 @@ export async function crearCobro(payload: {
   notas?: string | null
   emitir?: boolean
 }) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const items = (payload.items ?? []).filter((i) => i.descripcion?.trim() && Number(i.valor_unitario) > 0)
   if (items.length === 0) throw new Error('Agrega al menos un ítem con valor.')
@@ -233,6 +246,9 @@ export async function crearCobro(payload: {
 }
 
 export async function emitirCobro(id: string) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s
     .from('cobros_servicio_hogar')
@@ -243,6 +259,9 @@ export async function emitirCobro(id: string) {
 }
 
 export async function anularCobro(id: string, motivo: string) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s
     .from('cobros_servicio_hogar')
@@ -252,6 +271,9 @@ export async function anularCobro(id: string, motivo: string) {
 }
 
 export async function actualizarLinkPago(id: string, link: string) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s
     .from('cobros_servicio_hogar')
@@ -283,6 +305,9 @@ export async function registrarPagoManual(payload: {
   fecha_pago?: string | null
   notas?: string | null
 }) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const monto = Number(payload.monto)
   if (!monto || monto <= 0) throw new Error('El valor del pago debe ser mayor a cero.')
@@ -315,6 +340,9 @@ export async function registrarPagoManual(payload: {
 }
 
 export async function verificarPago(id: string) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { data: pago } = await s
     .from('pagos_hogar')
@@ -335,6 +363,9 @@ export async function verificarPago(id: string) {
 }
 
 export async function rechazarPago(id: string, motivo: string) {
+  const falta = await faltaPermiso('gestionar_pagos_hogar')
+  if (falta) throw new Error(falta)
+
   const s = await db()
   const { error } = await s
     .from('pagos_hogar')

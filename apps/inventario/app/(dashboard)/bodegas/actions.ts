@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string; ok?: boolean; id?: string }
 
@@ -24,6 +25,9 @@ function traducir(msg: string): string {
 
 // ─── BODEGAS ────────────────────────────────────────────────────────────────
 export async function crearBodega(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const nombre = String(formData.get('nombre') ?? '').trim()
@@ -45,6 +49,9 @@ export async function crearBodega(_prev: ActionResult, formData: FormData): Prom
 }
 
 export async function actualizarBodega(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const id = String(formData.get('id') ?? '')
@@ -64,6 +71,8 @@ export async function actualizarBodega(_prev: ActionResult, formData: FormData):
 }
 
 export async function eliminarBodega(formData: FormData): Promise<void> {
+  if (await faltaPermiso('gestionar_bodegas')) return
+
   const { supabase, user } = await auth()
   if (!user) return
   const id = String(formData.get('id') ?? '')
@@ -78,6 +87,9 @@ export async function crearUbicacion(input: {
   bodega_id: string; codigo: string; nombre?: string; tipo?: string
   descripcion?: string; pos_x?: number; pos_y?: number; responsable_id?: string | null; foto_url?: string | null
 }): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   if (!input.bodega_id) return { error: 'Bodega no especificada.' }
@@ -103,6 +115,9 @@ export async function actualizarUbicacion(input: {
   id: string; bodega_id: string; codigo: string; nombre?: string; tipo?: string
   descripcion?: string; responsable_id?: string | null; foto_url?: string | null
 }): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   if (!input.id) return { error: 'Ubicación no especificada.' }
@@ -120,6 +135,9 @@ export async function actualizarUbicacion(input: {
 }
 
 export async function moverUbicacion(id: string, bodega_id: string, pos_x: number, pos_y: number): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const { error } = await (supabase as DB).from('ubicaciones')
@@ -130,6 +148,9 @@ export async function moverUbicacion(id: string, bodega_id: string, pos_x: numbe
 }
 
 export async function eliminarUbicacion(id: string, bodega_id: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   // Desvincula productos antes de borrar
@@ -142,6 +163,9 @@ export async function eliminarUbicacion(id: string, bodega_id: string): Promise<
 
 // ─── ASIGNAR PRODUCTO A UBICACIÓN ────────────────────────────────────────────
 export async function asignarProductoUbicacion(productoId: string, ubicacionId: string | null, bodega_id: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas', 'editar_productos')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const { error } = await (supabase as DB).from('productos').update({ ubicacion_id: ubicacionId }).eq('id', productoId)
@@ -168,6 +192,9 @@ export async function guardarPiso(input: {
   fondo_url?: string | null
   elementos: unknown[]
 }): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   if (!input.bodega_id) return { error: 'Falta la bodega.' }
@@ -202,6 +229,9 @@ export async function guardarPiso(input: {
 }
 
 export async function eliminarPiso(id: string, bodega_id: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_bodegas')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const { error } = await (supabase as DB).from('bodega_pisos').delete().eq('id', id)

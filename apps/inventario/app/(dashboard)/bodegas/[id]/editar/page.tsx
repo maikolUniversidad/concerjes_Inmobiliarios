@@ -4,12 +4,14 @@ import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { BodegaForm, type BodegaDefaults } from '../../BodegaForm'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Editar bodega' }
 
 interface Props { params: Promise<{ id: string }> }
 
 export default async function EditarBodegaPage({ params }: Props) {
+  await requirePermiso('gestionar_bodegas', '/bodegas')
   const { id } = await params
   const supabase = await createClient()
   const [{ data, error }, { data: usuarios }] = await Promise.all([

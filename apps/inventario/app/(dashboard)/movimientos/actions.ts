@@ -4,10 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { TipoMovimiento } from '@/lib/types/database'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string }
 
 export async function registrarMovimiento(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('crear_movimientos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -56,6 +60,9 @@ export interface MovItem {
 
 /** Registra VARIOS movimientos en lote (uno por fila). */
 export async function registrarMovimientos(items: MovItem[]): Promise<{ error?: string; ok?: number }> {
+  const falta = await faltaPermiso('crear_movimientos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -100,6 +107,9 @@ export interface BorradorInput {
 
 /** Crea o actualiza un borrador de movimientos con sus ítems y responsables. */
 export async function guardarBorrador(input: BorradorInput): Promise<{ error?: string; id?: string }> {
+  const falta = await faltaPermiso('crear_movimientos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -140,6 +150,9 @@ export async function guardarBorrador(input: BorradorInput): Promise<{ error?: s
 }
 
 export async function eliminarBorrador(id: string): Promise<{ error?: string }> {
+  const falta = await faltaPermiso('crear_movimientos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -152,6 +165,9 @@ export async function eliminarBorrador(id: string): Promise<{ error?: string }> 
 
 /** Registra todos los ítems del borrador como movimientos y lo elimina. */
 export async function registrarDesdeBorrador(id: string): Promise<{ error?: string; ok?: number }> {
+  const falta = await faltaPermiso('crear_movimientos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -178,6 +194,9 @@ export async function registrarDesdeBorrador(id: string): Promise<{ error?: stri
  * absoluto): se borra el registro y el RPC lo avisa en el mensaje.
  */
 export async function eliminarMovimiento(id: string, revertirStock = true): Promise<{ error?: string; mensaje?: string }> {
+  const falta = await faltaPermiso('eliminar_movimientos')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }

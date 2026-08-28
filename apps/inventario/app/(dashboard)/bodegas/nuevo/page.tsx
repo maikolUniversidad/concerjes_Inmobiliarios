@@ -3,10 +3,12 @@ import Link from 'next/link'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { BodegaForm } from '../BodegaForm'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Nueva bodega' }
 
 export default async function NuevaBodegaPage() {
+  await requirePermiso('gestionar_bodegas', '/bodegas')
   const supabase = await createClient()
   const { data: usuarios } = await supabase.from('usuarios').select('id, nombre').eq('activo', true).order('nombre')
 

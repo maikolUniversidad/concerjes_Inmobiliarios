@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
 import { procesarCorreoSaliente } from '@/lib/email/procesar'
 import { esProveedor } from '@/lib/email/oauth'
+import { faltaPermiso } from '@/lib/permisos-server'
 import {
   authImap, cargarCuenta, crearTransporte, motivoNoEnvia, puedeEnviar, remitente, type CuentaCorreo,
 } from '@/lib/email/transport'
@@ -33,6 +34,9 @@ async function cargar(supabase: DB): Promise<CorreoConfig | null> {
  * OAuth si se dejan vacíos, para no obligar a reescribirlos en cada cambio.
  */
 export async function guardarCorreo(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_integraciones')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
 
@@ -90,6 +94,9 @@ export async function guardarCorreo(_prev: ActionResult, formData: FormData): Pr
 
 /** Verifica la conexión SMTP (envío) y guarda el estado. */
 export async function probarConexion(): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_integraciones')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const cfg = await cargar(supabase)
@@ -113,6 +120,9 @@ export async function probarConexion(): Promise<ActionResult> {
 
 /** Envía un correo de prueba a la dirección indicada (o a la propia cuenta). */
 export async function enviarPrueba(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_integraciones')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const cfg = await cargar(supabase)
@@ -137,6 +147,9 @@ export async function enviarPrueba(_prev: ActionResult, formData: FormData): Pro
 
 /** Revoca localmente la autorización OAuth: hay que volver a conectar la cuenta. */
 export async function desconectarOauth(): Promise<ActionResult> {
+  const falta = await faltaPermiso('gestionar_integraciones')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const cfg = await cargar(supabase)
@@ -158,6 +171,9 @@ export async function desconectarOauth(): Promise<ActionResult> {
 
 /** Envía manualmente los correos pendientes del buzón (alertas por email). */
 export async function procesarPendientes(): Promise<{ ok?: boolean; error?: string; enviados?: number; errores?: number }> {
+  const falta = await faltaPermiso('gestionar_integraciones')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const res = await procesarCorreoSaliente(supabase, 50)
@@ -172,6 +188,9 @@ export interface MensajeBandeja {
 
 /** Lee los últimos mensajes de la bandeja de entrada por IMAP. */
 export async function leerBandeja(): Promise<{ ok?: boolean; error?: string; mensajes?: MensajeBandeja[] }> {
+  const falta = await faltaPermiso('gestionar_integraciones')
+  if (falta) return { error: falta }
+
   const { supabase, user } = await auth()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const cfg = await cargar(supabase)

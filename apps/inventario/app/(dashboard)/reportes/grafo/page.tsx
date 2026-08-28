@@ -1,11 +1,14 @@
 import type { Metadata } from 'next'
+import { requirePermiso } from '@/lib/permisos-server'
 import Link from 'next/link'
 import { ArrowLeft, Share2 } from 'lucide-react'
 import { GrafoRelaciones } from './GrafoRelaciones'
 
 export const metadata: Metadata = { title: 'Grafo de relaciones' }
 
-export default function GrafoPage() {
+export default async function GrafoPage() {
+  await requirePermiso('ver_reportes', '/dashboard')
+
   return (
     <div className="p-4 sm:p-6 space-y-5">
       <div>

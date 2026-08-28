@@ -1,4 +1,5 @@
-import { requirePermiso } from '@/lib/permisos-server'
+import { redirect } from 'next/navigation'
+import { getPermisosUsuario } from '@/lib/permisos-server'
 import {
   getCobros, getResumenPagos, getPagosPorVerificar, getSolicitudesSinCobro, getMetodosPago,
 } from '../pagos-actions'
@@ -9,7 +10,10 @@ export default async function PagosPage({
 }: {
   searchParams: Promise<{ estado?: string; search?: string; page?: string }>
 }) {
-  await requirePermiso('gestionar_pagos_hogar')
+  // Ver los cobros basta con `ver_pagos_hogar`; las acciones de cada cobro
+  // siguen exigiendo `gestionar_pagos_hogar` en las server actions.
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('ver_pagos_hogar') && !perm.puede('gestionar_pagos_hogar')) redirect('/servicios-hogar')
   const sp = await searchParams
   const page = parseInt(sp.page ?? '1', 10)
   const pageSize = 20

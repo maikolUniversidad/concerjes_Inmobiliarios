@@ -5,6 +5,8 @@ import { defineConfig } from 'vitest/config'
 const raiz = dirname(fileURLToPath(import.meta.url))
 const inventario = join(raiz, 'apps/inventario')
 const web = join(raiz, 'apps/web')
+// `server-only` es un marcador de Next sin implementación en Node.
+const serverOnly = join(raiz, 'tests/stubs/server-only.ts')
 
 // Las pruebas viven todas en /tests para no entrar en el tsconfig de cada app
 // (si estuvieran dentro de apps/*, `next build` intentaría compilarlas).
@@ -23,11 +25,11 @@ export default defineConfig({
         test: { ...comun, name: 'offline', include: ['tests/offline/**/*.test.ts'] },
       },
       {
-        resolve: { alias: { '@': inventario } },
+        resolve: { alias: { '@': inventario, 'server-only': serverOnly } },
         test: { ...comun, name: 'inventario', include: ['tests/inventario/**/*.test.ts'] },
       },
       {
-        resolve: { alias: { '@': web } },
+        resolve: { alias: { '@': web, 'server-only': serverOnly } },
         test: { ...comun, name: 'web', include: ['tests/web/**/*.test.ts'] },
       },
       {

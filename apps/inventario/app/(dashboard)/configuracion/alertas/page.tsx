@@ -4,10 +4,12 @@ import { ChevronLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import type { ReglaAlerta, NotificacionPreferencias, RolUsuario } from '@/lib/types/database'
 import { AlertasClient } from './AlertasClient'
+import { requirePermiso } from '@/lib/permisos-server'
 
 export const metadata: Metadata = { title: 'Alertas y Notificaciones' }
 
 export default async function ConfiguracionAlertasPage() {
+  await requirePermiso('gestionar_alertas', '/configuracion')
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 

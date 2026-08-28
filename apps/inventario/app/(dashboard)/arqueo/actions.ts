@@ -4,10 +4,14 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string }
 
 export async function crearArqueo(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('realizar_arqueo')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -37,6 +41,8 @@ export async function crearArqueo(_prev: ActionResult, formData: FormData): Prom
 }
 
 export async function cerrarArqueo(formData: FormData): Promise<void> {
+  if (await faltaPermiso('realizar_arqueo')) return
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return

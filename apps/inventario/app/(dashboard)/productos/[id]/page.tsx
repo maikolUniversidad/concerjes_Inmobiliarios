@@ -3,6 +3,7 @@ import type { Metadata } from 'next'
 import { ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { requirePermiso } from '@/lib/permisos-server'
 import { ProductoDetalle } from './ProductoDetalle'
 import { ReembasadoProducto } from './ReembasadoProducto'
 import type { Producto, Stock, Proveedor, Movimiento } from '@/lib/types/database'
@@ -45,6 +46,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 }
 
 export default async function ProductoPage({ params }: Props) {
+  await requirePermiso('ver_productos')
   const { id } = await params
   const supabase = await createClient()
 

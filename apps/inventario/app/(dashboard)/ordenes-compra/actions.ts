@@ -3,10 +3,14 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { faltaPermiso } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string }
 
 export async function crearOC(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  const falta = await faltaPermiso('crear_ordenes_compra')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -76,6 +80,8 @@ export async function crearOC(_prev: ActionResult, formData: FormData): Promise<
 }
 
 export async function anularOC(formData: FormData): Promise<void> {
+  if (await faltaPermiso('crear_ordenes_compra')) return
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return
@@ -99,6 +105,9 @@ const TRANSICIONES: Record<string, string[]> = {
 
 /** Avanza el estado de la OC (aprobar, marcar comprada/enviada, anular). */
 export async function avanzarEstadoOC(id: string, nuevoEstado: string, comentario?: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('crear_ordenes_compra')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -134,6 +143,9 @@ export async function registrarRecepcionOC(
   recepciones: { itemId: string; cantidad: number }[],
   comentario?: string,
 ): Promise<ActionResult> {
+  const falta = await faltaPermiso('crear_ordenes_compra')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -200,6 +212,9 @@ export async function registrarRecepcionOC(
 
 /** Agrega un comentario a la trazabilidad de la OC. */
 export async function comentarOC(id: string, texto: string): Promise<ActionResult> {
+  const falta = await faltaPermiso('crear_ordenes_compra', 'ver_ordenes_compra')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -222,6 +237,9 @@ export async function actualizarItemsOC(
   lineas: { id?: string; producto_id: string; cantidad: number; precio: number }[],
   proveedorId?: string,
 ): Promise<ActionResult> {
+  const falta = await faltaPermiso('crear_ordenes_compra')
+  if (falta) return { error: falta }
+
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
