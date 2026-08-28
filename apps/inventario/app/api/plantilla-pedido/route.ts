@@ -162,7 +162,35 @@ export async function GET(req: NextRequest) {
     ws.getRow(4).height = 20
     metaLabel(4, 1, 'NOTA OPCIONAL'); ws.mergeCells(4, 2, 4, 4); metaInput(4, 2, '')
     metaLabel(4, 5, 'MES DE ENTREGA'); ws.mergeCells(4, 6, 4, totalCols); metaInput(4, 6, mesLabel)
-    ws.getRow(5).height = 6
+
+    // Fila 5: un comentario por sede. La NOTA OPCIONAL de arriba es una sola
+    // para toda la hoja; aquí cada sede escribe su novedad en su columna y
+    // viaja con el archivo. Va sobre los encabezados para quedar fuera del
+    // autofiltro (si no, filtrar productos la escondería).
+    ws.getRow(5).height = 26
+    ws.mergeCells(5, 1, 5, COL_FIXED)
+    const comentarioLabel = ws.getCell(5, 1)
+    comentarioLabel.value = 'COMENTARIO POR SEDE →'
+    comentarioLabel.font = { bold: true, size: 9 }
+    comentarioLabel.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_META_BG } }
+    comentarioLabel.alignment = { horizontal: 'right', vertical: 'middle' }
+    comentarioLabel.border = { bottom: { style: 'thin', color: { argb: 'FFB0C4DE' } } }
+    sedesHoja.forEach((_, si) => {
+      const c = ws.getCell(5, COL_FIXED + 1 + si)
+      c.value = null
+      c.font = { size: 9 }
+      c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_INPUT_BG } }
+      c.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true }
+      c.border = {
+        top: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+        bottom: { style: 'thin', color: { argb: 'FFB0C4DE' } },
+        left: { style: 'hair', color: { argb: 'FFD0D0D0' } },
+        right: { style: 'hair', color: { argb: 'FFD0D0D0' } },
+      }
+    })
+    const comentarioTotal = ws.getCell(5, totalCols)
+    comentarioTotal.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: COL_TOTAL_BG } }
+    comentarioTotal.border = { bottom: { style: 'thin', color: { argb: 'FFB0C4DE' } } }
 
     // Fila 6: encabezados
     ws.getRow(6).height = 40
