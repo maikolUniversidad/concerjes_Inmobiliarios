@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { FileDown, Loader2, Truck, ClipboardList, Building2, Download, FileText, Eye, MapPin, Check, X } from 'lucide-react'
+import { FileDown, Loader2, Truck, ClipboardList, Building2, Download, FileText, Eye, MapPin, CalendarDays, Check, X } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarGeneracionPDF, guardarDireccionSede } from '../actions'
@@ -62,6 +62,18 @@ function fecha(iso?: string | null) {
   return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
 }
 
+/** yyyy-mm-dd local (sin corrimiento de zona horaria). */
+function aISO(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** Formatea el yyyy-mm-dd del input como fecha larga, sin pasar por UTC. */
+function fechaCorta(valor: string) {
+  const [y, m, d] = valor.split('-').map(Number)
+  if (!y || !m || !d) return '—'
+  return new Date(y, m - 1, d).toLocaleDateString('es-CO', { day: '2-digit', month: 'long', year: 'numeric' })
+}
+
 /**
  * Genera / previsualiza el PDF (orden de insumo o remisión de despacho) para
  * imprimir y enviarlo físicamente con el pedido. Se construye en el navegador
@@ -77,6 +89,11 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
   const [historial, setHistorial] = useState<PdfHistorialItem[]>([])
   const [descargando, setDescargando] = useState<string | null>(null)
   const [viendo, setViendo] = useState<string | null>(null)
+
+  // Fecha de despacho: obligatoria, sale impresa en los documentos.
+  const [fechaDespacho, setFechaDespacho] = useState(() =>
+    aISO(datos.despachado_at ? new Date(datos.despachado_at) : new Date()),
+  )
 
   // Dirección de despacho: viene de la sede; si no la tiene, se registra aquí.
   const [direccion, setDireccion] = useState(datos.direccion ?? '')
@@ -211,17 +228,11 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             h(Text, { style: s.numero }, datos.numero),
           ),
         ),
+        // El encabezado del documento lleva SOLO estos tres datos.
         h(View, { style: s.box },
           h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Sede destino'), h(Text, { style: s.val }, datos.sede)),
-          dir ? h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Dirección'), h(Text, { style: s.val }, dir)) : null,
-          datos.grupo ? h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Contrato'), h(Text, { style: s.val }, datos.grupo)) : null,
-          h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Bodega'), h(Text, { style: s.val }, datos.bodega ?? '—')),
-          h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Fecha solicitud'), h(Text, { style: s.val }, fecha(datos.created_at))),
-          h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Aprobación'), h(Text, { style: s.val }, fecha(datos.aprobado_at))),
-          esRemision ? h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Despacho'), h(Text, { style: s.val }, fecha(datos.despachado_at))) : null,
-          datos.responsables.length
-            ? h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Responsables'), h(Text, { style: s.val }, datos.responsables.join(', ')))
-            : null,
+          h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Dirección'), h(Text, { style: s.val }, dir ?? '—')),
+          h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Fecha de despacho'), h(Text, { style: s.val }, fechaCorta(fechaDespacho))),
         ),
         h(View, { style: s.th },
           esRemision ? h(Text, { style: s.cDev }, 'DEVUELTO') : null,
@@ -278,6 +289,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
 
   /** Previsualiza sin descargar ni registrar (solo abre el visor). */
   async function previsualizar(tipo: Tipo) {
+    if (!fechaDespacho) { toast.error('Indica la fecha de despacho.'); return }
     setPrevisualizando(tipo)
     try {
       const blob = await construirBlob(tipo)
@@ -292,6 +304,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
 
   /** Genera + descarga + almacena + registra en el historial. */
   async function generar(tipo: Tipo) {
+    if (!fechaDespacho) { toast.error('Indica la fecha de despacho.'); return }
     setGenerando(tipo)
     try {
       const blob = await construirBlob(tipo)
@@ -373,7 +386,8 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
   }
 
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO'].includes(datos.estado)
-  const ocupado = generando !== null || previsualizando !== null
+  // Sin fecha de despacho no se emite ningún documento: sale impresa en ambos.
+  const ocupado = generando !== null || previsualizando !== null || !fechaDespacho
 
   return (
     <div className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
@@ -407,6 +421,23 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             {guardandoDir ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />} Guardar en la sede
           </button>
         </div>
+      </div>
+
+      {/* Fecha de despacho: obligatoria, se imprime en los documentos */}
+      <div className="mb-3 rounded-lg border border-gray-100 bg-gray-50/70 p-3">
+        <span className="flex items-center gap-1.5 font-body text-xs font-semibold text-gray-500 mb-1">
+          <CalendarDays className="w-3.5 h-3.5 text-brand-green" /> Fecha de despacho
+          <span className="text-red-500">*</span>
+        </span>
+        <input
+          type="date"
+          value={fechaDespacho}
+          onChange={(e) => setFechaDespacho(e.target.value)}
+          className="w-full sm:w-56 border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green bg-white"
+        />
+        {!fechaDespacho && (
+          <p className="font-body text-xs text-amber-700 mt-1">Indica la fecha de despacho para generar los documentos.</p>
+        )}
       </div>
 
       {/* Empresa emisora */}
