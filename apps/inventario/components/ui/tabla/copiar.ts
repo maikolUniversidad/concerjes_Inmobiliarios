@@ -127,6 +127,77 @@ export async function registrarCopia(datos: DatosCopia): Promise<void> {
   })
 }
 
+/**
+ * Los números entran como número para que Excel los sume; el resto va como
+ * texto. Solo se convierte lo que vuelve idéntico al escribirlo de nuevo, así
+ * un código como `007` o un `1/1` conservan su forma.
+ */
+function valorExcel(valor: string): string | number {
+  const texto = celdaPlana(valor)
+  if (texto === '') return ''
+  const numero = Number(texto)
+  return Number.isFinite(numero) && String(numero) === texto ? numero : texto
+}
+
+/**
+ * Descarga la tabla como un .xlsx de verdad: encabezado con el verde de la
+ * marca, fila congelada, autofiltro y anchos según el contenido. `exceljs` se
+ * carga bajo demanda para no engordar la pantalla mientras nadie descarga.
+ */
+export async function descargarExcel(
+  bloque: BloqueCopiado,
+  nombre: string,
+  hoja = 'Datos'
+): Promise<void> {
+  const ExcelJS = (await import('exceljs')).default
+  const wb = new ExcelJS.Workbook()
+  wb.creator = 'Conserjes Inmobiliarios · Inventario'
+  wb.created = new Date()
+  // Excel no admite : \ / ? * [ ] en el nombre de la hoja, ni más de 31 letras.
+  const ws = wb.addWorksheet(hoja.replace(/[:\\/?*[\]]/g, ' ').slice(0, 31) || 'Datos', {
+    views: [{ state: 'frozen', ySplit: bloque.encabezados.length ? 1 : 0 }],
+  })
+
+  if (bloque.encabezados.length) ws.addRow(bloque.encabezados)
+  for (const fila of bloque.filas) ws.addRow(fila.map(valorExcel))
+
+  const anchos = (bloque.encabezados.length ? [bloque.encabezados, ...bloque.filas] : bloque.filas)
+    .reduce<number[]>((acc, fila) => {
+      fila.forEach((c, i) => {
+        acc[i] = Math.max(acc[i] ?? 10, Math.min(60, celdaPlana(c).length + 2))
+      })
+      return acc
+    }, [])
+  anchos.forEach((ancho, i) => {
+    ws.getColumn(i + 1).width = ancho
+  })
+
+  if (bloque.encabezados.length) {
+    const encabezado = ws.getRow(1)
+    encabezado.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 }
+    encabezado.alignment = { vertical: 'middle' }
+    encabezado.height = 20
+    encabezado.eachCell((cell) => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2E7D32' } }
+      cell.border = { bottom: { style: 'thin', color: { argb: 'FF1B5E20' } } }
+    })
+    ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: ws.columnCount } }
+  }
+
+  const buffer = await wb.xlsx.writeBuffer()
+  const blob = new Blob([buffer], {
+    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${nombre}_${new Date().toISOString().slice(0, 10)}.xlsx`
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
 /** CSV con BOM para que Excel en español abra las tildes bien. */
 export function aCSV(bloque: BloqueCopiado): string {
   const filas = bloque.encabezados.length

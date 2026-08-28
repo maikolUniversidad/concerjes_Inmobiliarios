@@ -69,6 +69,9 @@ export async function exportarOrdenesExcel(
     { header: 'Creada', key: 'creada', width: 13 },
     { header: 'Entrega pactada', key: 'entrega', width: 16 },
     { header: 'Despachada', key: 'despachada', width: 13 },
+    { header: 'Novedad del pedido', key: 'novedad', width: 46 },
+    { header: 'Comentarios', key: 'comentarios', width: 12 },
+    { header: 'Último comentario', key: 'ultimo', width: 46 },
   ]
   for (const o of ordenes) {
     wsOrd.addRow({
@@ -84,6 +87,11 @@ export async function exportarOrdenesExcel(
       creada: fechaCorta(o.created_at),
       entrega: fechaCorta(o.fecha_entrega_pactada),
       despachada: fechaCorta(o.despachado_at),
+      novedad: o.observacion ?? '',
+      comentarios: o.comentarios,
+      ultimo: o.ultimo_comentario
+        ? `${o.comentario_autor ? `${o.comentario_autor}: ` : ''}${o.ultimo_comentario}`
+        : '',
     })
   }
   wsOrd.getColumn('avance').numFmt = '0%'

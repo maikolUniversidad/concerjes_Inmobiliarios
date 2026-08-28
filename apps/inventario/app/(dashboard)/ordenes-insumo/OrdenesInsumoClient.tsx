@@ -3,7 +3,7 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown, FileSpreadsheet, Loader2 } from 'lucide-react'
+import { Plus, ClipboardList, MapPin, ChevronRight, Package, Users, CheckCircle2, Clock, Filter, AlertTriangle, CalendarClock, UserCircle2, BarChart3, ChevronDown, FileSpreadsheet, Loader2, MessageSquare, StickyNote } from 'lucide-react'
 import { toast } from 'sonner'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { createClient } from '@/lib/supabase/client'
@@ -26,6 +26,17 @@ export interface OrdenRow {
   urgente: boolean
   creador_id: string | null
   creador_nombre: string | null
+  /** Novedad escrita al crear el pedido (`ordenes_insumo.observacion`). */
+  observacion: string | null
+  /** Comentarios de la trazabilidad (eventos tipo COMENTARIO). */
+  comentarios: number
+  ultimo_comentario: string | null
+  comentario_autor: string | null
+}
+
+/** Una orden "tiene comentarios" si trae novedad del pedido o comentarios en la trazabilidad. */
+export function tieneComentarios(o: OrdenRow): boolean {
+  return Boolean(o.observacion) || o.comentarios > 0
 }
 
 export const ESTADO_META: Record<EstadoOrdenInsumo, { label: string; cls: string }> = {
@@ -73,6 +84,25 @@ const FILTROS_ESTADO: { value: EstadoOrdenInsumo | 'todos'; label: string }[] = 
   { value: 'RECIBIDO',         label: 'Recibido'         },
   { value: 'ANULADA',          label: 'Anulada'          },
 ]
+
+type FiltroComentario = 'todos' | 'con' | 'sin'
+
+const FILTROS_COMENTARIO: { value: FiltroComentario; label: string }[] = [
+  { value: 'todos', label: 'Todas'            },
+  { value: 'con',   label: 'Con comentarios'  },
+  { value: 'sin',   label: 'Sin comentarios'  },
+]
+
+/** Texto plano de la columna de comentarios: alimenta búsqueda, filtro y copiado. */
+function textoComentarios(o: OrdenRow): string {
+  const partes: string[] = []
+  if (o.observacion) partes.push(`Novedad: ${o.observacion}`)
+  if (o.ultimo_comentario) {
+    partes.push(`${o.comentario_autor ? `${o.comentario_autor}: ` : ''}${o.ultimo_comentario}`)
+  }
+  if (!partes.length) return ''
+  return o.comentarios > 1 ? `${partes.join(' · ')} (${o.comentarios} comentarios)` : partes.join(' · ')
+}
 
 // ── Reporte de órdenes por quién la creó (estado + conteo) ───────────────────
 interface FilaReporte { id: string; nombre: string; total: number; porEstado: Record<string, number> }
@@ -176,6 +206,8 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   const [showFiltro, setShowFiltro] = useState(false)
   const [filtroCreador, setFiltroCreador] = useState<string>('todos')
   const [showCreador, setShowCreador] = useState(false)
+  const [filtroComentario, setFiltroComentario] = useState<FiltroComentario>('todos')
+  const [showComentario, setShowComentario] = useState(false)
 
   // Lista de creadores presentes (para el filtro "creado por").
   const creadores = useMemo(() => {
@@ -202,7 +234,9 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     const base = tab === 'proceso' ? proceso : tab === 'entregar' ? porEntregar : ordenes
     const porEstado = filtroEstado === 'todos' ? base : base.filter((o) => o.estado === filtroEstado)
     const porCreador = filtroCreador === 'todos' ? porEstado : porEstado.filter((o) => (o.creador_id ?? 'sin') === filtroCreador)
-    const filtrada = porCreador
+    const filtrada = filtroComentario === 'todos'
+      ? porCreador
+      : porCreador.filter((o) => (filtroComentario === 'con' ? tieneComentarios(o) : !tieneComentarios(o)))
     // En "Por entregar" se ordena por urgencia (vencidas primero), luego por
     // fecha pactada más próxima y por más recientes.
     if (tab !== 'entregar') return filtrada
@@ -214,7 +248,13 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       if (fa !== fb) return fa < fb ? -1 : 1
       return a.created_at < b.created_at ? 1 : -1
     })
-  }, [tab, proceso, porEntregar, ordenes, filtroEstado, filtroCreador])
+  }, [tab, proceso, porEntregar, ordenes, filtroEstado, filtroCreador, filtroComentario])
+
+  // Cuántas de las que se ven traen novedad o comentarios (va en el botón del filtro).
+  const conComentarios = useMemo(() => {
+    const base = tab === 'proceso' ? proceso : tab === 'entregar' ? porEntregar : ordenes
+    return base.filter(tieneComentarios).length
+  }, [tab, proceso, porEntregar, ordenes])
 
   // ── Exportar a Excel lo que está filtrado en pantalla ──────────────────────
   const [exportando, setExportando] = useState(false)
@@ -256,7 +296,8 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       const ctxTab = tab === 'entregar' ? 'Por entregar' : tab === 'proceso' ? 'Por procesar' : 'Todas'
       const ctxEstado = filtroEstado !== 'todos' ? ` · ${FILTROS_ESTADO.find((f) => f.value === filtroEstado)?.label ?? filtroEstado}` : ''
       const ctxCreador = filtroCreador !== 'todos' ? ` · ${creadores.find((c) => c.id === filtroCreador)?.nombre ?? ''}` : ''
-      await exportarOrdenesExcel(lista, items, `${ctxTab}${ctxEstado}${ctxCreador} · ${lista.length} órdenes`)
+      const ctxComentario = filtroComentario !== 'todos' ? ` · ${FILTROS_COMENTARIO.find((f) => f.value === filtroComentario)?.label ?? ''}` : ''
+      await exportarOrdenesExcel(lista, items, `${ctxTab}${ctxEstado}${ctxCreador}${ctxComentario} · ${lista.length} órdenes`)
       toast.success(`Excel generado con ${lista.length} órdenes.`)
     } catch {
       toast.error('No se pudo generar el Excel.')
@@ -321,6 +362,28 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     {
       id: 'creador', header: 'Creada por', valor: o => o.creador_nombre ?? '', prioridad: 3,
       className: 'text-xs text-gray-500', tarjeta: 'meta',
+    },
+    {
+      // Novedad del pedido + comentarios de la trazabilidad, en una sola columna.
+      id: 'comentarios', header: 'Comentarios', prioridad: 2, ancho: 'min-w-[240px]', tarjeta: 'cuerpo',
+      valor: o => textoComentarios(o),
+      celda: o => {
+        if (!tieneComentarios(o)) return <span className="text-gray-200">—</span>
+        const resumen = o.ultimo_comentario ?? o.observacion ?? ''
+        return (
+          <span className="flex items-center gap-1.5 min-w-0" title={textoComentarios(o)}>
+            {o.observacion
+              ? <StickyNote className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+              : <MessageSquare className="w-3.5 h-3.5 text-gray-300 shrink-0" />}
+            <span className="truncate max-w-[220px] font-body text-xs text-gray-600">{resumen}</span>
+            {o.comentarios > 0 && (
+              <span className="shrink-0 font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                {o.comentarios}
+              </span>
+            )}
+          </span>
+        )
+      },
     },
   ]
 
@@ -407,6 +470,30 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
               )}
             </div>
           )}
+          {/* Filtro por comentarios: novedad del pedido o comentarios de la trazabilidad */}
+          <div className="relative">
+            <button
+              onClick={() => setShowComentario(v => !v)}
+              title="Ver solo las órdenes que tienen novedad o comentarios"
+              className={`inline-flex items-center gap-2 font-body font-semibold text-sm px-3 py-2 rounded-xl border transition-colors ${filtroComentario !== 'todos' ? 'bg-amber-50 border-amber-300 text-amber-700' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>
+              <MessageSquare className="w-3.5 h-3.5" />
+              {filtroComentario === 'todos' ? 'Comentarios' : (FILTROS_COMENTARIO.find(f => f.value === filtroComentario)?.label ?? 'Comentarios')}
+              <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-bold ${filtroComentario !== 'todos' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500'}`}>
+                {conComentarios}
+              </span>
+            </button>
+            {showComentario && (
+              <div className="absolute left-0 top-full mt-1 z-20 bg-white border border-gray-200 rounded-xl shadow-lg py-1 min-w-[180px]">
+                {FILTROS_COMENTARIO.map(f => (
+                  <button key={f.value}
+                    onClick={() => { setFiltroComentario(f.value); setShowComentario(false) }}
+                    className={`w-full text-left font-body text-sm px-4 py-2 hover:bg-gray-50 transition-colors ${filtroComentario === f.value ? 'text-brand-green font-semibold' : 'text-gray-700'}`}>
+                    {f.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
           {puedeCrear && (
             <Link href="/ordenes-insumo/nuevo"
               className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-4 py-2 rounded-xl shadow-sm transition-colors">
@@ -481,6 +568,15 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
                   <span className="inline-flex items-center gap-1" title="Creada por"><UserCircle2 className="w-3.5 h-3.5" /> {o.creador_nombre}</span>
                 )}
               </div>
+
+              {tieneComentarios(o) && (
+                <p className="mt-2 flex items-start gap-1.5 rounded-lg bg-gray-50 px-2 py-1.5 font-body text-xs text-gray-600">
+                  {o.observacion
+                    ? <StickyNote className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                    : <MessageSquare className="w-3.5 h-3.5 text-gray-300 shrink-0 mt-0.5" />}
+                  <span className="line-clamp-2">{o.ultimo_comentario ?? o.observacion}</span>
+                </p>
+              )}
 
               {!['DESPACHADO', 'RECIBIDO', 'ANULADA'].includes(o.estado) && (
                 <div className="mt-3">

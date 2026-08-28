@@ -79,6 +79,39 @@ export default async function OrdenesInsumoPage({
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const nombrePorUsuario = new Map(((usuariosData ?? []) as any[]).map((u) => [u.id, u.nombre]))
 
+  // ── Comentarios del pedido ─────────────────────────────────────────────────
+  // La tabla muestra en una columna la novedad escrita al crear la orden y los
+  // comentarios de la trazabilidad. Se leen en lote (y paginados) para no hacer
+  // una consulta por orden.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ordenIds = (data as any[]).map((o) => o.id as string)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const comentariosRows = ordenIds.length
+    ? await traerTodoPorIds<any>(ordenIds, (lote, desde, hasta) =>
+        supabase
+          .from('orden_insumo_eventos')
+          .select('id, orden_id, mensaje, usuario_nombre, created_at')
+          .eq('tipo', 'COMENTARIO')
+          .in('orden_id', lote)
+          .order('created_at', { ascending: true })
+          .order('id')
+          .range(desde, hasta),
+        { tamanoLote: 120, etiqueta: 'No se pudieron leer los comentarios' },
+      )
+    : []
+
+  const comentariosPorOrden = new Map<string, { total: number; ultimo: string | null; autor: string | null }>()
+  for (const c of comentariosRows) {
+    const previo = comentariosPorOrden.get(c.orden_id) ?? { total: 0, ultimo: null, autor: null }
+    const mensaje = (c.mensaje ?? '').trim()
+    comentariosPorOrden.set(c.orden_id, {
+      total: previo.total + 1,
+      // Van en orden ascendente: el último que trae texto es el más reciente.
+      ultimo: mensaje || previo.ultimo,
+      autor: mensaje ? (c.usuario_nombre ?? null) : previo.autor,
+    })
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ordenes: OrdenRow[] = (data as any[]).map((o) => ({
     id: o.id,
@@ -94,6 +127,10 @@ export default async function OrdenesInsumoPage({
     urgente: !!o.urgente,
     creador_id: o.creado_por ?? null,
     creador_nombre: (o.creado_por && nombrePorUsuario.get(o.creado_por)) || null,
+    observacion: (o.observacion ?? '').trim() || null,
+    comentarios: comentariosPorOrden.get(o.id)?.total ?? 0,
+    ultimo_comentario: comentariosPorOrden.get(o.id)?.ultimo ?? null,
+    comentario_autor: comentariosPorOrden.get(o.id)?.autor ?? null,
   }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

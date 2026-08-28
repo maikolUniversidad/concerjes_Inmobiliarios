@@ -14,15 +14,15 @@ import {
   ChevronRight,
   ClipboardCheck,
   Copy,
-  Download,
   Eye,
+  FileSpreadsheet,
   FilterX,
   LayoutGrid,
   Rows3,
   Search,
 } from 'lucide-react'
 import { FiltroColumnaMenu } from './FiltroColumna'
-import { copiarBloque, descargarCSV, registrarCopia } from './copiar'
+import { copiarBloque, descargarExcel, registrarCopia } from './copiar'
 import {
   textoDeValor,
   type BloqueCopiado,
@@ -39,7 +39,7 @@ export interface TablaEstandarProps<T> {
   datos: T[]
   columnas: ColumnaTabla<T>[]
   filaId: (fila: T) => string
-  /** Nombre humano de la tabla: sale en el log y en el CSV. */
+  /** Nombre humano de la tabla: sale en el log, en el Excel y en su hoja. */
   titulo: string
   /** Módulo para `actividad_log` (Inventario, Compras, Usuarios…). */
   modulo?: string
@@ -86,6 +86,40 @@ function normalizar(rango: RangoSeleccion) {
     c1: Math.min(rango.colInicio, rango.colFin),
     c2: Math.max(rango.colInicio, rango.colFin),
   }
+}
+
+/** Aire que se deja entre la celda activa y el borde al seguir la selección. */
+const MARGEN_SCROLL = 24
+/** Franja del borde donde arrastrar empieza a mover la vista (estilo Excel). */
+const ZONA_ARRASTRE = 48
+
+/** Ancestro que hace el scroll vertical (el `main` del shell). null = la ventana. */
+function ancestroVertical(el: HTMLElement | null): HTMLElement | null {
+  let padre = el?.parentElement ?? null
+  while (padre && padre !== document.body) {
+    const overflow = window.getComputedStyle(padre).overflowY
+    if ((overflow === 'auto' || overflow === 'scroll') && padre.scrollHeight > padre.clientHeight) {
+      return padre
+    }
+    padre = padre.parentElement
+  }
+  return null
+}
+
+/** Franja visible en vertical: la del ancestro con scroll o la ventana. */
+function limitesVerticales(vertical: HTMLElement | null) {
+  if (!vertical) return { arriba: 0, abajo: window.innerHeight }
+  const r = vertical.getBoundingClientRect()
+  return { arriba: r.top, abajo: r.bottom }
+}
+
+/** Siempre instantáneo: la página usa `scroll-behavior: smooth` y una animación
+ *  por fotograma dejaría la selección atrás mientras se arrastra. */
+function desplazarVertical(vertical: HTMLElement | null, delta: number) {
+  if (!delta) return
+  const opciones: ScrollToOptions = { top: delta, behavior: 'instant' as ScrollBehavior }
+  if (vertical) vertical.scrollBy(opciones)
+  else window.scrollBy(opciones)
 }
 
 /** Punto de corte de Tailwind sin depender de clases: hace falta para que la
@@ -140,9 +174,14 @@ export function TablaEstandar<T>({
   const [porPagina, setPorPagina] = useState(filasPorPagina)
   const [sel, setSel] = useState<RangoSeleccion | null>(null)
   const [aviso, setAviso] = useState('')
+  const [descargando, setDescargando] = useState(false)
   const arrastrando = useRef(false)
   const ancla = useRef<{ fila: number; col: number } | null>(null)
   const contenedorRef = useRef<HTMLDivElement>(null)
+  /** Celda que la vista debe seguir tras el próximo repintado. */
+  const objetivo = useRef<{ fila: number; col: number; ejes: 'ambos' | 'horizontal' } | null>(null)
+  const puntero = useRef<{ x: number; y: number } | null>(null)
+  const autoScroll = useRef<number | null>(null)
 
   // ── Preferencia de vista ────────────────────────────────────────────────────
   useEffect(() => {
@@ -333,11 +372,19 @@ export function TablaEstandar<T>({
     [armarBloque, modulo, entidad, titulo, columnasCopiables, sel]
   )
 
-  const descargar = () => {
+  const descargar = async () => {
     const bloque = armarBloque('todo')
     if (!bloque) return
-    descargarCSV(bloque, titulo.toLowerCase().replace(/\s+/g, '_'))
-    anunciar('CSV descargado')
+    setDescargando(true)
+    try {
+      await descargarExcel(bloque, titulo.toLowerCase().replace(/\s+/g, '_'), titulo)
+      anunciar('Excel descargado')
+    } catch {
+      anunciar('No se pudo generar el Excel')
+      return
+    } finally {
+      setDescargando(false)
+    }
     void registrarCopia({
       modulo,
       entidad,
@@ -349,15 +396,128 @@ export function TablaEstandar<T>({
   }
 
   // ── Selección con mouse y teclado ───────────────────────────────────────────
+  const detenerAutoScroll = useCallback(() => {
+    if (autoScroll.current !== null) {
+      cancelAnimationFrame(autoScroll.current)
+      autoScroll.current = null
+    }
+  }, [])
+
   useEffect(() => {
     const soltar = () => {
       arrastrando.current = false
+      detenerAutoScroll()
+    }
+    const mover = (e: MouseEvent) => {
+      puntero.current = { x: e.clientX, y: e.clientY }
     }
     window.addEventListener('mouseup', soltar)
-    return () => window.removeEventListener('mouseup', soltar)
-  }, [])
+    window.addEventListener('mousemove', mover)
+    return () => {
+      window.removeEventListener('mouseup', soltar)
+      window.removeEventListener('mousemove', mover)
+      detenerAutoScroll()
+    }
+  }, [detenerAutoScroll])
+
+  const celdaDom = (fila: number, col: number) =>
+    contenedorRef.current?.querySelector<HTMLElement>(`[data-celda="${fila}:${col}"]`) ?? null
+
+  /** Mueve lo mínimo para dejar la celda a la vista, como haría una hoja de cálculo. */
+  const acercarCelda = (fila: number, col: number, ejes: 'ambos' | 'horizontal' = 'ambos') => {
+    const contenedor = contenedorRef.current
+    const celda = celdaDom(fila, col)
+    if (!contenedor || !celda) return
+    const c = contenedor.getBoundingClientRect()
+    const e = celda.getBoundingClientRect()
+    if (e.left < c.left + MARGEN_SCROLL) contenedor.scrollLeft += e.left - c.left - MARGEN_SCROLL
+    else if (e.right > c.right - MARGEN_SCROLL) {
+      contenedor.scrollLeft += e.right - c.right + MARGEN_SCROLL
+    }
+    if (ejes === 'horizontal') return
+    const vertical = ancestroVertical(contenedor)
+    const { arriba, abajo } = limitesVerticales(vertical)
+    if (e.top < arriba + MARGEN_SCROLL) desplazarVertical(vertical, e.top - arriba - MARGEN_SCROLL)
+    else if (e.bottom > abajo - MARGEN_SCROLL) {
+      desplazarVertical(vertical, e.bottom - abajo + MARGEN_SCROLL)
+    }
+  }
+
+  // La vista sigue a la celda activa después de pintar la nueva selección.
+  useEffect(() => {
+    const destino = objetivo.current
+    objetivo.current = null
+    if (!destino || vista !== 'tabla') return
+    acercarCelda(destino.fila, destino.col, destino.ejes)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, vista])
+
+  /** Extiende la selección hasta la celda que hay bajo un punto de la pantalla. */
+  const extenderHastaPunto = (x: number, y: number) => {
+    if (!ancla.current) return
+    const celda = (document.elementFromPoint(x, y) as HTMLElement | null)?.closest<HTMLElement>(
+      '[data-celda]'
+    )
+    const dato = celda?.dataset.celda
+    if (!dato || celda?.dataset.interactiva === '1') return
+    const [fila, col] = dato.split(':').map(Number)
+    const desde = ancla.current
+    setSel((prev) =>
+      prev &&
+      prev.filaInicio === desde.fila &&
+      prev.colInicio === desde.col &&
+      prev.filaFin === fila &&
+      prev.colFin === col
+        ? prev
+        : { filaInicio: desde.fila, colInicio: desde.col, filaFin: fila, colFin: col }
+    )
+  }
+
+  /** Con el botón apretado cerca del borde, la vista avanza sola y la selección
+   *  la sigue: así se puede marcar más allá de lo que se ve. */
+  const iniciarAutoScroll = () => {
+    if (autoScroll.current !== null) return
+    const paso = () => {
+      autoScroll.current = null
+      if (!arrastrando.current) return
+      const contenedor = contenedorRef.current
+      const p = puntero.current
+      if (contenedor && p) {
+        const c = contenedor.getBoundingClientRect()
+        const vertical = ancestroVertical(contenedor)
+        const limites = limitesVerticales(vertical)
+        const arriba = Math.max(c.top, limites.arriba)
+        const abajo = Math.min(c.bottom, limites.abajo)
+        const velocidad = (d: number) => Math.min(40, Math.round(4 + d / 3))
+        // En tablas cortas o angostas la franja se encoge: si no, todo el
+        // arrastre caería dentro de la zona de borde y la vista se iría sola.
+        const zonaX = Math.min(ZONA_ARRASTRE, (c.right - c.left) / 4)
+        const zonaY = Math.min(ZONA_ARRASTRE, Math.max(0, (abajo - arriba) / 4))
+        let dx = 0
+        let dy = 0
+        if (p.x > c.right - zonaX) dx = velocidad(p.x - (c.right - zonaX))
+        else if (p.x < c.left + zonaX) dx = -velocidad(c.left + zonaX - p.x)
+        if (p.y > abajo - zonaY) dy = velocidad(p.y - (abajo - zonaY))
+        else if (p.y < arriba + zonaY) dy = -velocidad(arriba + zonaY - p.y)
+        const scrollAntes = contenedor.scrollLeft
+        const verticalAntes = vertical ? vertical.scrollTop : window.scrollY
+        if (dx) contenedor.scrollLeft += dx
+        if (dy) desplazarVertical(vertical, dy)
+        const verticalDespues = vertical ? vertical.scrollTop : window.scrollY
+        if (contenedor.scrollLeft !== scrollAntes || verticalDespues !== verticalAntes) {
+          extenderHastaPunto(
+            Math.min(Math.max(p.x, c.left + 4), c.right - 4),
+            Math.min(Math.max(p.y, arriba + 4), abajo - 4)
+          )
+        }
+      }
+      autoScroll.current = requestAnimationFrame(paso)
+    }
+    autoScroll.current = requestAnimationFrame(paso)
+  }
 
   const seleccionarCelda = (fila: number, col: number, extender: boolean) => {
+    objetivo.current = { fila, col, ejes: 'ambos' }
     if (extender && ancla.current) {
       setSel({
         filaInicio: ancla.current.fila,
@@ -374,12 +534,15 @@ export function TablaEstandar<T>({
   const seleccionarColumna = (col: number) => {
     if (!filasPagina.length) return
     ancla.current = { fila: 0, col }
+    // Solo se acerca en horizontal: al marcar una columna la vista no debe saltar de fila.
+    objetivo.current = { fila: 0, col, ejes: 'horizontal' }
     setSel({ filaInicio: 0, colInicio: col, filaFin: filasPagina.length - 1, colFin: col })
     contenedorRef.current?.focus()
   }
 
   const seleccionarFila = (fila: number) => {
     ancla.current = { fila, col: 0 }
+    objetivo.current = { fila, col: 0, ejes: 'ambos' }
     setSel({
       filaInicio: fila,
       colInicio: 0,
@@ -430,6 +593,7 @@ export function TablaEstandar<T>({
       const base = { fila: sel.filaFin, col: sel.colFin }
       const fila = Math.min(Math.max(0, base.fila + df), Math.max(0, filasPagina.length - 1))
       const col = Math.min(Math.max(0, base.col + dc), columnasVisibles.length - 1)
+      objetivo.current = { fila, col, ejes: 'ambos' }
       if (e.shiftKey && ancla.current) {
         setSel({
           filaInicio: ancla.current.fila,
@@ -618,11 +782,12 @@ export function TablaEstandar<T>({
         {descargable && (
           <button
             type="button"
-            onClick={descargar}
-            title="Descargar lo filtrado como CSV (se abre en Excel)"
-            className="inline-flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3 py-2 font-body text-sm font-semibold text-green-700 transition-colors hover:bg-green-100"
+            onClick={() => void descargar()}
+            disabled={descargando}
+            title="Descargar lo filtrado como Excel (.xlsx)"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-green-200 bg-green-50 px-3 py-2 font-body text-sm font-semibold text-green-700 transition-colors hover:bg-green-100 disabled:opacity-50"
           >
-            <Download className="h-3.5 w-3.5" /> CSV
+            <FileSpreadsheet className="h-3.5 w-3.5" /> {descargando ? 'Generando…' : 'Excel'}
           </button>
         )}
         <div className="inline-flex rounded-xl border border-gray-200 bg-white p-0.5">
@@ -825,13 +990,17 @@ export function TablaEstandar<T>({
                   {columnasVisibles.map((c, ci) => (
                     <td
                       key={c.id}
+                      data-celda={`${ri}:${ci}`}
+                      data-interactiva={c.interactiva ? '1' : undefined}
                       onMouseDown={(e) => {
                         // Las celdas con controles no entran en la selección:
                         // el clic es del input, no de la hoja.
                         if (c.interactiva || e.button !== 0) return
                         arrastrando.current = true
+                        puntero.current = { x: e.clientX, y: e.clientY }
                         seleccionarCelda(ri, ci, e.shiftKey)
                         contenedorRef.current?.focus()
+                        iniciarAutoScroll()
                       }}
                       onMouseEnter={() => {
                         if (c.interactiva || !arrastrando.current || !ancla.current) return

@@ -7,6 +7,7 @@ export {
   aTSV,
   copiarBloque,
   descargarCSV,
+  descargarExcel,
   registrarCopia,
 } from './copiar'
 export { textoDeValor } from './tipos'
