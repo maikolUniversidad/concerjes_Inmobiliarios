@@ -15,7 +15,7 @@
     "open:android": "cap open android",
     "electron": "electron .",
     "desktop:build": "npm run build && node scripts/desktop.mjs",
-    "lint": "tsc --noEmit"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@capacitor/android": "^6.1.2",
