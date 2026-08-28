@@ -278,7 +278,7 @@ export function FlujoOrden({
                       <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${m.color}`}>{m.label}</span>
                       <span className="font-body text-xs text-gray-400">{e.usuario_nombre ?? 'Sistema'} · {fmt(e.created_at)}</span>
                     </div>
-                    {e.mensaje && <p className="font-body text-sm text-gray-700 mt-0.5">{e.mensaje}</p>}
+                    {e.mensaje && <p className="font-body text-sm text-gray-700 mt-0.5 whitespace-pre-wrap">{e.mensaje}</p>}
                   </div>
                 </li>
               )

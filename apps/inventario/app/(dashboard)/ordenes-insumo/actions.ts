@@ -120,9 +120,12 @@ export async function crearOrdenInsumo(input: {
     responsables.map((usuario_id) => ({ orden_id: orden.id, usuario_id })),
   )
 
+  // La observación del formulario queda en la trazabilidad como novedad inicial.
+  const notaInicial = input.observacion?.trim()
   await sb.rpc('oi_evento', {
     p_orden: orden.id, p_tipo: 'CREACION',
-    p_mensaje: `Orden creada en borrador con ${items.length} producto(s). Pendiente de aprobar.`,
+    p_mensaje: `Orden creada en borrador con ${items.length} producto(s). Pendiente de aprobar.`
+      + (notaInicial ? `\nNovedad: ${notaInicial}` : ''),
     p_nue: 'BORRADOR',
   })
 

@@ -263,7 +263,6 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
             </button>
           )}
         </div>
-        {orden.observacion && <p className="mt-3 font-body text-sm text-gray-600 bg-gray-50 rounded-lg px-3 py-2">{orden.observacion}</p>}
 
         {/* Progreso */}
         {!anulada && (

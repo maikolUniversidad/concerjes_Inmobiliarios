@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
+import { StickyNote } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { OrdenDetalleClient } from './OrdenDetalleClient'
@@ -116,6 +117,16 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         esSolicitante={Boolean(user && o.creado_por === user.id)}
         puedeRecibir={perm.puede('recibir_ordenes_insumo')}
       />
+      {/* Novedad del pedido: la nota que se escribe al crear la orden. Se muestra
+          siempre (también en borrador) para que no se pierda en el proceso. */}
+      {o.observacion && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+          <p className="font-heading font-semibold text-sm text-amber-900 flex items-center gap-2">
+            <StickyNote className="w-4 h-4" /> Novedad del pedido
+          </p>
+          <p className="mt-2 font-body text-sm text-amber-900/90 whitespace-pre-wrap">{o.observacion}</p>
+        </div>
+      )}
       <UrgenciaEditor
         ordenId={id}
         estado={estado}
