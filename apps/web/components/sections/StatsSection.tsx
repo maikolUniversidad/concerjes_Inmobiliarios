@@ -2,6 +2,7 @@
 
 import { useInView } from 'react-intersection-observer'
 import { useEffect, useState } from 'react'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 const stats = [
   { value: 36, suffix: '+', label: 'Años de experiencia', description: 'Fundados el 6 de abril de 1990' },
@@ -43,7 +44,12 @@ export function StatsSection() {
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.3 })
 
   return (
-    <section className="py-20 gradient-brand relative overflow-hidden">
+    <section className="py-20 relative isolate overflow-hidden">
+      {/* Foto de la operación como textura de fondo, bajo el degradado de marca:
+          la banda de cifras ya no es un rectángulo verde plano. */}
+      <FotoFondo src="/images/servicios/operacion.jpg" posicion="center 45%" opacidad={0.35} />
+      <Velo estilo="linear-gradient(135deg, rgba(27,94,32,.90) 0%, rgba(46,125,50,.84) 45%, rgba(56,142,60,.90) 100%)" />
+
       {/* Decorative circles */}
       <div className="absolute top-0 right-0 w-96 h-96 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2" />
       <div className="absolute bottom-0 left-0 w-64 h-64 bg-white/5 rounded-full translate-y-1/2 -translate-x-1/2" />

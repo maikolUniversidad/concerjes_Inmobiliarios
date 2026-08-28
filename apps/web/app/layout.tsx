@@ -58,6 +58,9 @@ export const metadata: Metadata = {
     card: 'summary_large_image',
     title: 'Conserjes Inmobiliarios Ltda',
     description: 'Servicios de aseo, cafetería y mantenimiento en Colombia.',
+    // Sin esta línea la tarjeta de Twitter/X se comparte sin imagen: `twitter`
+    // no hereda las imágenes de `openGraph`.
+    images: ['/images/og-image.jpg'],
   },
   robots: {
     index: true,

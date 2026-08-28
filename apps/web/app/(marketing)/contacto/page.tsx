@@ -6,6 +6,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { toast } from 'sonner'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 const contactSchema = z.object({
   nombre: z.string().min(3, 'Mínimo 3 caracteres'),
@@ -56,8 +57,10 @@ export default function ContactoPage() {
   return (
     <>
       {/* Hero */}
-      <div className="pt-28 pb-16 gradient-brand">
-        <div className="container-max px-4 sm:px-6 lg:px-8 text-center">
+      <div className="relative isolate overflow-hidden pt-28 pb-16">
+        <FotoFondo src="/images/contacto/asesora.jpg" posicion="center 35%" />
+        <Velo />
+        <div className="container-max px-4 sm:px-6 lg:px-8 text-center relative z-10">
           <h1 className="font-heading font-bold text-5xl sm:text-6xl text-white mb-4">Contáctenos</h1>
           <p className="text-green-200 font-body text-xl max-w-xl mx-auto">
             Solicite una cotización gratuita. Respondemos en menos de 24 horas.

@@ -61,11 +61,11 @@ export default function SeguridadSaludPage() {
 
           {/* Banner image slot */}
           <Foto
-            src="/images/servicios-hogar/post-obra.jpg"
-            alt="Colaboradora en campo con tapabocas y gorro de proteccion durante una limpieza post-obra"
+            src="/images/seguridad-salud/epp.jpg"
+            alt="Dos colaboradores ayudándose a ajustar gafas, tapabocas, gorro y guantes de protección"
             ratio="aspect-[21/6]"
             className="mb-16 rounded-3xl shadow-lg"
-            posicion="center 45%"
+            posicion="center 40%"
             sizes="100vw"
           />
 

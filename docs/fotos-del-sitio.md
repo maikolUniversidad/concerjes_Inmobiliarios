@@ -1,89 +1,105 @@
 # Fotos del sitio — dónde va cada una
 
-**Estado: las 13 fotos ya están colocadas y en producción.**
+**Estado: 20 fotos colocadas, más los iconos de aplicación. Ningún bloque del
+sitio queda sin imagen.**
 
-Los originales (PNG de 2752x1536, entre 5 y 10 MB cada uno) se conservan en
-`fotos-originales/FotosPagina/`, fuera del control de versiones y fuera de
-`public/` para que no se publiquen. Las versiones del sitio se generaron con
-sharp: JPG progresivo, calidad 80, mozjpeg; 2400 px de ancho para las portadas,
-1800 px para las secundarias y 1200 px para las tarjetas. El total pasó de
-**108 MB a 2,1 MB**.
+Los originales (PNG grandes, entre 2 y 10 MB cada uno) se conservan en
+`fotos-originales/`, fuera del control de versiones y fuera de `public/` para que
+no se publiquen. Las versiones del sitio se generaron con sharp: JPG progresivo,
+calidad 80, mozjpeg; 2400 px de ancho para las portadas, 1800 px para las
+secundarias y 1200 px para las tarjetas.
 
 Si se reemplaza alguna, basta con dejar el JPG con el mismo nombre en la misma
 ruta. Mientras un archivo no exista se ve un degradado de marca de respaldo
 (`components/ui/FotoFondo.tsx`) y la página no se rompe.
 
+`tests/web/fotos.test.ts` recorre todo el código del sitio y falla si alguna
+ruta `/images/…` o `/logo…` escrita en un componente no tiene archivo detrás, o
+si falta alguno de los iconos de aplicación.
+
 ## Mapa de colocación
 
-Numeración según el orden en que se entregaron las 13 fotos.
+### Tanda 1 — 13 fotos (agosto 2026)
 
-| # | Foto | Archivo destino | Dónde se ve |
+| Foto | Archivo | Dónde se ve |
+|---|---|---|
+| Edificio de concreto al atardecer con conserje en la entrada | `images/hero-bg.jpg` | Portada del sitio (`/`) |
+| Mesero de guantes blancos sirviendo a una familia | `images/servicios-hogar/hero.jpg` | Portada de Servicios del Hogar · hero de la tienda |
+| Trapeando el piso de una sala luminosa | `images/servicios-hogar/aseo-regular.jpg` | Tarjeta "Aseo Regular" · tarjeta "Aseo y Limpieza" |
+| Guantes azules limpiando la puerta grasosa del horno | `images/servicios-hogar/limpieza-profunda.jpg` | Tarjeta "Limpieza Profunda" · banda de Hogar en la portada |
+| Apartamento en obra gris siendo limpiado | `images/servicios-hogar/post-obra.jpg` | Tarjeta "Post-Obra" · tarjeta "Servicios Especiales" |
+| Sirviendo vino en comedor con velas y flores | `images/servicios-hogar/eventos.jpg` | Tarjeta "Atención en Eventos" |
+| Emplatando pollo, arroz y ensalada | `images/servicios-hogar/cocina.jpg` | Tarjeta "Servicio de Cocina" |
+| Regando plantas en la terraza con vista a la ciudad | `images/servicios-hogar/jardin.jpg` | Tarjeta "Jardín y Exteriores" · tarjeta "Jardinería" |
+| Foto grupal contra el muro de ladrillo | `images/nosotros/equipo.jpg` | Portada de `/nosotros` · sección Nosotros de la portada |
+| Inventario en la bodega de insumos | `images/servicios/operacion.jpg` | Portada de `/servicios` · fondo de la banda de cifras |
+| Capacitación en sala con tablero de seguridad | `images/seguridad-salud/capacitacion.jpg` | Portada de `/seguridad-salud` |
+| Restregando la plancha de acero con vapor | `images/servicios/cafeteria.jpg` | Tarjeta "Cafetería" |
+| Logo sobre fondo azul | `images/og-image.jpg` | Miniatura al compartir el enlace (OG y Twitter) |
+
+### Tanda 2 — 7 fotos (28 de agosto de 2026)
+
+Cubren los bloques que habían quedado sin imagen propia o con una foto prestada
+que no correspondía al tema.
+
+| Foto | Archivo | Dónde se ve | Qué reemplaza |
 |---|---|---|---|
-| 11 | Edificio de concreto al atardecer con conserje en la entrada | `images/hero-bg.jpg` | Portada del sitio (`/`) |
-| 2 | Mesero de guantes blancos sirviendo a una familia | `images/servicios-hogar/hero.jpg` | Portada de Servicios del Hogar |
-| 12 | Trapeando el piso de una sala luminosa | `images/servicios-hogar/aseo-regular.jpg` | Tarjeta "Aseo Regular" |
-| 10 | Guantes azules limpiando la puerta grasosa del horno | `images/servicios-hogar/limpieza-profunda.jpg` | Tarjeta "Limpieza Profunda" |
-| 9 | Apartamento en obra gris siendo limpiado | `images/servicios-hogar/post-obra.jpg` | Tarjeta "Post-Obra" |
-| 8 | Sirviendo vino en comedor con velas y flores | `images/servicios-hogar/eventos.jpg` | Tarjeta "Atención en Eventos" |
-| 3 | Emplatando pollo, arroz y ensalada | `images/servicios-hogar/cocina.jpg` | Tarjeta "Servicio de Cocina" |
-| 7 | Regando plantas en la terraza con vista a la ciudad | `images/servicios-hogar/jardin.jpg` | Tarjeta "Jardín y Exteriores" |
-| 6 | Foto grupal contra el muro de ladrillo | `images/nosotros/equipo.jpg` | Portada de `/nosotros` |
-| 5 | Inventario en la bodega de insumos | `images/servicios/operacion.jpg` | Portada de `/servicios` |
-| 4 | Capacitación en sala con tablero de seguridad | `images/seguridad-salud/capacitacion.jpg` | Portada de `/seguridad-salud` |
-| 13 | Logo sobre fondo azul | `images/og-image.jpg` | Miniatura al compartir el enlace |
-| 1 | Restregando la plancha de acero con vapor | `images/servicios-hogar/limpieza-profunda-2.jpg` | Sin usar — reserva, ver abajo |
+| Operarios con arnés lavando una fachada de vidrio | `images/servicios/alturas.jpg` | Tarjeta "Limpieza en Alturas" y su bloque en `/servicios` | Antes mostraba la foto del salón de capacitación |
+| Conserje en la recepción de un edificio | `images/servicios/conserjeria.jpg` | Tarjeta "Conserjería" y su bloque en `/servicios` | Antes repetía la foto de la portada |
+| Asesora con diadema atendiendo en oficina | `images/contacto/asesora.jpg` | Portada de `/contacto` | Antes era un degradado verde plano |
+| Dos colaboradores ajustándose los EPP | `images/seguridad-salud/epp.jpg` | Banner de `/seguridad-salud` | Antes mostraba una limpieza post-obra |
+| Bienvenida a un aspirante en recepción | `images/nosotros/trabaja-con-nosotros.jpg` | Primer paso de `/registro-vacantes` | El registro no tenía ninguna imagen |
+| Equipo de seis caminando por un lobby de vidrio | `images/cta-equipo.jpg` | Bloque de cierre (CTA) de `/`, `/servicios`, `/nosotros`, `/seguridad-salud` | Antes era un degradado verde plano |
+| Lobby desenfocado con plantas | `images/ingresar-fondo.jpg` | `/ingresar` y `/portal/ingresar` | Antes eran fondos de color plano |
 
-### Rutas completas
+### Iconos de aplicación
 
-```
-apps/web/public/images/hero-bg.jpg
-apps/web/public/images/og-image.jpg
-apps/web/public/images/nosotros/equipo.jpg
-apps/web/public/images/servicios/operacion.jpg
-apps/web/public/images/seguridad-salud/capacitacion.jpg
-apps/web/public/images/servicios-hogar/hero.jpg
-apps/web/public/images/servicios-hogar/aseo-regular.jpg
-apps/web/public/images/servicios-hogar/limpieza-profunda.jpg
-apps/web/public/images/servicios-hogar/post-obra.jpg
-apps/web/public/images/servicios-hogar/eventos.jpg
-apps/web/public/images/servicios-hogar/cocina.jpg
-apps/web/public/images/servicios-hogar/jardin.jpg
-```
+El sitio no tenía favicon: la pestaña del navegador mostraba el icono genérico.
+Se generaron desde el isotipo de `public/logo.png` (la gota, sin el texto, que a
+16 px no se lee) sobre fondo blanco.
 
-Formato **JPG**, calidad 80, cada archivo por debajo de 500 KB. Las seis tarjetas
-de servicio se recortan a 16:9; las portadas usan todo el ancho con un velo
-oscuro encima para que el texto blanco tenga contraste.
+| Archivo | Tamaño | Para qué |
+|---|---|---|
+| `app/icon.png` | 512×512 | Favicon de la pestaña |
+| `app/apple-icon.png` | 180×180 | Icono al guardar en la pantalla de inicio en iOS |
+| `app/favicon.ico` | 32×32 | Para quien pide `/favicon.ico` directamente |
 
-## La foto 1 (plancha de acero)
+Next.js los detecta por convención de nombre y emite los `<link>` solo.
 
-No se asignó a ninguna ranura: lee como cocina industrial y las seis tarjetas de
-servicio ya quedaron cubiertas con imágenes de contexto doméstico. Dos destinos
-razonables:
+## Lo que sigue sin foto real
 
-- Subirla a la **galería** desde `/gestion-hogar` → pestaña *Galería*, donde
-  alimenta el carrusel de la landing y de la tienda.
-- Guardarla como `images/servicios-hogar/limpieza-profunda-2.jpg` para rotarla
-  con la #10 más adelante.
+Dos cosas quedan pendientes y no se resuelven con archivos en `public/`:
+
+- **Retratos de los concerjes** (`/servicios-hogar/tienda`). Hoy los cuatro
+  concerjes de la base muestran un avatar con la inicial sobre un degradado
+  verde. Necesitan retrato cuadrado (600×600), fondo neutro, uniforme, cargado
+  desde `/gestion-hogar` → pestaña *Concerjes*. Es lo que más sube la conversión
+  en la tienda, y no se debe rellenar con fotos de otras personas.
+- **Logos de clientes** (`ClientsSection`). Se muestran solo los sectores
+  atendidos hasta que estén las autorizaciones de uso de marca. Es una decisión,
+  no un olvido.
+
+La galería de `/servicios-hogar` y el carrusel de la tienda sí tienen contenido:
+seis fotos cargadas en el bucket `servicios-hogar/galeria` de Supabase, una por
+tipo de servicio.
 
 ## Advertencia sobre el texto dentro de las imágenes
 
-Tres fotos tienen **texto ilegible o deformado** cuando se ven en grande:
+Tres fotos de la primera tanda tienen **texto ilegible o deformado** cuando se
+ven en grande:
 
-- **#4 (capacitación):** lo escrito en el tablero no es español real
+- **Capacitación:** lo escrito en el tablero no es español real
   ("Ensemo el sesemo se complonentn…"), y es el punto focal de la foto.
-- **#6 (foto grupal):** el logo bordado aparece deformado y con distintas
-  grafías entre uniformes ("conserjas", "consorjes").
-- **#5 (bodega):** las etiquetas de las cajas y los rótulos son ilegibles.
+- **Foto grupal:** el logo bordado aparece deformado y con distintas grafías
+  entre uniformes ("conserjas", "consorjes").
+- **Bodega:** las etiquetas de las cajas y los rótulos son ilegibles.
 
 En las tres el velo oscuro de la portada atenúa bastante el problema, y por eso
-quedaron en portadas y no en tarjetas, donde se verían nítidas y de cerca. Aun
-así conviene saberlo: quien se acerque a mirar el tablero va a notar que no dice
-nada. Si aparecen fotos reales de una capacitación o de la bodega, esas tres son
-las primeras que vale la pena reemplazar.
+quedaron en portadas y no en tarjetas, donde se verían nítidas y de cerca. Si
+aparecen fotos reales de una capacitación o de la bodega, esas tres son las
+primeras que vale la pena reemplazar.
 
 ## Estas no son archivos: se cargan desde la administración
 
 - **Galería y videos** → `/gestion-hogar`, pestaña *Galería*.
-- **Foto de cada conserje** → `/gestion-hogar`, pestaña *Concerjes*.
-  Retrato cuadrado (600×600), fondo neutro, uniforme. Es lo que más sube la
-  conversión en la tienda.
+- **Foto de cada concerje** → `/gestion-hogar`, pestaña *Concerjes*.

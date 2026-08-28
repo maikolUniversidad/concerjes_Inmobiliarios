@@ -8,6 +8,7 @@ import {
 } from 'lucide-react'
 import { getPublico } from '@/lib/supabase/publico'
 import { traerTodo } from '@/lib/supabase/paginado'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 interface Tipo { id: string; nombre: string; descripcion: string | null; icono: string | null; color: string | null; incluye: string[] | null }
 interface Tarifa { tipo_id: string; precio_unico: number; duracion_horas: number }
@@ -137,10 +138,14 @@ export function TiendaClient() {
 
       {/* Hero mini */}
       <section className="container-max px-4 pt-6">
-        <div className="rounded-2xl gradient-brand p-6 text-white sm:p-8">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold"><Sparkles className="h-3.5 w-3.5" /> Tienda de Servicios del Hogar</span>
-          <h1 className="mt-3 font-heading text-2xl font-bold sm:text-3xl">Pide tu servicio como pides un domicilio</h1>
-          <p className="mt-1 max-w-xl text-white/80">Explora servicios con fotos y video, mira a tus concerjes y agenda en minutos. Sin registro para ver.</p>
+        <div className="relative isolate overflow-hidden rounded-2xl p-6 text-white sm:p-8">
+          <FotoFondo src="/images/servicios-hogar/hero.jpg" posicion="center 35%" />
+          <Velo estilo="linear-gradient(120deg, rgba(12,40,15,.86) 0%, rgba(12,40,15,.62) 60%, rgba(12,40,15,.55) 100%)" />
+          <div className="relative z-10">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1 text-xs font-semibold"><Sparkles className="h-3.5 w-3.5" /> Tienda de Servicios del Hogar</span>
+            <h1 className="mt-3 font-heading text-2xl font-bold sm:text-3xl">Pide tu servicio como pides un domicilio</h1>
+            <p className="mt-1 max-w-xl text-white/80">Explora servicios con fotos y video, mira a tus concerjes y agenda en minutos. Sin registro para ver.</p>
+          </div>
         </div>
       </section>
 

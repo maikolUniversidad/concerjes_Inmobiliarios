@@ -14,8 +14,8 @@ export const FOTOS_SERVICIO: Record<string, { src: string; alt: string }> = {
     alt: 'Limpieza a fondo de una plancha de cocina industrial',
   },
   conserjeria: {
-    src: '/images/hero-bg.jpg',
-    alt: 'Conserje de Conserjes Inmobiliarios en la entrada de un edificio residencial',
+    src: '/images/servicios/conserjeria.jpg',
+    alt: 'Conserje de Conserjes Inmobiliarios en la recepción de un edificio residencial',
   },
   jardineria: {
     src: '/images/servicios-hogar/jardin.jpg',
@@ -26,7 +26,7 @@ export const FOTOS_SERVICIO: Record<string, { src: string; alt: string }> = {
     alt: 'Limpieza post-obra en un apartamento recién entregado',
   },
   alturas: {
-    src: '/images/seguridad-salud/capacitacion.jpg',
-    alt: 'Capacitación en seguridad y uso de elementos de protección personal',
+    src: '/images/servicios/alturas.jpg',
+    alt: 'Operarios con arnés lavando la fachada de vidrio de una torre corporativa',
   },
 }

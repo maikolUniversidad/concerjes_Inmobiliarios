@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, CalendarPlus, UserRound, Star, ImageIcon, ShieldCheck } from 'lucide-react'
+import { Foto } from '@/components/ui/Foto'
 
 const CHIPS = [
   { icono: '🧹', nombre: 'Aseo Regular' },
@@ -77,17 +78,26 @@ export function ServiciosHogarBand() {
             </p>
           </div>
 
-          {/* Beneficios */}
-          <div className="grid grid-cols-2 gap-4">
-            {BENEFICIOS.map((b) => (
-              <div key={b.titulo} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-                <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green">
-                  {b.icono}
+          {/* Foto + beneficios */}
+          <div>
+            <Foto
+              src="/images/servicios-hogar/limpieza-profunda.jpg"
+              alt="Limpieza profunda del horno de una cocina residencial"
+              ratio="aspect-[16/9]"
+              className="mb-4 rounded-2xl shadow-sm"
+              sizes="(max-width: 1024px) 100vw, 50vw"
+            />
+            <div className="grid grid-cols-2 gap-4">
+              {BENEFICIOS.map((b) => (
+                <div key={b.titulo} className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
+                  <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-green/10 text-brand-green">
+                    {b.icono}
+                  </div>
+                  <p className="mb-1 font-heading font-bold text-brand-gray-dark">{b.titulo}</p>
+                  <p className="font-body text-sm leading-snug text-brand-gray-mid">{b.desc}</p>
                 </div>
-                <p className="mb-1 font-heading font-bold text-brand-gray-dark">{b.titulo}</p>
-                <p className="font-body text-sm leading-snug text-brand-gray-mid">{b.desc}</p>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       </div>

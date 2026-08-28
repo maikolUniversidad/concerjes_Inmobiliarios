@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { ChevronDown, ShieldCheck, ScanFace } from 'lucide-react'
 import { AVISO_PRIVACIDAD, CONSENTIMIENTO_DATOS, CONSENTIMIENTO_BIOMETRICO } from '@/lib/registro/consentimientos'
+import { Foto } from '@/components/ui/Foto'
 
 export function Paso0Consentimientos({ onContinuar }: { onContinuar: (biometrico: boolean) => void }) {
   const [datos, setDatos] = useState(false)
@@ -13,6 +14,26 @@ export function Paso0Consentimientos({ onContinuar }: { onContinuar: (biometrico
 
   return (
     <div className="space-y-5">
+      {/* Foto de bienvenida: la primera pantalla del registro era solo texto y
+          casillas, sin ninguna imagen de la empresa a la que se postula. */}
+      <div className="relative isolate overflow-hidden rounded-2xl">
+        <Foto
+          src="/images/nosotros/trabaja-con-nosotros.jpg"
+          alt="Coordinadora de Conserjes Inmobiliarios dando la bienvenida a un aspirante"
+          ratio="aspect-[16/7]"
+          posicion="center 35%"
+          sizes="(max-width: 768px) 100vw, 672px"
+        />
+        <div
+          className="absolute inset-0"
+          style={{ background: 'linear-gradient(to top, rgba(12,40,15,.82) 0%, rgba(12,40,15,.20) 55%, transparent 100%)' }}
+          aria-hidden="true"
+        />
+        <p className="absolute inset-x-0 bottom-0 p-4 font-heading text-lg font-bold leading-tight text-white drop-shadow sm:text-xl">
+          Trabaja con nosotros
+        </p>
+      </div>
+
       <div>
         <h2 className="font-heading text-xl font-bold text-gray-900">Antes de empezar</h2>
         <p className="mt-1 text-sm text-gray-500">

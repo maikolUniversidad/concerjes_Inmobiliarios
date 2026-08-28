@@ -1,11 +1,14 @@
 import Link from 'next/link'
 import { ArrowRight, Phone, Mail } from 'lucide-react'
+import { FotoFondo, Velo } from '@/components/ui/FotoFondo'
 
 export function CTASection() {
   return (
-    <section className="py-24 relative overflow-hidden">
-      {/* Background */}
-      <div className="absolute inset-0 gradient-brand" />
+    <section className="py-24 relative isolate overflow-hidden">
+      {/* Background — foto del equipo bajo un velo de marca. Si el archivo
+          faltara queda el degradado y el bloque no se rompe. */}
+      <FotoFondo src="/images/cta-equipo.jpg" posicion="center 40%" />
+      <Velo estilo="linear-gradient(135deg, rgba(27,94,32,.92) 0%, rgba(46,125,50,.86) 45%, rgba(56,142,60,.90) 100%)" />
       <div className="absolute inset-0 opacity-5"
         style={{
           backgroundImage: `radial-gradient(circle at 25px 25px, white 2px, transparent 0), radial-gradient(circle at 75px 75px, white 2px, transparent 0)`,
