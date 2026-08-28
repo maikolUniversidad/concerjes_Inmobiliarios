@@ -65,6 +65,8 @@ for (const r of pols) {
 }
 const enRoles = new Set((await c.query(
   `select distinct k from roles, lateral jsonb_object_keys(permisos) k`)).rows.map(r => r.k))
+const rolesBD = (await c.query(
+  'select nombre, rol_base, permisos from roles where activo order by nombre')).rows
 await c.end()
 
 const cat = new Set(readFileSync(join(base, 'lib/permisos.ts'), 'utf8').match(/key: '[a-z_]+'/g).map(s => s.slice(6, -1)))
@@ -91,6 +93,80 @@ for (const x of todas) {
   console.log(x.padEnd(36), [cat.has(x), app.has(x), rls.has(x), enRoles.has(x)].map(b => b ? ' ✔ ' : ' · ').join(' '), problemas.join(' + '))
 }
 console.log(`    ${n} de ${todas.length} claves\n`)
+
+// ── Dependencias entre permisos ─────────────────────────────────────────────
+// Un permiso de acción es inútil (o falla) sin su lectura correspondiente:
+// cerrar un arqueo aplica un ajuste de stock, gestionar reembasado necesita ver
+// la pantalla, el cargue masivo de personas vive en /importar, etc.
+const IMPLICA = {
+  editar_productos: ['ver_productos'],
+  ajustar_stock: ['ver_stock'],
+  crear_movimientos: ['ver_movimientos'],
+  eliminar_movimientos: ['ver_movimientos'],
+  // cerrar un arqueo aplica AJUSTE de stock: sin ajustar_stock el cierre falla
+  realizar_arqueo: ['ver_arqueo', 'ver_stock', 'ajustar_stock'],
+  gestionar_bodegas: ['ver_bodegas'],
+  gestionar_reembasado: ['ver_reembasado'],
+  gestionar_maquinaria: ['ver_maquinaria'],
+  editar_aprovisionamiento: ['ver_aprovisionamiento'],
+  editar_contratos: ['ver_contratos'],
+  gestionar_parametrizacion: ['ver_parametrizacion'],
+  editar_proveedores: ['ver_proveedores'],
+  crear_ordenes_compra: ['ver_ordenes_compra'],
+  crear_ordenes_insumo: ['ver_ordenes_insumo'],
+  aprobar_ordenes_insumo: ['ver_ordenes_insumo'],
+  recibir_ordenes_insumo: ['ver_ordenes_insumo'],
+  alistar_ordenes_insumo: ['ver_ordenes_insumo', 'ver_alistamiento'],
+  subir_documentos: ['ver_documentos'],
+  gestionar_usuarios: ['ver_usuarios'],
+  // el cargue masivo de personas vive en /importar, que exige importar_datos
+  importar_personas: ['importar_datos', 'ver_personas'],
+  gestionar_personas: ['ver_personas'],
+  gestionar_empresas_usuarias: ['ver_empresas_usuarias'],
+  gestionar_documentos_rrhh: ['ver_documentos_rrhh'],
+  gestionar_tipos_documentales: ['ver_documentos_rrhh'],
+  gestionar_postulaciones: ['ver_postulaciones'],
+  gestionar_pqrs: ['ver_pqrs'],
+  gestionar_no_conformes: ['ver_no_conformes'],
+  gestionar_contratos_conserjeria: ['ver_contratos_conserjeria'],
+  gestionar_solicitudes_hogar: ['ver_servicios_hogar'],
+  gestionar_agenda_hogar: ['ver_servicios_hogar'],
+  gestionar_tipos_servicio: ['ver_servicios_hogar'],
+  gestionar_precios_servicio: ['ver_servicios_hogar'],
+  gestionar_pagos_hogar: ['ver_servicios_hogar', 'ver_pagos_hogar'],
+  parametrizar_pagos_hogar: ['ver_servicios_hogar', 'ver_pagos_hogar'],
+  gestionar_flujos_notificacion: ['ver_flujos_notificacion'],
+  gestionar_conductores: ['ver_logistica'],
+  gestionar_rutas: ['ver_logistica'],
+  ver_ubicacion_conductores: ['ver_logistica'],
+  gestionar_horarios_entrega: ['ver_logistica'],
+  ver_monitoreo_entregas: ['ver_logistica'],
+  gestionar_novedades_entrega: ['ver_logistica', 'ver_novedades_entrega'],
+  ver_rutas_conductor: ['ver_logistica'],
+  actualizar_gps_conductor: ['ver_rutas_conductor'],
+  confirmar_entrega_conductor: ['ver_rutas_conductor'],
+  reportar_novedad_conductor: ['ver_rutas_conductor', 'ver_novedades_entrega'],
+  gestionar_alertas: ['ver_notificaciones'],
+  editar_configuracion: ['ver_configuracion'],
+  gestionar_integraciones: ['ver_configuracion'],
+}
+
+const incoherentes = []
+for (const r of rolesBD) {
+  if (r.rol_base === 'ADMIN' || r.rol_base === 'SUPER_ADMIN') continue  // acceso total
+  const faltan = new Set()
+  for (let pasada = 0; pasada < 4; pasada++) {
+    for (const [accion, deps] of Object.entries(IMPLICA)) {
+      if (r.permisos?.[accion] !== true && !faltan.has(accion)) continue
+      for (const d of deps) if (r.permisos?.[d] !== true) faltan.add(d)
+    }
+  }
+  if (faltan.size) incoherentes.push([r.nombre, [...faltan].sort()])
+}
+console.log('### ROLES CON PERMISOS QUE NO PUEDEN FUNCIONAR ###')
+for (const [rol, ks] of incoherentes) console.log(`    ${rol}: falta ${ks.join(', ')}`)
+console.log(`    ${incoherentes.length} de ${rolesBD.length} roles
+`)
 
 // ── Pantallas sin guard ─────────────────────────────────────────────────────
 // `/dashboard`, `/perfil` y `/carnet` son personales: cualquier usuario
@@ -136,4 +212,4 @@ console.log('### ACCIONES QUE ESCRIBEN SIN VERIFICAR PERMISO ###')
 sinCheck.forEach(f => console.log('   ', rel(f)))
 console.log(`    ${sinCheck.length} de ${acciones.length} archivos`)
 
-process.exit(n || sinGuard.length || sinPermiso.length || sinCheck.length ? 1 : 0)
+process.exit(n || incoherentes.length || sinGuard.length || sinPermiso.length || sinCheck.length ? 1 : 0)
