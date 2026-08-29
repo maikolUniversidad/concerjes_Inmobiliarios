@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ClipboardList, CalendarDays, Star, DollarSign, Clock, CheckCircle2, AlertCircle, TrendingUp, Wallet, SlidersHorizontal, FileText } from 'lucide-react'
+import { ClipboardList, CalendarDays, Star, DollarSign, Clock, CheckCircle2, AlertCircle, TrendingUp, Wallet, SlidersHorizontal, FileText, Gift } from 'lucide-react'
 import { getResumenServiciosHogar, getSolicitudesRecientes } from './actions'
 import { getResumenPagos } from './pagos-actions'
 
@@ -92,6 +92,7 @@ export default async function ServiciosHogarPage() {
           { href: '/servicios-hogar/precios',     icon: DollarSign,    label: 'Precios y tarifas',   desc: 'Gestionar precios por duración y frecuencia' },
           { href: '/servicios-hogar/pagos',       icon: Wallet,        label: 'Pagos',               desc: 'Cuentas de cobro, verificación y cartera' },
           { href: '/servicios-hogar/parametros-pago', icon: SlidersHorizontal, label: 'Parámetros de pago', desc: 'IVA, plazos, anticipos y formas de pago' },
+          { href: '/servicios-hogar/puntos',      icon: Gift,          label: 'Puntos y recompensas', desc: 'Reglas del programa, catálogo y canjes' },
         ].map((a) => {
           const Icon = a.icon
           return (

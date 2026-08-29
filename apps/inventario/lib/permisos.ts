@@ -136,6 +136,10 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_pagos_hogar',              label: 'Ver cobros y pagos' },
       { key: 'gestionar_pagos_hogar',        label: 'Gestionar cobros y registrar pagos' },
       { key: 'parametrizar_pagos_hogar',     label: 'Parametrizar medios de pago' },
+      { key: 'ver_puntos_hogar',             label: 'Ver puntos y redenciones' },
+      { key: 'gestionar_puntos_hogar',       label: 'Gestionar redenciones y ajustar puntos' },
+      { key: 'parametrizar_puntos_hogar',    label: 'Parametrizar el programa de puntos' },
+      { key: 'gestionar_recompensas',        label: 'Crear / editar recompensas' },
     ],
   },
   {
