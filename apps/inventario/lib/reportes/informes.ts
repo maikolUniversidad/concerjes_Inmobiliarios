@@ -305,6 +305,107 @@ async function cargarOCAbiertas(supabase: DB): Promise<ItemOC[]> {
   return acc
 }
 
+// ─── Seguimiento de productos (movimientos hacia las sedes) ───────────────────
+
+export interface Movimiento {
+  id: string
+  productoId: string
+  fecha: string
+  tipo: string
+  cantidad: number
+  sede: string
+  ciudad: string
+  contrato: string
+  observacion: string
+  responsable: string
+  /** Datos del producto tomados del propio movimiento (respaldo si no está en el catálogo). */
+  prodRef: number | null
+  prodCodigo: number | null
+  prodSku: string | null
+  prodNombre: string
+  prodPresentacion: string
+}
+
+/** Movimientos más recientes, con la sede a la que se enviaron y quién los registró. */
+async function cargarMovimientos(supabase: DB, progreso: (paso: string) => void): Promise<Movimiento[]> {
+  const acc: Movimiento[] = []
+  for (let desde = 0; desde < MAX_FILAS; desde += PAGINA) {
+    const { data, error } = await supabase
+      .from('movimientos')
+      .select(
+        'id, tipo, cantidad, observacion, created_at, usuario_id, producto_id, ' +
+        'producto:productos ( ref, codigo, sku, nombre_estandar, presentacion ), ' +
+        'sede:sedes ( nombre, ciudad, grupo:grupos_contrato ( codigo ) )',
+      )
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(desde, desde + PAGINA - 1)
+    if (error) throw new Error(`No se pudieron leer los movimientos: ${error.message}`)
+    const lote = (data ?? []) as Fila[]
+    for (const m of lote) {
+      const sede = uno<Fila>(m.sede)
+      const grupo = uno<Fila>(sede?.grupo)
+      const prod = uno<Fila>(m.producto)
+      acc.push({
+        id: m.id,
+        productoId: m.producto_id,
+        fecha: m.created_at ?? '',
+        tipo: m.tipo ?? '',
+        cantidad: num(m.cantidad),
+        sede: sede?.nombre ?? '',
+        ciudad: sede?.ciudad ?? '',
+        contrato: grupo?.codigo ?? '',
+        observacion: m.observacion ?? '',
+        responsable: m.usuario_id ?? '',
+        prodRef: prod?.ref ?? null,
+        prodCodigo: prod?.codigo ?? null,
+        prodSku: prod?.sku ?? null,
+        prodNombre: prod?.nombre_estandar ?? '',
+        prodPresentacion: prod?.presentacion ?? '',
+      })
+    }
+    if (lote.length < PAGINA) break
+    progreso(`Leyendo movimientos… (${acc.length.toLocaleString('es-CO')})`)
+  }
+
+  // El nombre de quien registró se resuelve por la vista `usuarios_opciones`:
+  // la RLS de `usuarios` no deja leer el nombre de otras personas.
+  const ids = [...new Set(acc.map(m => m.responsable).filter(Boolean))]
+  if (ids.length > 0) {
+    const nombres = new Map<string, string>()
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await supabase.from('usuarios_opciones').select('id, nombre').in('id', ids.slice(i, i + 200))
+      for (const u of (data ?? []) as Fila[]) nombres.set(u.id, u.nombre ?? '')
+    }
+    for (const m of acc) m.responsable = nombres.get(m.responsable) ?? ''
+  }
+  return acc
+}
+
+/** Etiqueta de los movimientos que no salieron hacia un contrato. */
+const SIN_SEDE = '(sin sede - bodega central)'
+
+/** Nombre legible del tipo de movimiento. */
+const TIPO_MOV: Record<string, string> = {
+  ENTRADA: 'Entrada',
+  SALIDA: 'Salida',
+  DEVOLUCION: 'Devolución',
+  AJUSTE: 'Ajuste',
+  TRASLADO: 'Traslado',
+}
+
+/** Columnas propias del seguimiento: el envío en sí, antes de la ficha del producto. */
+const COLS_MOV: ColumnaInforme[] = [
+  { header: 'Fecha y hora', key: 'fecha_hora', width: 18 },
+  { header: 'Sede destino', key: 'sede', width: 36 },
+  { header: 'Ciudad', key: 'ciudad', width: 16 },
+  { header: 'Contrato', key: 'contrato', width: 12 },
+  { header: 'Tipo de movimiento', key: 'tipo_mov', width: 18 },
+  { header: 'Cantidad enviada', key: 'cantidad', width: 17, formato: 'decimal', total: true },
+  { header: 'Observaciones', key: 'observacion', width: 50 },
+  { header: 'Registrado por', key: 'responsable', width: 26 },
+]
+
 function acumular<T extends { productoId: string }>(items: T[], valor: (i: T) => number): Map<string, number> {
   const m = new Map<string, number>()
   for (const i of items) m.set(i.productoId, (m.get(i.productoId) ?? 0) + valor(i))
@@ -926,6 +1027,142 @@ export const INFORMES: DefinicionInforme[] = [
             nombre: 'Top 100 por valor',
             columnas: columnas([{ header: 'Participación', key: 'participacion', width: 14 }]),
             filas: top.map(p => fila(p, { participacion: valor > 0 ? `${(((p.real * p.precio) / valor) * 100).toFixed(2)}%` : '' })),
+          },
+        ],
+      }
+    },
+  },
+
+  {
+    id: 'seguimiento-productos',
+    nombre: 'Seguimiento de productos (envíos a sedes)',
+    grupo: 'Trazabilidad',
+    archivo: 'seguimiento_de_productos',
+    descripcion:
+      'A dónde fue a parar cada producto: sede de destino, fecha y hora, código y nombre del producto, cantidad enviada, tipo de movimiento y las observaciones con las que se registró. Incluye el consolidado por sede y por producto.',
+    incluye: ['Sede destino', 'Fecha y hora', 'Código y nombre', 'Cantidad enviada', 'Tipo de movimiento', 'Observaciones'],
+    async generar(supabase, progreso) {
+      progreso('Leyendo movimientos…')
+      const movs = await cargarMovimientos(supabase, progreso)
+      progreso('Cruzando con el catálogo de productos…')
+      const prods = await cargarProductos(supabase, false)
+      const porId = new Map(prods.map(p => [p.id, p]))
+
+      /** Ficha del producto; si ya no está en el catálogo, lo que quedó en el movimiento. */
+      const filaProducto = (m: Movimiento): Fila => {
+        const p = porId.get(m.productoId)
+        if (p) return fila(p)
+        return {
+          ref: m.prodRef, codigo: m.prodCodigo, sku: m.prodSku,
+          producto: m.prodNombre, presentacion: m.prodPresentacion,
+          id: m.productoId,
+        }
+      }
+
+      const esEnvio = (m: Movimiento) => m.tipo === 'SALIDA' || m.tipo === 'TRASLADO'
+      const enviadas = movs.filter(esEnvio).reduce((a, m) => a + m.cantidad, 0)
+      const devueltas = movs.filter(m => m.tipo === 'DEVOLUCION').reduce((a, m) => a + m.cantidad, 0)
+      const fechas = movs.map(m => m.fecha).filter(Boolean).sort()
+      const sedes = new Set(movs.map(m => m.sede).filter(Boolean))
+
+      // Consolidado por sede
+      const porSede = new Map<string, { sede: string; ciudad: string; contrato: string; movimientos: number; enviadas: number; devueltas: number; productos: Set<string>; ultima: string }>()
+      for (const m of movs) {
+        const k = m.sede || SIN_SEDE
+        const e = porSede.get(k) ?? { sede: k, ciudad: m.ciudad, contrato: m.contrato, movimientos: 0, enviadas: 0, devueltas: 0, productos: new Set<string>(), ultima: m.fecha }
+        e.movimientos++
+        if (esEnvio(m)) e.enviadas += m.cantidad
+        if (m.tipo === 'DEVOLUCION') e.devueltas += m.cantidad
+        e.productos.add(m.productoId)
+        if (m.fecha > e.ultima) e.ultima = m.fecha
+        porSede.set(k, e)
+      }
+
+      // Consolidado por producto
+      const porProducto = new Map<string, { movimientos: number; enviadas: number; devueltas: number; sedes: Set<string>; ultima: string; ultimaSede: string; muestra: Movimiento }>()
+      for (const m of movs) {
+        const e = porProducto.get(m.productoId) ?? { movimientos: 0, enviadas: 0, devueltas: 0, sedes: new Set<string>(), ultima: m.fecha, ultimaSede: m.sede, muestra: m }
+        e.movimientos++
+        if (esEnvio(m)) e.enviadas += m.cantidad
+        if (m.tipo === 'DEVOLUCION') e.devueltas += m.cantidad
+        if (m.sede) e.sedes.add(m.sede)
+        if (m.fecha >= e.ultima) { e.ultima = m.fecha; e.ultimaSede = m.sede }
+        porProducto.set(m.productoId, e)
+      }
+
+      progreso('Armando el Excel…')
+      return {
+        resumen: [
+          { label: 'Movimientos incluidos', valor: movs.length },
+          { label: 'Periodo cubierto', valor: fechas.length ? `${fecha(fechas[0])} a ${fecha(fechas[fechas.length - 1])}` : '—' },
+          { label: 'Unidades enviadas a sedes', valor: miles(enviadas) },
+          { label: 'Unidades devueltas', valor: miles(devueltas) },
+          { label: 'Sedes atendidas', valor: sedes.size },
+          { label: 'Productos con movimiento', valor: porProducto.size },
+          { label: 'Movimientos sin sede asignada', valor: movs.filter(m => !m.sede).length },
+        ],
+        notas: [
+          `Se incluyen los ${movs.length.toLocaleString('es-CO')} movimientos más recientes (tope de ${MAX_FILAS.toLocaleString('es-CO')} por descarga).`,
+          '"Unidades enviadas" suma los movimientos de tipo Salida y Traslado; las devoluciones se cuentan aparte y las entradas y ajustes no se suman.',
+          'Los movimientos sin sede corresponden a entradas, ajustes o reembasados de la bodega central, que no salieron hacia un contrato.',
+        ],
+        hojas: [
+          {
+            nombre: 'Seguimiento',
+            columnas: [...COLS_MOV, ...columnas()],
+            filas: movs.map(m => ({
+              fecha_hora: fechaHora(m.fecha),
+              sede: m.sede || SIN_SEDE,
+              ciudad: m.ciudad,
+              contrato: m.contrato,
+              tipo_mov: TIPO_MOV[m.tipo] ?? m.tipo,
+              cantidad: m.cantidad,
+              observacion: m.observacion,
+              responsable: m.responsable,
+              ...filaProducto(m),
+            })),
+            nota: 'Un renglón por movimiento, del más reciente al más antiguo. Usa los filtros de la fila 1 para acotar por sede, producto o tipo.',
+          },
+          {
+            nombre: 'Por sede',
+            columnas: [
+              { header: 'Sede destino', key: 'sede', width: 36 },
+              { header: 'Ciudad', key: 'ciudad', width: 16 },
+              { header: 'Contrato', key: 'contrato', width: 12 },
+              { header: 'Movimientos', key: 'movimientos', width: 14, formato: 'entero', total: true },
+              { header: 'Unidades enviadas', key: 'enviadas', width: 18, formato: 'decimal', total: true },
+              { header: 'Unidades devueltas', key: 'devueltas', width: 18, formato: 'decimal', total: true },
+              { header: 'Productos distintos', key: 'productos', width: 19, formato: 'entero', total: true },
+              { header: 'Último movimiento', key: 'ultima', width: 18 },
+            ],
+            filas: [...porSede.values()]
+              .sort((a, b) => b.enviadas - a.enviadas)
+              .map(e => ({
+                sede: e.sede, ciudad: e.ciudad, contrato: e.contrato,
+                movimientos: e.movimientos, enviadas: e.enviadas, devueltas: e.devueltas,
+                productos: e.productos.size, ultima: fechaHora(e.ultima),
+              })),
+            nota: 'A dónde se envió: totales por sede de destino, ordenados por unidades enviadas.',
+          },
+          {
+            nombre: 'Por producto',
+            columnas: columnas([
+              { header: 'Movimientos', key: 'movimientos', width: 14, formato: 'entero', total: true },
+              { header: 'Unidades enviadas', key: 'enviadas', width: 18, formato: 'decimal', total: true },
+              { header: 'Unidades devueltas', key: 'devueltas', width: 18, formato: 'decimal', total: true },
+              { header: 'Sedes atendidas', key: 'sedes', width: 16, formato: 'entero' },
+              { header: 'Último envío', key: 'ultima', width: 18 },
+              { header: 'Última sede', key: 'ultima_sede', width: 34 },
+            ]),
+            filas: [...porProducto.values()]
+              .sort((a, b) => b.enviadas - a.enviadas)
+              .map(e => ({
+                movimientos: e.movimientos, enviadas: e.enviadas, devueltas: e.devueltas,
+                sedes: e.sedes.size, ultima: fechaHora(e.ultima),
+                ultima_sede: e.ultimaSede || SIN_SEDE,
+                ...filaProducto(e.muestra),
+              })),
+            nota: 'Ordenado por unidades enviadas. Lleva la ficha completa del producto para no cruzar hojas.',
           },
         ],
       }
