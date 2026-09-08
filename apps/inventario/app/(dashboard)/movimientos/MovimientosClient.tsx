@@ -1,7 +1,7 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useMemo, useState, useTransition } from 'react'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import {
   ArrowDownToLine, ArrowUpFromLine, RefreshCw, Settings2, ArrowLeftRight,
   Trash2, Loader2, MapPin, Calendar, User2,
@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { eliminarMovimiento } from './actions'
 import { formatFechaHora } from '@/lib/utils'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { CLAVE_TIPO_MOV, ORDEN_TIPOS_MOV, TIPO_MOV_META, leerTipoMov } from '@/lib/movimientos'
 import type { TipoMovimiento } from '@/lib/types/database'
 
 export interface MovRow {
@@ -25,20 +26,39 @@ export interface MovRow {
   sede: { nombre: string } | null
 }
 
-const TIPO_META: Record<TipoMovimiento, { label: string; cls: string; icon: typeof ArrowDownToLine }> = {
-  ENTRADA: { label: 'Entrada', cls: 'bg-green-100 text-green-700', icon: ArrowDownToLine },
-  SALIDA: { label: 'Salida', cls: 'bg-orange-100 text-orange-700', icon: ArrowUpFromLine },
-  DEVOLUCION: { label: 'Devolución', cls: 'bg-blue-100 text-blue-700', icon: RefreshCw },
-  AJUSTE: { label: 'Ajuste', cls: 'bg-purple-100 text-purple-700', icon: Settings2 },
-  TRASLADO: { label: 'Traslado', cls: 'bg-gray-100 text-gray-600', icon: ArrowLeftRight },
+const ICONO_TIPO: Record<TipoMovimiento, typeof ArrowDownToLine> = {
+  ENTRADA: ArrowDownToLine,
+  SALIDA: ArrowUpFromLine,
+  DEVOLUCION: RefreshCw,
+  AJUSTE: Settings2,
+  TRASLADO: ArrowLeftRight,
 }
-const ORDEN_TIPOS: TipoMovimiento[] = ['ENTRADA', 'SALIDA', 'DEVOLUCION', 'AJUSTE', 'TRASLADO']
 
 export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; puedeEliminar: boolean }) {
   const router = useRouter()
-  const [tipo, setTipo] = useState<TipoMovimiento | 'TODOS'>('TODOS')
+  const pathname = usePathname()
+  const sp = useSearchParams()
   const [borrando, setBorrando] = useState<string | null>(null)
   const [pending, start] = useTransition()
+
+  // El tipo se refleja en la URL (?mov=) para que entre en las vistas rápidas
+  // del panel de filtros, pero el corte sigue siendo en cliente: los contadores
+  // de cada chip cuentan sobre todo lo cargado, no sobre lo ya filtrado.
+  const tipoUrl: TipoMovimiento | 'TODOS' = leerTipoMov(sp.get(CLAVE_TIPO_MOV)) ?? 'TODOS'
+  const [tipo, setTipoLocal] = useState<TipoMovimiento | 'TODOS'>(tipoUrl)
+  // Llega de fuera (vista rápida aplicada, atrás del navegador, enlace pegado).
+  useEffect(() => { setTipoLocal(tipoUrl) }, [tipoUrl])
+
+  function setTipo(next: TipoMovimiento | 'TODOS') {
+    setTipoLocal(next)
+    // `replaceState` en vez de navegar: el filtro es local, no hace falta pedir
+    // la página otra vez ni llenar el historial con un paso por cada chip.
+    const params = new URLSearchParams(sp.toString())
+    if (next === 'TODOS') params.delete(CLAVE_TIPO_MOV)
+    else params.set(CLAVE_TIPO_MOV, next)
+    const query = params.toString()
+    window.history.replaceState(null, '', query ? `${pathname}?${query}` : pathname)
+  }
 
   const conteos = useMemo(() => {
     const c: Record<string, number> = { TODOS: movs.length }
@@ -58,7 +78,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
       : m.tipo === 'TRASLADO'
         ? 'El traslado no altera el stock central.'
         : `Se revertirá su efecto en el stock de ${nombre}.`
-    if (!window.confirm(`¿Eliminar este movimiento (${TIPO_META[m.tipo].label} de ${m.cantidad} · ${nombre})?\n\n${efecto}`)) return
+    if (!window.confirm(`¿Eliminar este movimiento (${TIPO_MOV_META[m.tipo].label} de ${m.cantidad} · ${nombre})?\n\n${efecto}`)) return
     setBorrando(m.id)
     start(async () => {
       const r = await eliminarMovimiento(m.id, true)
@@ -72,7 +92,9 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
   const chip = (key: TipoMovimiento | 'TODOS', label: string) => {
     const activo = tipo === key
     const n = conteos[key] ?? 0
-    if (key !== 'TODOS' && n === 0) return null
+    // Los tipos sin movimientos se ocultan, salvo el que esté seleccionado:
+    // si viene de una vista rápida hay que poder verlo y quitarlo.
+    if (key !== 'TODOS' && n === 0 && !activo) return null
     return (
       <button key={key} onClick={() => setTipo(key)}
         className={'rounded-full px-3 py-1.5 font-body text-xs font-semibold transition-colors ' +
@@ -110,12 +132,12 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
     {
       id: 'tipo',
       header: 'Tipo',
-      valor: (m) => TIPO_META[m.tipo].label,
+      valor: (m) => TIPO_MOV_META[m.tipo].label,
       celda: (m) => {
-        const meta = TIPO_META[m.tipo]
-        const Icon = meta.icon
+        const meta = TIPO_MOV_META[m.tipo]
+        const Icon = ICONO_TIPO[m.tipo]
         return (
-          <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 font-body text-xs font-medium ${meta.cls}`}>
+          <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 font-body text-xs font-medium ${meta.badge}`}>
             <Icon className="h-3.5 w-3.5" /> {meta.label}
           </span>
         )
@@ -199,7 +221,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
       {/* Filtros por tipo */}
       <div className="flex flex-wrap gap-2">
         {chip('TODOS', 'Todos')}
-        {ORDEN_TIPOS.map(t => chip(t, TIPO_META[t].label))}
+        {ORDEN_TIPOS_MOV.map(t => chip(t, TIPO_MOV_META[t].label))}
       </div>
 
       <TablaEstandar
@@ -223,12 +245,12 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
           </>
         }
         renderTarjeta={(m) => {
-          const meta = TIPO_META[m.tipo]
-          const Icon = meta.icon
+          const meta = TIPO_MOV_META[m.tipo]
+          const Icon = ICONO_TIPO[m.tipo]
           return (
             <>
               <div className="flex items-start justify-between gap-2">
-                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-body text-xs font-medium ${meta.cls}`}>
+                <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-body text-xs font-medium ${meta.badge}`}>
                   <Icon className="h-3.5 w-3.5" /> {meta.label}
                 </span>
                 <div className="flex shrink-0 items-center gap-1">

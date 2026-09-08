@@ -31,3 +31,27 @@ export const colorEtiqueta = (c?: string | null) => ETIQUETA_COLORES[c ?? 'gray'
 
 export interface Etiqueta { id: string; categoria_id: string; nombre: string; color: string | null; orden?: number }
 export interface Categoria { id: string; nombre: string; descripcion: string | null; color: string; multiple: boolean; orden?: number }
+
+// ── Filtros extra del panel ──────────────────────────────────────────────────
+// Otros filtros de la pantalla (tipo de movimiento, semana…) que el panel no
+// dibuja pero sí resume a la derecha y guarda dentro de las vistas rápidas.
+// Son datos planos porque los declara la página servidor.
+
+export interface OpcionFiltroExtra { label: string; badge?: string }
+
+export interface FiltroExtra {
+  /** Parámetro de URL donde vive el filtro, p.ej. 'mov' o 'semana'. */
+  clave: string
+  /** Nombre del grupo en el resumen, p.ej. 'Movimiento'. */
+  grupo: string
+  /** valor → cómo se muestra. Si falta el valor, se muestra tal cual. */
+  opciones?: Record<string, OpcionFiltroExtra>
+  /** Formato del valor cuando no hay diccionario de opciones. */
+  formato?: 'semana'
+}
+
+/** "2026-W35" → "Semana 35 · 2026". Devuelve el crudo si no tiene esa forma. */
+export function etiquetaSemana(valor: string): string {
+  const m = valor.match(/^(\d{4})-W(\d{2})$/)
+  return m ? `Semana ${Number(m[2])} · ${m[1]}` : valor
+}

@@ -222,7 +222,11 @@ export default async function OrdenesInsumoPage({
         <FiltroSemana />
       </Suspense>
       <Suspense fallback={null}>
-        <FiltroClasificacion categorias={categorias as Categoria[]} etiquetas={etiquetas as Etiqueta[]} />
+        <FiltroClasificacion
+          categorias={categorias as Categoria[]}
+          etiquetas={etiquetas as Etiqueta[]}
+          extras={[{ clave: 'semana', grupo: 'Semana', formato: 'semana' }]}
+        />
       </Suspense>
       <SobrePedidos items={sobrePedidos} />
       <OrdenesInsumoClient

@@ -5,6 +5,7 @@ import { Plus, ArrowLeftRight } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import type { Categoria, Etiqueta } from '@/lib/clasificacion'
+import { CLAVE_TIPO_MOV, TIPO_MOV_META } from '@/lib/movimientos'
 import { sedesPorClasificacion, leerFiltroClasif, cargarEtiquetas } from '@/lib/clasificacion-server'
 import { FiltroClasificacion } from '@/components/clasificacion/FiltroClasificacion'
 import { MovimientosClient, type MovRow } from './MovimientosClient'
@@ -27,6 +28,9 @@ export default async function MovimientosPage({
     sedesPorClasificacion(supabase, filtro),
     cargarEtiquetas(supabase),
   ])
+
+  /** Hay algún filtro puesto: cambia el mensaje de "sin datos". */
+  const hayFiltro = sedeIds !== null
 
   let query = supabase
     .from('movimientos')
@@ -64,7 +68,11 @@ export default async function MovimientosPage({
       </div>
 
       <Suspense fallback={null}>
-        <FiltroClasificacion categorias={categorias as Categoria[]} etiquetas={etiquetas as Etiqueta[]} />
+        <FiltroClasificacion
+          categorias={categorias as Categoria[]}
+          etiquetas={etiquetas as Etiqueta[]}
+          extras={[{ clave: CLAVE_TIPO_MOV, grupo: 'Movimiento', opciones: TIPO_MOV_META }]}
+        />
       </Suspense>
 
       {error && (
@@ -76,11 +84,20 @@ export default async function MovimientosPage({
       {movs.length === 0 ? (
         <div className="bg-white border border-gray-100 rounded-2xl p-12 text-center text-gray-400">
           <ArrowLeftRight className="w-10 h-10 mx-auto mb-3 text-gray-300" />
-          <p className="font-heading font-bold text-lg text-gray-600">Aún no hay movimientos</p>
-          <p className="font-body text-sm mt-1">Registra el primer movimiento para empezar la trazabilidad.</p>
-          <Link href="/movimientos/nuevo" className="inline-block mt-4 text-brand-green font-body font-semibold text-sm hover:underline">
-            Registrar movimiento →
-          </Link>
+          {hayFiltro ? (
+            <>
+              <p className="font-heading font-bold text-lg text-gray-600">Sin resultados</p>
+              <p className="font-body text-sm mt-1">Ningún movimiento coincide con los filtros aplicados.</p>
+            </>
+          ) : (
+            <>
+              <p className="font-heading font-bold text-lg text-gray-600">Aún no hay movimientos</p>
+              <p className="font-body text-sm mt-1">Registra el primer movimiento para empezar la trazabilidad.</p>
+              <Link href="/movimientos/nuevo" className="inline-block mt-4 text-brand-green font-body font-semibold text-sm hover:underline">
+                Registrar movimiento →
+              </Link>
+            </>
+          )}
         </div>
       ) : (
         <MovimientosClient movs={movs} puedeEliminar={perm.puede('eliminar_movimientos')} />
