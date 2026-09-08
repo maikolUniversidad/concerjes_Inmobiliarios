@@ -5,7 +5,7 @@ import {
   UploadCloud, History, ClipboardCheck, Barcode, PackageCheck, Split,
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
-  Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow,
+  Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -86,6 +86,7 @@ export const navigation: NavModule[] = [
     title: 'Gestión Humana',
     icon: Briefcase,
     items: [
+      { label: 'Planta de personal', href: '/gestion-humana/planta',   icon: UsersRound, permiso: 'ver_planta_personal' },
       { label: 'Personas',      href: '/gestion-humana/personas',      icon: Contact, permiso: 'ver_personas' },
       { label: 'Postulaciones', href: '/gestion-humana/postulaciones', icon: ClipboardList, permiso: 'ver_postulaciones' },
       { label: 'Documentos',    href: '/gestion-humana/documentos',    icon: FolderTree, permiso: 'ver_documentos_rrhh' },

@@ -10,7 +10,7 @@ import { createClient } from '@/lib/supabase/client'
 export default function LoginPage() {
   const [show, setShow]         = useState(false)
   const [loading, setLoading]   = useState(false)
-  const [email, setEmail]       = useState('')
+  const [usuario, setUsuario]   = useState('')
   const [password, setPassword] = useState('')
   const [error, setError]       = useState('')
   const router = useRouter()
@@ -20,13 +20,31 @@ export default function LoginPage() {
     setError('')
     setLoading(true)
 
+    // Los colaboradores de planta entran con su cédula: nómina no guarda correo
+    // personal, así que su cuenta tiene uno sintético. Si lo que escribieron no
+    // es un correo, se resuelve contra la ficha antes de intentar el acceso.
+    let correo = usuario.trim()
+    if (!correo.includes('@')) {
+      try {
+        const r = await fetch('/api/auth/resolver-acceso', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ documento: correo }),
+        })
+        const j = (await r.json()) as { email: string | null }
+        if (j.email) correo = j.email
+      } catch {
+        /* si el resolutor falla, se intenta con lo que escribieron */
+      }
+    }
+
     const supabase = createClient()
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    const { error: authError } = await supabase.auth.signInWithPassword({ email: correo, password })
 
     if (authError) {
       setError(
         authError.message.includes('Invalid login credentials')
-          ? 'Correo o contraseña incorrectos.'
+          ? 'Usuario o contraseña incorrectos.'
           : authError.message.includes('Email not confirmed')
           ? 'Correo no confirmado. Contacta al administrador.'
           : 'Error al iniciar sesión. Intenta de nuevo.'
@@ -84,16 +102,17 @@ export default function LoginPage() {
             <form onSubmit={handleLogin} className="space-y-5">
               <div>
                 <label className="font-body text-sm font-semibold text-gray-700 block mb-1.5">
-                  Correo electrónico
+                  Correo o cédula
                 </label>
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type="text"
+                  inputMode="email"
+                  value={usuario}
+                  onChange={(e) => setUsuario(e.target.value)}
                   required
-                  autoComplete="email"
+                  autoComplete="username"
                   className="w-full border border-gray-200 rounded-xl px-4 py-3 font-body text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-green/30 focus:border-brand-green transition-colors placeholder:text-gray-400"
-                  placeholder="usuario@conserjesinmobiliarios.com"
+                  placeholder="usuario@conserjesinmobiliarios.com o tu cédula"
                 />
               </div>
 

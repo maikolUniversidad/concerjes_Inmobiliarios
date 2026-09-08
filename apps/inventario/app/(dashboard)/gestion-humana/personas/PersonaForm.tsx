@@ -25,7 +25,9 @@ interface Props {
   onDeleted: (id: string) => void
 }
 
-const SELECT = `id, tipo_doc, documento, nombres, apellidos, cargo, empresa_usuaria_id, sede_id, fecha_ingreso, estado, email, telefono, direccion, eps, arl, usuario_id, created_at, empresas_usuarias(id, nombre), sedes(id, nombre), cuenta:usuarios(id, email, activo, rol_id, roles(id, nombre))`
+// Debe devolver la MISMA forma que la consulta de la pantalla: la fila que sale
+// de aquí reemplaza a la de la lista mientras llega el refresco del servidor.
+const SELECT = `id, tipo_doc, documento, nombres, apellidos, nombre_completo, cargo, empresa_usuaria_id, sede_id, fecha_ingreso, fecha_retiro, estado, email, telefono, direccion, eps, arl, usuario_id, created_at, ciudad, origen, empresas_usuarias(id, nombre), sedes(id, nombre), centros_costo(id, codigo), cuenta:usuarios(id, email, activo, rol_id, roles(id, nombre))`
 
 /** Contraseña temporal legible (para mostrar y copiar). */
 function generarPassword(): string {

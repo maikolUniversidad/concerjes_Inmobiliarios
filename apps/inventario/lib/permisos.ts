@@ -108,6 +108,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_tipos_documentales', label: 'Gestionar árbol de tipos documentales' },
       { key: 'ver_postulaciones',         label: 'Ver postulaciones (registro de vacantes)' },
       { key: 'gestionar_postulaciones',   label: 'Gestionar postulaciones y verificar documentos' },
+      { key: 'ver_planta_personal',       label: 'Ver la planta de personal (nómina y retiros)' },
+      { key: 'gestionar_planta_personal', label: 'Mantener la planta: centros de costo y vinculaciones' },
     ],
   },
   {

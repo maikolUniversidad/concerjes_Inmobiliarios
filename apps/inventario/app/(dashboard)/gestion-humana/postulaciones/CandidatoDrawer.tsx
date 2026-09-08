@@ -43,6 +43,22 @@ function cruces(ocr: any, cand: CandidatoRow, grupo: string | undefined): { labe
 }
 interface ConsentRow { id: string; tipo: string; otorgado: boolean; texto_version: string; created_at: string }
 
+/** Una fila de `historial_laboral(documento)`: un paso por la empresa. */
+interface HistorialFila {
+  vinculacion_id: string
+  cargo: string | null
+  centro_costo: string | null
+  ciudad: string | null
+  tipo_contrato: string | null
+  fecha_ingreso: string | null
+  fecha_retiro: string | null
+  dias_trabajados: number | null
+  estado: string
+}
+
+const diaCorto = (s: string | null) =>
+  s ? new Date(s).toLocaleDateString('es-CO', { year: 'numeric', month: 'short' }) : '—'
+
 interface Props {
   candidato: CandidatoRow
   puedeGestionar: boolean
@@ -72,6 +88,9 @@ export function CandidatoDrawer({
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
   const [rolId, setRolId] = useState<string>('')
   const [rolCargado, setRolCargado] = useState(false)
+  // Historial laboral: si el candidato ya trabajó con nosotros, hay que verlo
+  // ANTES de decidir. Sale de la planta de personal, cruzada por documento.
+  const [historial, setHistorial] = useState<HistorialFila[] | null>(null)
 
   const tipoMap = new Map(tipos.map((t) => [t.id, t]))
 
@@ -86,6 +105,14 @@ export function CandidatoDrawer({
       if (!vivo) return
       setDocs(d.data ?? []); setConsents(c.data ?? []); setDireccion(dir.data ?? null)
       setCargando(false)
+
+      // ¿Ya trabajó con nosotros? La función cruza por documento contra la
+      // planta, así que responde aunque la ficha se haya creado por nómina y no
+      // por este formulario.
+      if (candidato.numero_documento) {
+        const { data: h } = await sb.rpc('historial_laboral', { p_documento: candidato.numero_documento })
+        if (vivo) setHistorial((h ?? []) as HistorialFila[])
+      }
 
       // Rol de la cuenta de plataforma del candidato (si ya terminó su registro)
       if (candidato.auth_uid) {
@@ -102,7 +129,7 @@ export function CandidatoDrawer({
       }
     })()
     return () => { vivo = false }
-  }, [candidato.id, candidato.foto_perfil_path, candidato.auth_uid, sb])
+  }, [candidato.id, candidato.foto_perfil_path, candidato.auth_uid, candidato.numero_documento, sb])
 
   async function guardarRol() {
     setGuardando(true)
@@ -287,6 +314,45 @@ export function CandidatoDrawer({
                 </div>
               </div>
             </div>
+          )}
+
+          {/* Ya trabajó con nosotros */}
+          {historial && historial.length > 0 && (
+            <section>
+              <h3 className="mb-1 flex items-center gap-1.5 font-heading text-sm font-bold text-gray-700">
+                <Briefcase className="h-4 w-4 text-brand-green" /> Ya trabajó con nosotros
+              </h3>
+              <p className="mb-2 text-xs text-gray-500">
+                {historial.length === 1 ? 'Una vinculación' : `${historial.length} vinculaciones`} en la planta de personal.
+              </p>
+              <ol className="space-y-1.5">
+                {historial.map((h) => (
+                  <li key={h.vinculacion_id} className="rounded-lg border border-gray-100 bg-gray-50 p-2.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-sm font-semibold text-gray-900">{h.cargo ?? 'Cargo no registrado'}</p>
+                      <span className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                        h.estado === 'ACTIVA' ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
+                      }`}>
+                        {h.estado === 'ACTIVA' ? 'Vigente' : 'Terminada'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">
+                      {h.centro_costo ?? 'Sin centro de costos'}{h.ciudad ? ` · ${h.ciudad}` : ''}
+                    </p>
+                    <p className="text-xs text-gray-400">
+                      {diaCorto(h.fecha_ingreso)} → {h.fecha_retiro ? diaCorto(h.fecha_retiro) : 'hoy'}
+                      {h.dias_trabajados !== null ? ` · ${h.dias_trabajados} días` : ''}
+                    </p>
+                  </li>
+                ))}
+              </ol>
+              {historial.some((h) => h.estado === 'ACTIVA') && (
+                <p className="mt-2 rounded-lg border border-amber-100 bg-amber-50 p-2 text-xs text-amber-900">
+                  Ojo: esta persona figura <strong>vinculada hoy</strong>. Confirma con nómina antes de
+                  procesar la postulación.
+                </p>
+              )}
+            </section>
           )}
 
           {/* Datos */}

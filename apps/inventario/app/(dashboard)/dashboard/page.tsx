@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import {
   Package, ArrowLeftRight, AlertTriangle, TrendingUp, Sparkles, Boxes,
   ClipboardList, PackageCheck, Truck, ClipboardCheck, CheckCircle2, ChevronRight,
@@ -34,6 +35,13 @@ export default async function DashboardPage() {
   const verPedidos = perm.puede('ver_ordenes_insumo') || perm.puede('ver_alistamiento')
   const verInventario = perm.puede('ver_stock') || perm.puede('ver_productos')
   const verMovs = perm.puede('ver_movimientos')
+
+  // Un colaborador de planta (rol «Empleado») no tiene nada que hacer en el
+  // tablero de inventario: sin ninguno de estos permisos vería una página en
+  // blanco. Se le lleva a su carnet, que sí es su pantalla.
+  if (!verPedidos && !verInventario && !verMovs && !perm.puede('ver_reportes')) {
+    redirect('/carnet')
+  }
 
   // ── Pedidos (pipeline de órdenes de insumo) ──────────────────────────────
   let ped = { porAlistar: 0, enAlistamiento: 0, listos: 0, porEntregar: 0, recibidos: 0 }
