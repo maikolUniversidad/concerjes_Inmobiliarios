@@ -70,6 +70,25 @@ y `planta_resumen()` (los cinco números de la cabecera).
 * `persona_vinculaciones` tiene `contrato_id` y `obra_id` listos para que, cuando
   el ATS genere un contrato, la vinculación nazca de ahí en vez de un Excel.
 
+## Dónde se ve
+
+| Pantalla | Qué muestra |
+|---|---|
+| **Gestión Humana → Planta de personal** (`/gestion-humana/planta`) | resumen, filtros por ciudad y centro de costos, fichas por revisar, historial laboral por persona |
+| **Gestión Humana → Personas** (`/gestion-humana/personas`) | el CRUD de siempre, ahora con **tabla como vista base** y tarjetas de opción |
+| **Gestión Humana → Postulaciones** → abrir un candidato | sección «Ya trabajó con nosotros» con su historial |
+| `/login` | acepta cédula además de correo |
+| `/carnet` | donde aterriza un empleado al entrar |
+| `/roles` | los dos permisos nuevos, en el grupo Gestión Humana |
+
+**Personas pasó a paginación de servidor.** Antes pedía todas las fichas de una
+y filtraba en memoria. Eso funcionaba con 79 personas; con 6.639 dejó de
+funcionar en silencio, porque **PostgREST corta toda respuesta en 1.000 filas
+sin error y sin aviso**: la pantalla decía «1000 de 1000 personas» y las otras
+5.639 simplemente no existían para quien la usaba. Ahora la búsqueda, el filtro
+por estado y la paginación son del servidor, el contador dice el total real, y
+la vista (tabla o tarjetas) viaja en la URL como los demás filtros.
+
 ## Programación de personal
 
 **El módulo de programación no existe todavía.** Lo que queda listo es su
