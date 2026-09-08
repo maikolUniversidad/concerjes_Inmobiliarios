@@ -81,13 +81,17 @@ y `planta_resumen()` (los cinco números de la cabecera).
 | `/carnet` | donde aterriza un empleado al entrar |
 | `/roles` | los dos permisos nuevos, en el grupo Gestión Humana |
 
-**Personas pasó a paginación de servidor.** Antes pedía todas las fichas de una
-y filtraba en memoria. Eso funcionaba con 79 personas; con 6.639 dejó de
-funcionar en silencio, porque **PostgREST corta toda respuesta en 1.000 filas
-sin error y sin aviso**: la pantalla decía «1000 de 1000 personas» y las otras
-5.639 simplemente no existían para quien la usaba. Ahora la búsqueda, el filtro
-por estado y la paginación son del servidor, el contador dice el total real, y
-la vista (tabla o tarjetas) viaja en la URL como los demás filtros.
+**Las dos pantallas usan `TablaEstandar`** (`components/ui/tabla`), la misma
+tabla de Productos: buscador, filtro por columna, orden, selección tipo hoja de
+cálculo, copiar, Excel y el par Tabla/Tarjetas.
+
+**Personas mostraba «1000 de 1000».** Pedía todas las fichas en una sola
+consulta, y **PostgREST corta toda respuesta en 1.000 filas sin error y sin
+aviso**: con 79 personas nadie lo notaba; con 6.639, las otras 5.639 no existían
+para quien usaba la pantalla. Ahora las dos pantallas traen el maestro completo
+con `traerTodo` (`lib/supabase/paginado.ts`) y la tabla se encarga de filtrar y
+paginar. Son 598 KB comprimidos en Personas y 423 KB en Planta — se midió antes
+de decidirlo.
 
 ## Programación de personal
 

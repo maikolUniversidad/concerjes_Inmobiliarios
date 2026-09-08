@@ -655,8 +655,12 @@ export function TablaEstandar<T>({
     const titulos = de('titulo')
     const subtitulos = de('subtitulo')
     const badges = de('badge')
-    const cuerpo = de('cuerpo')
-    const metas = de('meta')
+    // Una etiqueta sin valor («Cargo:» y nada más) solo mete ruido en la
+    // tarjeta, y en tablas con filas incompletas —la planta de personal, donde
+    // los retirados no traen cargo ni centro de costos— serían casi todas.
+    const conValor = (c: ColumnaTabla<T>) => textoDeValor(c.valor(fila)).trim() !== ''
+    const cuerpo = de('cuerpo').filter(conValor)
+    const metas = de('meta').filter(conValor)
     return (
       <>
         <div className="flex items-start justify-between gap-2">
