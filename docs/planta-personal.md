@@ -138,13 +138,32 @@ cuya contraseña es la cédula sería una escalada de privilegios.
 
 ## ⚠️ Lo que falta decidir
 
-### 1. La contraseña es la cédula, y la cédula no es un secreto
+*(1 ya está resuelto; quedan 2, 3, 4 y 5.)*
 
-Aparece en la nómina, en los informes y en el carnet. Sirve para el primer
-ingreso, no como clave. Cada cuenta queda con `debe_cambiar_password: true` en
-su `user_metadata`, **pero todavía no hay pantalla que lo exija**. Mientras no
-la haya, cualquiera que conozca una cédula de la empresa puede entrar como esa
-persona.
+### 1. La contraseña temporal ~~es la cédula~~ ya se cambia de entrada — HECHO
+
+La cédula aparece en la nómina, en los informes y en el carnet, así que sirve
+para el primer ingreso y no como clave. Ahora **`/cambiar-clave` es obligatoria**:
+
+* Toda cuenta que nace con una contraseña que otro conoce lleva
+  `debe_cambiar_password: true` — las 859 de nómina, las que crea el formulario
+  de Gestión Humana, las del cargue masivo, y también cuando un administrador
+  **repone** la contraseña de alguien.
+* El bloqueo vive en `proxy.ts`, no en cada página: con la marca puesta,
+  **ninguna ruta** se abre hasta cambiarla. Solo quedan libres el sitio público,
+  `/login` y las APIs.
+* La pantalla exige 8 caracteres, letra y número, y **prohíbe que la nueva sea
+  el documento, el usuario o puro dígito** — que es justo de lo que se trata.
+* El cambio y el apagado de la marca van en **un solo llamado**
+  (`updateUser({ password, data })`): separarlos dejaría a alguien girando para
+  siempre en esa pantalla si el segundo fallara.
+* `/cambiar-clave` también queda disponible a voluntad, con enlace desde
+  **Mi Perfil**.
+
+Verificado de punta a punta con una cuenta desechable: con la marca, `/dashboard`,
+`/carnet` y `/gestion-humana/planta` redirigen a la pantalla; después del cambio
+la contraseña vieja deja de servir, la marca queda en `false` sin perder el resto
+de la metadata, y la navegación se abre.
 
 ### 2. ~78 tablas se leen con `USING (true)`
 

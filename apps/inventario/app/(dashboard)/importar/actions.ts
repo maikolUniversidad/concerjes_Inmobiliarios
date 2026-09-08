@@ -73,7 +73,9 @@ async function provisionCuenta(ctx: PersonasCtx, datos: Record<string, unknown>)
     email: loginEmail,
     password: pwdFor(documento),
     email_confirm: true,
-    user_metadata: { nombre },
+    // La contraseña del cargue masivo es el documento, que no es un secreto:
+    // se exige cambiarla en el primer ingreso (lo bloquea proxy.ts).
+    user_metadata: { nombre, debe_cambiar_password: true },
   })
 
   let uid: string | undefined = authData?.user?.id

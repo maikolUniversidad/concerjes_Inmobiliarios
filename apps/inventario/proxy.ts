@@ -25,6 +25,7 @@ export async function proxy(request: NextRequest) {
 
   const path = request.nextUrl.pathname
   const isAuthRoute   = path.startsWith('/login')
+  const isClaveRoute  = path.startsWith('/cambiar-clave')
   // Rutas públicas: landing, APIs y el flujo público de Registro de Vacantes.
   const isPublicRoute =
     path === '/' ||
@@ -38,11 +39,25 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
+  // Cuenta con contraseña temporal: no entra a ningún lado hasta cambiarla.
+  // El bloqueo va aquí y no en cada página porque una contraseña que otro
+  // conoce (la cédula, para los colaboradores de planta) deja de ser un
+  // problema solo cuando NINGUNA ruta se puede abrir con ella.
+  if (user?.user_metadata?.debe_cambiar_password === true
+      && !isClaveRoute && !isPublicRoute && !isAuthRoute) {
+    const url = request.nextUrl.clone()
+    url.pathname = '/cambiar-clave'
+    url.search = ''
+    return NextResponse.redirect(url)
+  }
+
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/dashboard'
     return NextResponse.redirect(url)
   }
+  // `/cambiar-clave` queda abierta para cualquiera con sesión: obligatoria para
+  // quien tiene contraseña temporal, y disponible para el que quiera cambiarla.
 
   return supabaseResponse
 }

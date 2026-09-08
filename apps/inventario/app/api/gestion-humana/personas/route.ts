@@ -60,7 +60,10 @@ async function crearCuenta(a: CrearCuentaArgs): Promise<{ id: string } | { error
     email: a.loginEmail,
     password: a.password,
     email_confirm: true,
-    user_metadata: { nombre: a.nombre },
+    // La contraseña que sale de aquí la conoce quien crea la cuenta (y por
+    // defecto es el documento). `debe_cambiar_password` obliga a cambiarla en
+    // el primer ingreso: el proxy no deja abrir ninguna ruta hasta que pase.
+    user_metadata: { nombre: a.nombre, debe_cambiar_password: true },
   })
   if (authErr || !authData.user) {
     const m = (authErr?.message ?? '').toLowerCase()
@@ -210,7 +213,14 @@ export async function PUT(req: NextRequest) {
       // Actualizar la cuenta existente.
       const uid = persona.usuario_id as string
       if (b.password && String(b.password).trim()) {
-        const { error: pwErr } = await sb.auth.admin.updateUserById(uid, { password: String(b.password).trim() })
+        // Reponer la contraseña desde el administrativo también deja una clave
+        // que otro conoce, así que vuelve a exigir el cambio al entrar. La
+        // metadata se lee primero para no borrar el resto de sus llaves.
+        const { data: actual } = await sb.auth.admin.getUserById(uid)
+        const { error: pwErr } = await sb.auth.admin.updateUserById(uid, {
+          password: String(b.password).trim(),
+          user_metadata: { ...(actual?.user?.user_metadata ?? {}), debe_cambiar_password: true },
+        })
         if (pwErr) return NextResponse.json({ error: 'No se pudo cambiar la contraseña: ' + pwErr.message }, { status: 400 })
       }
       const patch: Record<string, unknown> = {}
