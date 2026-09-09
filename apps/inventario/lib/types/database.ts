@@ -248,6 +248,8 @@ export interface OrdenInsumo {
   despachado_at: string | null
   video_path: string | null
   video_mime: string | null
+  /** Segundos del video de despacho. NULL = grabado antes de que se midiera. */
+  video_duracion_s: number | null
   // Módulo conductor
   conductor_id: string | null
   tomado_ruta_at: string | null

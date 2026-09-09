@@ -27,7 +27,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       id, numero, estado, periodo, observacion, created_at, aprobado_at, creado_por,
       fecha_entrega_pactada, urgente,
       aprobado_solicitante_at, aprobado_coordinador_at, recibido_at, recibido_obs,
-      alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime,
+      alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime, video_duracion_s,
       tipo_despacho, transportadora_nombre, transportadora_guia, sede_id,
       conductor:usuarios!ordenes_insumo_conductor_id_fkey ( nombre ),
       sede:sedes ( nombre, direccion, grupo:grupos_contrato ( nombre ) ),

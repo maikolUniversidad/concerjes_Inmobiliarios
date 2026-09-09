@@ -660,7 +660,8 @@ export interface DespachoInfo {
 }
 
 export async function despacharOrden(
-  ordenId: string, videoPath: string, videoMime: string | null, despacho?: DespachoInfo,
+  ordenId: string, videoPath: string, videoMime: string | null,
+  videoDuracion: number | null, despacho?: DespachoInfo,
 ): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -743,6 +744,9 @@ export async function despacharOrden(
   const { error: updErr } = await sb.from('ordenes_insumo').update({
     estado: 'DESPACHADO' as const, despachado_por: user.id, despachado_at: new Date().toISOString(),
     video_path: videoPath, video_mime: videoMime,
+    // La duración se guarda para poder distinguir un despacho con evidencia de
+    // uno con un archivo vacío, sin tener que abrir el video a mano.
+    video_duracion_s: videoDuracion,
     tipo_despacho: tipo,
     conductor_id: esPropio ? despacho?.conductorId ?? null : null,
     transportadora_nombre: esPropio ? null : despacho?.transportadoraNombre?.trim() ?? null,

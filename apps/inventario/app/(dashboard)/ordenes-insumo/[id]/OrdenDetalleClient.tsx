@@ -13,6 +13,7 @@ import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { metaEstado } from '../OrdenesInsumoClient'
 import { actualizarItemAlistamiento, despacharOrden, anularOrden } from '../actions'
 import { VideoDespacho } from './VideoDespacho'
+import { VideoGrabado } from '@/components/ui/VideoGrabado'
 import { ProductoThumb } from './ProductoThumb'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
@@ -37,6 +38,7 @@ interface Orden {
   created_at: string
   despachado_at: string | null
   video_path: string | null
+  video_duracion_s: number | null
   tipo_despacho: string | null
   transportadora_nombre: string | null
   transportadora_guia: string | null
@@ -148,10 +150,10 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     : tipoDespacho === 'TRANSPORTADORA' ? Boolean(transpNombre.trim())
     : false
 
-  async function onVideoListo(path: string, mime: string | null) {
+  async function onVideoListo(path: string, mime: string | null, duracion: number | null) {
     setShowVideo(false)
     setDespachando(true)
-    const res = await despacharOrden(orden.id, path, mime, {
+    const res = await despacharOrden(orden.id, path, mime, duracion, {
       tipo: tipoDespacho as TipoDespacho,
       conductorId: tipoDespacho === 'CONDUCTOR_PROPIO' ? conductorId : null,
       transportadoraNombre: tipoDespacho === 'TRANSPORTADORA' ? transpNombre : null,
@@ -331,7 +333,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
               </div>
             </div>
             {videoUrl ? (
-              <video src={videoUrl} controls playsInline className="w-full rounded-xl bg-black aspect-video" />
+              <VideoGrabado src={videoUrl} duracion={orden.video_duracion_s} />
             ) : orden.video_path ? (
               <p className="font-body text-xs text-gray-400 flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Cargando video…</p>
             ) : (
