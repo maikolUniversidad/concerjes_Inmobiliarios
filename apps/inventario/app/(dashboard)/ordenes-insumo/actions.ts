@@ -840,6 +840,66 @@ export async function guardarDireccionSede(sedeId: string, direccion: string): P
   return { ok: true }
 }
 
+/**
+ * Cambia la sede de destino de una orden ya creada (típicamente porque se
+ * eligió mal al crearla). Solo cambia el destino: los productos, cantidades y
+ * el alistamiento quedan igual — lo que sí queda desfasado es la referencia de
+ * "máximo parametrizado" de cada ítem, que era la de la sede anterior.
+ * El cambio queda en la trazabilidad con sede anterior y nueva.
+ */
+export async function actualizarSedeOrden(ordenId: string, sedeId: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('crear_ordenes_insumo') && !perm.puede('aprobar_ordenes_insumo')) {
+    return { error: 'No tienes permiso para cambiar la sede de la orden.' }
+  }
+  if (!sedeId) return { error: 'Selecciona una sede.' }
+  const sb = supabase as DB
+
+  const { data: orden } = await sb.from('ordenes_insumo')
+    .select('id, numero, estado, sede_id, sede:sedes ( nombre )').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  // Órdenes cerradas: el pedido ya llegó a su destino, cambiarlo falsearía el histórico.
+  if (['ENTREGADO', 'RECIBIDO', 'ANULADA'].includes(orden.estado)) {
+    return { error: 'La orden ya está cerrada: no se puede cambiar la sede.' }
+  }
+  if (orden.sede_id === sedeId) return { ok: true }
+
+  const { data: nueva } = await sb.from('sedes').select('id, nombre, activo').eq('id', sedeId).single()
+  if (!nueva) return { error: 'La sede seleccionada no existe.' }
+  if (nueva.activo === false) return { error: 'Esa sede está inactiva.' }
+
+  const { error } = await sb.from('ordenes_insumo').update({ sede_id: sedeId }).eq('id', ordenId)
+  if (error) {
+    if ((error.message ?? '').includes('row-level security')) return { error: 'No tienes permisos para editar esta orden.' }
+    return { error: 'No se pudo cambiar la sede: ' + error.message }
+  }
+
+  const antes = orden.sede?.nombre ?? 'sin sede'
+  await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'SEDE',
+    p_mensaje: `Sede de destino cambiada: ${antes} → ${nueva.nombre}.`,
+    p_detalle: { sede_anterior_id: orden.sede_id, sede_anterior: antes, sede_nueva_id: sedeId, sede_nueva: nueva.nombre },
+  })
+
+  // Si la orden ya salió de borrador, el cambio de destino le importa a todos
+  // los que la van a alistar, despachar o recibir.
+  if (!['BORRADOR', 'CAMBIOS_SOLICITADOS'].includes(orden.estado)) {
+    const quien = await nombreUsuario(sb, user.id)
+    await emitirNotificacion(sb, {
+      codigo: 'SISTEMA',
+      titulo: `Cambio de sede en la orden ${orden.numero}`,
+      descripcion: `${quien} cambió el destino: ${antes} → ${nueva.nombre}`,
+      entidad: 'ordenes_insumo', entidadId: ordenId,
+      enlace: `/ordenes-insumo/${ordenId}`,
+    })
+  }
+
+  revalidatePath(`/ordenes-insumo/${ordenId}`); revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return { ok: true }
+}
+
 /** Fija/actualiza la urgencia y la fecha de entrega pactada de una orden. */
 export async function actualizarUrgencia(
   ordenId: string, patch: { urgente?: boolean; fechaEntrega?: string | null },

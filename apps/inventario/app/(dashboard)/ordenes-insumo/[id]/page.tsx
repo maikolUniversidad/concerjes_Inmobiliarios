@@ -9,6 +9,7 @@ import { FlujoOrden, type EventoOrden } from './FlujoOrden'
 import { DocumentosPDF, type DatosDoc } from './DocumentosPDF'
 import { BorrarOrdenBtn } from './BorrarOrdenBtn'
 import { UrgenciaEditor } from './UrgenciaEditor'
+import { SedeEditor } from './SedeEditor'
 import { DevolucionOrden } from './DevolucionOrden'
 import { EnvioRestante } from './EnvioRestante'
 
@@ -71,6 +72,12 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo'))
     && !['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
 
+  // La sede de destino se puede corregir mientras el pedido no haya llegado
+  // (se elige mal al crear la orden más seguido de lo que parece).
+  const puedeEditarSede =
+    (perm.puede('crear_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo'))
+    && !['ENTREGADO', 'RECIBIDO', 'ANULADA'].includes(estado)
+
   // La prioridad (urgente / fecha de entrega) se puede ajustar mientras la orden
   // siga en curso (no recibida ni anulada).
   const puedeEditarUrgencia =
@@ -127,6 +134,15 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
           <p className="mt-2 font-body text-sm text-amber-900/90 whitespace-pre-wrap">{o.observacion}</p>
         </div>
       )}
+      <SedeEditor
+        ordenId={id}
+        sedeId={o.sede_id ?? null}
+        sedeNombre={o.sede?.nombre ?? null}
+        grupo={o.sede?.grupo?.nombre ?? null}
+        direccion={o.sede?.direccion ?? null}
+        estado={estado}
+        puedeEditar={puedeEditarSede}
+      />
       <UrgenciaEditor
         ordenId={id}
         estado={estado}
