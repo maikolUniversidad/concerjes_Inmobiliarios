@@ -3,9 +3,10 @@
 import { useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Image from 'next/image'
+import Link from 'next/link'
 import {
   Wrench, MapPin, User, Tag, Camera, Loader2, Send, Clock, RefreshCw, PencilLine,
-  GitBranch, Image as ImageIcon, MessageSquare, FilePlus2, MoveRight,
+  GitBranch, Image as ImageIcon, MessageSquare, FilePlus2, MoveRight, HardHat, ChevronRight, ClipboardCheck, Gauge,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -14,6 +15,7 @@ import { ESTADOS_MAQ, ESTADO_MAQ_META, subirFotoMaq } from '../estados'
 import { MaquinariaForm } from '../MaquinariaForm'
 import type { MaquinariaRow, SedeOpt as FormSedeOpt } from '../MaquinariaClient'
 import { MaquinariaQR } from './MaquinariaQR'
+import { CONDICION_META } from '@/lib/mantenimiento'
 
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 
@@ -23,6 +25,7 @@ export interface MaqDetalle {
   ubicacion_sede_id: string | null; ubicacion_texto: string | null; responsable: string | null
   imagen_url: string | null; fecha_adquisicion: string | null; valor: number | null
   observaciones: string | null; created_at: string; sedes: { id: string; nombre: string } | null
+  condicion?: string; frecuencia_mant_dias?: number | null; ultimo_mant_at?: string | null; proximo_mant?: string | null
 }
 export interface MaqEvento {
   id: string; tipo: string; estado_anterior: string | null; estado_nuevo: string | null
@@ -38,6 +41,8 @@ const EVENTO_ICON: Record<string, { icon: typeof Wrench; cls: string }> = {
   FOTO: { icon: ImageIcon, cls: 'bg-emerald-100 text-emerald-600' },
   MANTENIMIENTO: { icon: Wrench, cls: 'bg-amber-100 text-amber-600' },
   COMENTARIO: { icon: MessageSquare, cls: 'bg-purple-100 text-purple-600' },
+  ACTIVIDAD: { icon: ClipboardCheck, cls: 'bg-teal-100 text-teal-600' },
+  CONDICION: { icon: Gauge, cls: 'bg-pink-100 text-pink-600' },
 }
 const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
 
@@ -134,6 +139,21 @@ export function MaquinariaDetalleClient({ maquina, eventos, sedes, puedeGestiona
           </div>
         </div>
       </div>
+
+      {/* Mantenimiento */}
+      <Link href={`/equipo/${maquina.id}`}
+        className="flex items-center gap-3 rounded-2xl border border-amber-100 bg-amber-50/60 p-4 shadow-sm hover:border-amber-300">
+        <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700 shrink-0"><HardHat className="w-5 h-5" /></span>
+        <div className="min-w-0 flex-1">
+          <p className="font-heading font-semibold text-sm text-gray-900">Mantenimiento del equipo</p>
+          <p className="text-xs text-gray-600">
+            Condición {(CONDICION_META[maquina.condicion ?? 'BUENA']?.label ?? 'Buena').toLowerCase()}
+            {maquina.proximo_mant ? ` · próximo preventivo ${new Date(maquina.proximo_mant + 'T00:00:00').toLocaleDateString('es-CO')}` : ' · sin plan preventivo'}
+            {' · '}tickets, actividades y soporte remoto
+          </p>
+        </div>
+        <ChevronRight className="w-4 h-4 text-amber-500 shrink-0" />
+      </Link>
 
       {/* Código QR */}
       <MaquinariaQR id={maquina.id} codigo={maquina.codigo} nombre={maquina.nombre} />

@@ -786,6 +786,7 @@ export const ESTADO_PARADA_LABELS: Record<EstadoParada, { label: string; color: 
 
 // ── Control de Maquinaria ─────────────────────────────────────────────────────
 export type EstadoMaquinaria = 'OPERATIVA' | 'EN_USO' | 'MANTENIMIENTO' | 'DANADA' | 'BAJA'
+export type CondicionMaquinaria = 'BUENA' | 'REGULAR' | 'MALA'
 
 export interface Maquinaria {
   id: string
@@ -804,6 +805,10 @@ export interface Maquinaria {
   valor: number | null
   observaciones: string | null
   activo: boolean
+  condicion: CondicionMaquinaria
+  frecuencia_mant_dias: number | null
+  ultimo_mant_at: string | null
+  proximo_mant: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -822,6 +827,74 @@ export interface MaquinariaEvento {
   detalle: Record<string, unknown> | null
   usuario_id: string | null
   usuario_email: string | null
+  usuario_nombre: string | null
+  ticket_id: string | null
+  created_at: string
+}
+
+// ── Mantenimiento de maquinaria ──────────────────────────────────────────────
+export type EstadoTicketMant = 'ABIERTO' | 'RECIBIDO' | 'EN_PROCESO' | 'EN_ESPERA' | 'RESUELTO' | 'CERRADO' | 'CANCELADO'
+export type TipoTicketMant = 'CORRECTIVO' | 'PREVENTIVO' | 'INSPECCION' | 'SOPORTE_REMOTO'
+export type PrioridadMant = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA'
+
+export interface MantenimientoTicket {
+  id: string
+  numero: string
+  maquinaria_id: string
+  sede_id: string | null
+  tipo: TipoTicketMant
+  prioridad: PrioridadMant
+  estado: EstadoTicketMant
+  titulo: string
+  descripcion: string | null
+  estado_equipo_reportado: EstadoMaquinaria | null
+  fotos: string[]
+  programado_para: string | null
+  reportado_por: string | null
+  reportado_nombre: string | null
+  asignado_a: string | null
+  asignado_nombre: string | null
+  recibido_nombre: string | null
+  recibido_por: string | null
+  recibido_at: string | null
+  iniciado_at: string | null
+  resuelto_at: string | null
+  cerrado_at: string | null
+  diagnostico: string | null
+  solucion: string | null
+  costo: number | null
+  estado_equipo_final: EstadoMaquinaria | null
+  ultimo_mensaje_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MantenimientoMensaje {
+  id: string
+  ticket_id: string
+  usuario_id: string | null
+  usuario_nombre: string | null
+  tipo: 'MENSAJE' | 'ADJUNTO' | 'SISTEMA'
+  mensaje: string | null
+  adjunto_path: string | null
+  adjunto_nombre: string | null
+  adjunto_mime: string | null
+  adjunto_bytes: number | null
+  created_at: string
+}
+
+export interface MantenimientoActividad {
+  id: string
+  maquinaria_id: string
+  ticket_id: string | null
+  sede_id: string | null
+  tipo: string
+  resultado: 'OK' | 'NOVEDAD'
+  descripcion: string | null
+  checklist: { item: string; ok: boolean }[]
+  condicion: CondicionMaquinaria | null
+  fotos: string[]
+  usuario_id: string | null
   usuario_nombre: string | null
   created_at: string
 }
@@ -995,6 +1068,9 @@ export type Database = {
     Tables: {
       maquinaria: { Row: Maquinaria; Insert: Partial<Maquinaria>; Update: Partial<Maquinaria> }
       maquinaria_eventos: { Row: MaquinariaEvento; Insert: Partial<MaquinariaEvento>; Update: Partial<MaquinariaEvento> }
+      mantenimiento_tickets: { Row: MantenimientoTicket; Insert: Partial<MantenimientoTicket>; Update: Partial<MantenimientoTicket> }
+      mantenimiento_mensajes: { Row: MantenimientoMensaje; Insert: Partial<MantenimientoMensaje>; Update: Partial<MantenimientoMensaje> }
+      mantenimiento_actividades: { Row: MantenimientoActividad; Insert: Partial<MantenimientoActividad>; Update: Partial<MantenimientoActividad> }
       empresas_usuarias: { Row: EmpresaUsuaria; Insert: Partial<EmpresaUsuaria>; Update: Partial<EmpresaUsuaria> }
       personas: { Row: Persona; Insert: Partial<Persona>; Update: Partial<Persona> }
       tipos_documentales: { Row: TipoDocumental; Insert: Partial<TipoDocumental>; Update: Partial<TipoDocumental> }

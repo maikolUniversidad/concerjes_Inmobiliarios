@@ -18,7 +18,7 @@ export default async function MaquinariaDetallePage({ params }: { params: Promis
 
   const { data: maquina } = await supabase
     .from('maquinaria')
-    .select('id, codigo, nombre, tipo, marca, modelo, serial, estado, ubicacion_sede_id, ubicacion_texto, responsable, imagen_url, fecha_adquisicion, valor, observaciones, created_at, sedes:ubicacion_sede_id(id, nombre)')
+    .select('id, codigo, nombre, tipo, marca, modelo, serial, estado, ubicacion_sede_id, ubicacion_texto, responsable, imagen_url, fecha_adquisicion, valor, observaciones, created_at, condicion, frecuencia_mant_dias, ultimo_mant_at, proximo_mant, sedes:ubicacion_sede_id(id, nombre)')
     .eq('id', id)
     .single()
   if (!maquina) notFound()

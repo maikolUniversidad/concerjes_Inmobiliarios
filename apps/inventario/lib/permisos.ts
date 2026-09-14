@@ -37,6 +37,15 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    grupo: 'Mantenimiento de Maquinaria',
+    permisos: [
+      { key: 'reportar_falla_maquinaria', label: 'Escanear equipos, reportar fallas y registrar actividades' },
+      { key: 'ver_mantenimiento',         label: 'Ver tablero y tickets de mantenimiento' },
+      { key: 'atender_mantenimiento',     label: 'Recibir, atender y resolver tickets (técnico)' },
+      { key: 'gestionar_mantenimiento',   label: 'Asignar, cancelar y programar preventivos (jefe)' },
+    ],
+  },
+  {
     grupo: 'Gestión',
     permisos: [
       { key: 'ver_aprovisionamiento',    label: 'Ver aprovisionamiento' },

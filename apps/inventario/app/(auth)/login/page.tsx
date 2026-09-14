@@ -53,7 +53,9 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/dashboard')
+    // Solo rutas internas: evita redirecciones abiertas a otro dominio.
+    const next = new URLSearchParams(window.location.search).get('next')
+    router.push(next && /^\/(?![/\\])/.test(next) ? next : '/dashboard')
     router.refresh()
   }
 

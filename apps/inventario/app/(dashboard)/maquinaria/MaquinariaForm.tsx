@@ -13,7 +13,7 @@ const inputCls =
   'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 bg-white transition-colors'
 const labelCls = 'font-body font-semibold text-xs text-gray-600 block mb-1'
 
-const SELECT = 'id, codigo, nombre, tipo, marca, modelo, serial, estado, ubicacion_sede_id, ubicacion_texto, responsable, imagen_url, fecha_adquisicion, valor, observaciones, created_at, sedes:ubicacion_sede_id(id, nombre)'
+const SELECT = 'id, codigo, nombre, tipo, marca, modelo, serial, estado, ubicacion_sede_id, ubicacion_texto, responsable, imagen_url, fecha_adquisicion, valor, observaciones, created_at, condicion, frecuencia_mant_dias, ultimo_mant_at, proximo_mant, sedes:ubicacion_sede_id(id, nombre)'
 
 interface Props {
   maquina: MaquinariaRow | null
@@ -43,6 +43,7 @@ export function MaquinariaForm({ maquina, sedes, onClose, onSaved, onDeleted }: 
     fecha_adquisicion: maquina?.fecha_adquisicion ?? '',
     valor: maquina?.valor != null ? String(maquina.valor) : '',
     observaciones: maquina?.observaciones ?? '',
+    frecuencia_mant_dias: maquina?.frecuencia_mant_dias != null ? String(maquina.frecuencia_mant_dias) : '',
   })
   const [imagenUrl, setImagenUrl] = useState<string | null>(maquina?.imagen_url ?? null)
   const [subiendoFoto, setSubiendoFoto] = useState(false)
@@ -72,6 +73,7 @@ export function MaquinariaForm({ maquina, sedes, onClose, onSaved, onDeleted }: 
       ubicacion_texto: f.ubicacion_texto.trim() || null, responsable: f.responsable.trim() || null,
       imagen_url: imagenUrl, fecha_adquisicion: f.fecha_adquisicion || null,
       valor: f.valor ? Number(f.valor) : null, observaciones: f.observaciones.trim() || null,
+      frecuencia_mant_dias: f.frecuencia_mant_dias ? Math.max(1, Math.round(Number(f.frecuencia_mant_dias))) : null,
     }
     try {
       if (isNew) {
@@ -94,7 +96,14 @@ export function MaquinariaForm({ maquina, sedes, onClose, onSaved, onDeleted }: 
     if (!window.confirm(`¿Eliminar la máquina ${maquina.codigo}?`)) return
     setSaving(true)
     try {
-      await sb.from('maquinaria').delete().eq('id', maquina.id)
+      const { error: err } = await sb.from('maquinaria').delete().eq('id', maquina.id)
+      if (err) {
+        // Con mantenimientos o actividades el equipo no se borra: la hoja de vida se conserva.
+        setError(/foreign key|violates/i.test(err.message)
+          ? 'Este equipo tiene mantenimientos registrados y no se puede eliminar. Cambia su estado a "Dada de baja".'
+          : err.message)
+        return
+      }
       await logActivity(sb, { accion: 'ELIMINAR', modulo: 'Maquinaria', descripcion: `Maquinaria eliminada: ${maquina.codigo}`, entidad: 'maquinaria', entidad_id: maquina.id })
       onDeleted(maquina.id); toast.success('Maquinaria eliminada.')
     } finally { setSaving(false) }
@@ -174,6 +183,11 @@ export function MaquinariaForm({ maquina, sedes, onClose, onSaved, onDeleted }: 
         <div>
           <label className={labelCls}>Valor (COP)</label>
           <input type="number" value={f.valor} onChange={(e) => set('valor', e.target.value)} className={inputCls} placeholder="1500000" />
+        </div>
+        <div>
+          <label className={labelCls}>Mantenimiento preventivo cada (días)</label>
+          <input type="number" min={1} value={f.frecuencia_mant_dias} onChange={(e) => set('frecuencia_mant_dias', e.target.value)} className={inputCls} placeholder="Ej: 90 — vacío si no aplica" />
+          {maquina?.proximo_mant && <p className="mt-1 text-[11px] text-gray-500">Próximo: {new Date(maquina.proximo_mant + 'T00:00:00').toLocaleDateString('es-CO')}</p>}
         </div>
         <div>
           <label className={labelCls}>Observaciones</label>

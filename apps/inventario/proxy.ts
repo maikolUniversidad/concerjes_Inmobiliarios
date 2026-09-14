@@ -36,6 +36,8 @@ export async function proxy(request: NextRequest) {
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    // Volver a donde iba después de entrar (p. ej. el QR de un equipo).
+    url.search = path === '/dashboard' ? '' : `?next=${encodeURIComponent(path + request.nextUrl.search)}`
     return NextResponse.redirect(url)
   }
 

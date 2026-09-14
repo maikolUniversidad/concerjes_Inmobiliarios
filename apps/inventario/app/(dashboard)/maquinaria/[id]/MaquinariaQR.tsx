@@ -12,12 +12,13 @@ export function MaquinariaQR({ id, codigo, nombre }: { id: string; codigo: strin
 
   useEffect(() => {
     const base = window.location.origin
-    const destino = `${base}/maquinaria/${id}`
+    // Lleva a la ficha de campo: desde ahí la sede reporta fallas y registra actividades.
+    const destino = `${base}/equipo/${encodeURIComponent(codigo)}`
     setUrl(destino)
     QRCode.toDataURL(destino, { width: 512, margin: 1, color: { dark: VERDE, light: '#ffffff' } })
       .then(setQr)
       .catch(() => setQr(null))
-  }, [id])
+  }, [id, codigo])
 
   function descargar() {
     if (!qr) return
@@ -45,7 +46,7 @@ export function MaquinariaQR({ id, codigo, nombre }: { id: string; codigo: strin
           <img src="${qr}" alt="QR ${codigo}" />
           <div class="cod">${codigo}</div>
           <div class="nom">${nombre.replace(/</g, '&lt;')}</div>
-          <div class="org">Conserjes Inmobiliarios · Maquinaria</div>
+          <div class="org">Conserjes Inmobiliarios · Escanear para reportar</div>
         </div>
       </body></html>`)
     w.document.close()
@@ -68,7 +69,7 @@ export function MaquinariaQR({ id, codigo, nombre }: { id: string; codigo: strin
         <div className="flex-1 min-w-0 text-center sm:text-left">
           <p className="font-mono text-lg font-bold text-brand-green">{codigo}</p>
           <p className="font-body text-sm text-gray-600">{nombre}</p>
-          <p className="font-body text-xs text-gray-400 mt-1 break-all">Al escanear abre la ficha de la máquina.</p>
+          <p className="font-body text-xs text-gray-400 mt-1 break-all">Al escanear abre la ficha de campo: estado, reportar falla, soporte y actividades. Si cambias el código, reimprime la etiqueta.</p>
           <div className="mt-3 flex flex-wrap justify-center sm:justify-start gap-2">
             <button onClick={descargar} disabled={!qr}
               className="flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-50">

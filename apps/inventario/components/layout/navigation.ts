@@ -6,6 +6,7 @@ import {
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
+  ScanLine, HardHat,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -79,6 +80,15 @@ export const navigation: NavModule[] = [
       { label: 'Comparar Precios',  href: '/comparador-precios', icon: Scale, permiso: 'ver_proveedores' },
       { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText, permiso: 'ver_ordenes_compra' },
       { label: 'Reportes',          href: '/reportes',          icon: BarChart3, permiso: 'ver_reportes' },
+    ],
+  },
+  {
+    id: 'mantenimiento',
+    title: 'Mantenimiento',
+    icon: HardHat,
+    items: [
+      { label: 'Escanear equipo', href: '/equipo',        icon: ScanLine, permiso: 'reportar_falla_maquinaria' },
+      { label: 'Tablero',         href: '/mantenimiento', icon: HardHat,  permiso: 'ver_mantenimiento' },
     ],
   },
   {
@@ -162,6 +172,7 @@ export const moduleShortLabel: Record<string, string> = {
   carnet: 'Carnet',
   inventario: 'Inventario',
   gestion: 'Gestión',
+  mantenimiento: 'Manten.',
   gestion_humana: 'RRHH',
   logistica: 'Logística',
   servicios_hogar: 'Hogar',

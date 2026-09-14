@@ -17,6 +17,10 @@ export interface MaquinariaRow {
   modelo: string | null
   serial: string | null
   estado: string
+  condicion?: string
+  frecuencia_mant_dias?: number | null
+  ultimo_mant_at?: string | null
+  proximo_mant?: string | null
   ubicacion_sede_id: string | null
   ubicacion_texto: string | null
   responsable: string | null
