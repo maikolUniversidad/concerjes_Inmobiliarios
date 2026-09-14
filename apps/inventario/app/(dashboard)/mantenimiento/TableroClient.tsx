@@ -4,19 +4,21 @@ import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
-  AlertTriangle, Inbox, Wrench, CheckCircle2, Siren, CalendarClock, Search, MessageSquare, ChevronRight,
-  Loader2, CalendarPlus, MapPin, ScanLine,
+  AlertTriangle, Inbox, Wrench, CheckCircle2, Siren, CalendarClock, MessageSquare, ChevronRight,
+  Loader2, CalendarPlus, ScanLine, CalendarRange, Timer, Gauge, DollarSign, Headset, ClipboardList, UserCheck,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
+import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { ESTADO_MAQ_META } from '../maquinaria/estados'
 import { CONDICION_META, ESTADO_TICKET_META, PRIORIDAD_META, TIPO_TICKET_META, haceCuanto } from '@/lib/mantenimiento'
+import { PERIODOS, type Periodo } from './periodos'
 
 export interface TicketFila {
   id: string; numero: string; tipo: string; prioridad: string; estado: string; titulo: string
   reportado_nombre: string | null; asignado_a: string | null; asignado_nombre: string | null
-  created_at: string; recibido_at: string | null; resuelto_at: string | null; programado_para: string | null
-  ultimo_mensaje_at: string | null; costo: number | null
+  created_at: string; recibido_at: string | null; iniciado_at: string | null; resuelto_at: string | null; cerrado_at: string | null
+  programado_para: string | null; ultimo_mensaje_at: string | null; costo: number | null
   maquinaria: { id: string; codigo: string; nombre: string } | null
   sede: { id: string; nombre: string } | null
 }
@@ -24,31 +26,50 @@ export interface EquipoAlerta {
   id: string; codigo: string; nombre: string; estado: string; condicion: string
   proximo_mant: string | null; sedes: { nombre: string } | null
 }
+export interface Backlog { porRecibir: number; enCurso: number; criticos: number; porConfirmar: number; mios: number }
 
-type Vista = 'atender' | 'curso' | 'resueltos' | 'historial' | 'todos'
+type Vista = 'todos' | 'atender' | 'curso' | 'resueltos' | 'historial'
 const VISTAS: { k: Vista; label: string; estados: string[] | null }[] = [
+  { k: 'todos', label: 'Todos', estados: null },
   { k: 'atender', label: 'Por recibir', estados: ['ABIERTO'] },
   { k: 'curso', label: 'En curso', estados: ['RECIBIDO', 'EN_PROCESO', 'EN_ESPERA'] },
   { k: 'resueltos', label: 'Por confirmar', estados: ['RESUELTO'] },
   { k: 'historial', label: 'Cerrados', estados: ['CERRADO', 'CANCELADO'] },
-  { k: 'todos', label: 'Todos', estados: null },
 ]
 const ACTIVOS = ['ABIERTO', 'RECIBIDO', 'EN_PROCESO', 'EN_ESPERA']
+const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
+const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+const minutos = (a: string | null, b: string | null) => (a && b ? Math.max(0, (new Date(b).getTime() - new Date(a).getTime()) / 60000) : null)
+function duracion(min: number | null) {
+  if (min == null) return '—'
+  if (min < 60) return `${Math.round(min)} min`
+  const h = min / 60
+  if (h < 48) return `${h.toFixed(h < 10 ? 1 : 0)} h`
+  return `${(h / 24).toFixed(1)} d`
+}
+const promedio = (xs: (number | null)[]) => { const v = xs.filter((x): x is number => x != null); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null }
 
-export function TableroClient({ tickets, equipos, usuarioId, permisos }: {
+export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta, etiquetaPeriodo, vistaInicial, usuarioId, permisos }: {
   tickets: TicketFila[]
+  backlog: Backlog
   equipos: EquipoAlerta[]
+  periodo: Periodo
+  desde: string
+  hasta: string
+  etiquetaPeriodo: string
+  vistaInicial?: string
   usuarioId: string
   permisos: { tecnico: boolean; jefe: boolean }
 }) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
-  const [vista, setVista] = useState<Vista>(tickets.some((t) => t.estado === 'ABIERTO') ? 'atender' : 'curso')
+  const [cargando, startCarga] = useTransition()
+  const [vista, setVista] = useState<Vista>(VISTAS.some((v) => v.k === vistaInicial) ? vistaInicial as Vista : 'todos')
   const [mios, setMios] = useState(false)
-  const [prioridad, setPrioridad] = useState('')
-  const [sede, setSede] = useState('')
-  const [q, setQ] = useState('')
   const [recibiendo, setRecibiendo] = useState<string | null>(null)
+  const [rangoDesde, setRangoDesde] = useState(desde)
+  const [rangoHasta, setRangoHasta] = useState(hasta)
+  const [verRango, setVerRango] = useState(periodo === 'rango')
 
   // En vivo: cualquier cambio en tickets refresca el tablero (con un respiro).
   const tRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -58,43 +79,54 @@ export function TableroClient({ tickets, equipos, usuarioId, permisos }: {
     const canal = sb.channel('mant-tablero')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'mantenimiento_tickets' }, () => {
         if (tRef.current) clearTimeout(tRef.current)
-        tRef.current = setTimeout(() => router.refresh(), 800)
+        tRef.current = setTimeout(() => router.refresh(), 1500)
       })
       .subscribe()
     return () => { if (tRef.current) clearTimeout(tRef.current); sb.removeChannel(canal) }
   }, [router])
 
-  const sedes = useMemo(() => {
-    const m = new Map<string, string>()
-    tickets.forEach((t) => { if (t.sede) m.set(t.sede.id, t.sede.nombre) })
-    return [...m.entries()].sort((a, b) => a[1].localeCompare(b[1]))
+  function irPeriodo(p: Periodo, d = '', h = '', v: Vista = vista) {
+    if (p === 'rango' && !d && !h) { setVerRango(true); return }
+    setVerRango(p === 'rango')
+    const qs = new URLSearchParams({ periodo: p })
+    if (v !== 'todos') qs.set('vista', v)
+    if (p === 'rango') { if (d) qs.set('desde', d); if (h) qs.set('hasta', h) }
+    startCarga(() => router.push(`/mantenimiento?${qs.toString()}`))
+  }
+
+  // Indicadores del periodo
+  const kpi = useMemo(() => {
+    const total = tickets.length
+    const atendidos = tickets.filter((t) => t.estado === 'CERRADO' || t.estado === 'RESUELTO').length
+    const cancelados = tickets.filter((t) => t.estado === 'CANCELADO').length
+    const base = total - cancelados
+    return {
+      total, atendidos, pct: base ? Math.round((atendidos / base) * 100) : 0,
+      respuesta: promedio(tickets.filter((t) => t.tipo !== 'PREVENTIVO' && t.tipo !== 'INSPECCION').map((t) => minutos(t.created_at, t.recibido_at))),
+      solucion: promedio(tickets.filter((t) => t.tipo === 'CORRECTIVO').map((t) => minutos(t.created_at, t.resuelto_at))),
+      costo: tickets.reduce((a, t) => a + (Number(t.costo) || 0), 0),
+      remotos: tickets.filter((t) => t.tipo === 'SOPORTE_REMOTO' && (t.estado === 'RESUELTO' || t.estado === 'CERRADO')).length,
+      preventivos: tickets.filter((t) => t.tipo === 'PREVENTIVO').length,
+    }
   }, [tickets])
 
-  const kpi = useMemo(() => ({
-    porRecibir: tickets.filter((t) => t.estado === 'ABIERTO').length,
-    enCurso: tickets.filter((t) => ['RECIBIDO', 'EN_PROCESO', 'EN_ESPERA'].includes(t.estado)).length,
-    criticos: tickets.filter((t) => ACTIVOS.includes(t.estado) && (t.prioridad === 'CRITICA' || t.prioridad === 'ALTA')).length,
-    porConfirmar: tickets.filter((t) => t.estado === 'RESUELTO').length,
-    fueraServicio: equipos.filter((e) => e.estado === 'DANADA' || e.estado === 'MANTENIMIENTO').length,
-    preventivos: equipos.filter((e) => e.proximo_mant && new Date(e.proximo_mant + 'T00:00:00') <= new Date()).length,
-  }), [tickets, equipos])
-
-  const filtrados = useMemo(() => {
+  const datos = useMemo(() => {
     const estados = VISTAS.find((v) => v.k === vista)?.estados
-    const texto = q.trim().toLowerCase()
     return tickets
       .filter((t) => !estados || estados.includes(t.estado))
       .filter((t) => !mios || t.asignado_a === usuarioId)
-      .filter((t) => !prioridad || t.prioridad === prioridad)
-      .filter((t) => !sede || t.sede?.id === sede)
-      .filter((t) => !texto || [t.numero, t.titulo, t.maquinaria?.codigo, t.maquinaria?.nombre, t.reportado_nombre, t.asignado_nombre]
-        .some((x) => x?.toLowerCase().includes(texto)))
       .sort((a, b) => {
-        if (vista === 'historial' || vista === 'todos') return b.created_at.localeCompare(a.created_at)
-        const p = (PRIORIDAD_META[a.prioridad]?.orden ?? 9) - (PRIORIDAD_META[b.prioridad]?.orden ?? 9)
-        return p !== 0 ? p : a.created_at.localeCompare(b.created_at)
+        // Lo pendiente primero, por prioridad; lo demás, lo más reciente primero.
+        const pa = ACTIVOS.includes(a.estado) ? 0 : 1, pb = ACTIVOS.includes(b.estado) ? 0 : 1
+        if (pa !== pb) return pa - pb
+        if (pa === 0) {
+          const p = (PRIORIDAD_META[a.prioridad]?.orden ?? 9) - (PRIORIDAD_META[b.prioridad]?.orden ?? 9)
+          if (p !== 0) return p
+          return a.created_at.localeCompare(b.created_at)
+        }
+        return b.created_at.localeCompare(a.created_at)
       })
-  }, [tickets, vista, mios, prioridad, sede, q, usuarioId])
+  }, [tickets, vista, mios, usuarioId])
 
   function recibir(id: string) {
     setRecibiendo(id)
@@ -118,111 +150,162 @@ export function TableroClient({ tickets, equipos, usuarioId, permisos }: {
     })
   }
 
-  const Kpi = ({ icon: Icon, label, valor, cls, onClick }: { icon: typeof Inbox; label: string; valor: number; cls: string; onClick?: () => void }) => (
+  const columnas: ColumnaTabla<TicketFila>[] = [
+    { id: 'numero', header: 'Ticket', valor: (t) => t.numero, tarjeta: 'subtitulo', className: 'font-mono text-xs text-gray-600 whitespace-nowrap' },
+    {
+      id: 'titulo', header: 'Reporte', valor: (t) => t.titulo, ancho: 'min-w-[220px]', tarjeta: 'titulo',
+      celda: (t) => (
+        <div className="min-w-0">
+          <p className="font-medium text-gray-900 truncate max-w-[280px]">{t.titulo}</p>
+          {t.ultimo_mensaje_at && <p className="text-[11px] text-gray-400 flex items-center gap-1"><MessageSquare className="w-3 h-3" /> {haceCuanto(t.ultimo_mensaje_at)}</p>}
+        </div>
+      ),
+    },
+    {
+      id: 'estado', header: 'Estado', valor: (t) => ESTADO_TICKET_META[t.estado]?.label ?? t.estado, tarjeta: 'badge',
+      celda: (t) => <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${ESTADO_TICKET_META[t.estado]?.cls ?? 'bg-gray-100'}`}>{ESTADO_TICKET_META[t.estado]?.label ?? t.estado}</span>,
+    },
+    {
+      id: 'prioridad', header: 'Prioridad', valor: (t) => PRIORIDAD_META[t.prioridad]?.label ?? t.prioridad, tarjeta: 'badge',
+      celda: (t) => <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${PRIORIDAD_META[t.prioridad]?.cls ?? ''}`}>{PRIORIDAD_META[t.prioridad]?.label ?? t.prioridad}</span>,
+    },
+    { id: 'tipo', header: 'Tipo', valor: (t) => TIPO_TICKET_META[t.tipo]?.label ?? t.tipo, prioridad: 2, tarjeta: 'meta', className: 'text-xs text-gray-600 whitespace-nowrap' },
+    {
+      id: 'equipo', header: 'Equipo', valor: (t) => `${t.maquinaria?.codigo ?? ''} ${t.maquinaria?.nombre ?? ''}`.trim(), prioridad: 2, tarjeta: 'meta',
+      celda: (t) => <span className="text-xs text-gray-700"><span className="font-mono text-gray-500">{t.maquinaria?.codigo}</span> {t.maquinaria?.nombre}</span>,
+    },
+    { id: 'sede', header: 'Sede', valor: (t) => t.sede?.nombre ?? 'Bodega', prioridad: 2, tarjeta: 'meta', className: 'text-xs text-gray-600 max-w-[200px] truncate' },
+    { id: 'reporto', header: 'Reportó', valor: (t) => t.reportado_nombre ?? '', prioridad: 3, tarjeta: 'oculto', className: 'text-xs text-gray-600 whitespace-nowrap' },
+    {
+      id: 'tecnico', header: 'Técnico', valor: (t) => t.asignado_nombre ?? 'Sin asignar', prioridad: 2, tarjeta: 'meta',
+      celda: (t) => t.asignado_nombre ? <span className="text-xs text-gray-700 whitespace-nowrap">{t.asignado_nombre}</span>
+        : ACTIVOS.includes(t.estado) ? <span className="text-xs text-red-500">Sin asignar</span> : <span className="text-gray-300">—</span>,
+    },
+    { id: 'creado', header: 'Creado', valor: (t) => t.created_at, copiaTexto: (t) => fechaHora(t.created_at), celda: (t) => <span className="text-xs text-gray-600 whitespace-nowrap">{fechaHora(t.created_at)}</span>, prioridad: 2, tarjeta: 'meta', filtrable: false },
+    { id: 'respuesta', header: 'Respuesta', align: 'right', valor: (t) => minutos(t.created_at, t.recibido_at), copiaTexto: (t) => duracion(minutos(t.created_at, t.recibido_at)), celda: (t) => <span className="text-xs text-gray-600">{duracion(minutos(t.created_at, t.recibido_at))}</span>, prioridad: 3, tarjeta: 'oculto', filtrable: false },
+    { id: 'solucion', header: 'Solución', align: 'right', valor: (t) => minutos(t.created_at, t.resuelto_at), copiaTexto: (t) => duracion(minutos(t.created_at, t.resuelto_at)), celda: (t) => <span className="text-xs text-gray-600">{duracion(minutos(t.created_at, t.resuelto_at))}</span>, prioridad: 3, tarjeta: 'oculto', filtrable: false },
+    { id: 'costo', header: 'Costo', align: 'right', valor: (t) => (t.costo != null ? Number(t.costo) : null), copiaTexto: (t) => (t.costo != null ? String(t.costo) : ''), celda: (t) => t.costo != null ? <span className="text-xs text-gray-700 tabular-nums">{cop.format(Number(t.costo))}</span> : <span className="text-gray-300">—</span>, prioridad: 3, tarjeta: 'oculto', filtrable: false },
+  ]
+
+  const Kpi = ({ icon: Icon, label, valor, detalle, cls, onClick }: { icon: typeof Inbox; label: string; valor: string | number; detalle?: string; cls: string; onClick?: () => void }) => (
     <button onClick={onClick} disabled={!onClick}
       className="rounded-2xl border border-gray-100 bg-white p-3 text-left shadow-sm enabled:hover:border-brand-green/40 disabled:cursor-default">
       <span className={`inline-flex h-8 w-8 items-center justify-center rounded-lg ${cls}`}><Icon className="w-4 h-4" /></span>
       <p className="mt-2 font-heading text-2xl font-bold text-gray-900 tabular-nums">{valor}</p>
       <p className="text-xs text-gray-500">{label}</p>
+      {detalle && <p className="text-[11px] text-gray-400">{detalle}</p>}
     </button>
   )
 
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-        <Kpi icon={Inbox} label="Por recibir" valor={kpi.porRecibir} cls="bg-red-50 text-red-600" onClick={() => setVista('atender')} />
-        <Kpi icon={Wrench} label="En curso" valor={kpi.enCurso} cls="bg-amber-50 text-amber-600" onClick={() => setVista('curso')} />
-        <Kpi icon={Siren} label="Alta / crítica activos" valor={kpi.criticos} cls="bg-orange-50 text-orange-600" />
-        <Kpi icon={CheckCircle2} label="Por confirmar en sede" valor={kpi.porConfirmar} cls="bg-emerald-50 text-emerald-600" onClick={() => setVista('resueltos')} />
-        <Kpi icon={AlertTriangle} label="Equipos fuera de servicio" valor={kpi.fueraServicio} cls="bg-gray-100 text-gray-600" />
-        <Kpi icon={CalendarClock} label="Preventivos vencidos" valor={kpi.preventivos} cls="bg-purple-50 text-purple-600" />
+      {/* Pendientes (de cualquier fecha) */}
+      <div>
+        <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Pendiente ahora</p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <Kpi icon={Inbox} label="Por recibir" valor={backlog.porRecibir} cls="bg-red-50 text-red-600" onClick={() => irPeriodo('todo', '', '', 'atender')} />
+          <Kpi icon={Wrench} label="En curso" valor={backlog.enCurso} cls="bg-amber-50 text-amber-600" onClick={() => irPeriodo('todo', '', '', 'curso')} />
+          <Kpi icon={Siren} label="Alta / crítica activos" valor={backlog.criticos} cls="bg-orange-50 text-orange-600" />
+          <Kpi icon={CheckCircle2} label="Por confirmar en sede" valor={backlog.porConfirmar} cls="bg-emerald-50 text-emerald-600" onClick={() => irPeriodo('todo', '', '', 'resueltos')} />
+          <Kpi icon={AlertTriangle} label="Equipos fuera de servicio" valor={equipos.filter((e) => e.estado === 'DANADA' || e.estado === 'MANTENIMIENTO').length} cls="bg-gray-100 text-gray-600" />
+          <Kpi icon={CalendarClock} label="Preventivos vencidos" valor={equipos.filter((e) => e.proximo_mant && new Date(e.proximo_mant + 'T00:00:00') <= new Date()).length} cls="bg-purple-50 text-purple-600" />
+        </div>
+      </div>
+
+      {/* Periodo */}
+      <div className="rounded-2xl border border-gray-100 bg-white p-3 shadow-sm space-y-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <CalendarRange className="w-4 h-4 text-brand-green" />
+          <span className="text-sm font-semibold text-gray-800">Periodo:</span>
+          <div className="flex flex-wrap gap-1">
+            {PERIODOS.map((p) => (
+              <button key={p.k} onClick={() => irPeriodo(p.k, rangoDesde, rangoHasta)}
+                className={`rounded-full px-3 py-1 text-xs font-medium border transition-colors ${
+                  (p.k === periodo && !(p.k !== 'rango' && verRango)) || (p.k === 'rango' && verRango)
+                    ? 'bg-brand-green text-white border-brand-green' : 'border-gray-200 text-gray-600 hover:border-brand-green/50'}`}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+          {cargando && <Loader2 className="w-4 h-4 animate-spin text-gray-400" />}
+        </div>
+        {verRango && (
+          <form onSubmit={(e) => { e.preventDefault(); irPeriodo('rango', rangoDesde, rangoHasta) }} className="flex flex-wrap items-end gap-2">
+            <label className="text-xs text-gray-600">Desde
+              <input type="date" value={rangoDesde} onChange={(e) => setRangoDesde(e.target.value)} className="mt-0.5 block rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+            </label>
+            <label className="text-xs text-gray-600">Hasta
+              <input type="date" value={rangoHasta} min={rangoDesde || undefined} onChange={(e) => setRangoHasta(e.target.value)} className="mt-0.5 block rounded-lg border border-gray-200 px-2 py-1.5 text-sm" />
+            </label>
+            <button type="submit" disabled={!rangoDesde && !rangoHasta}
+              className="rounded-lg bg-brand-green px-4 py-2 text-xs font-semibold text-white disabled:opacity-40">Aplicar</button>
+          </form>
+        )}
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <Kpi icon={ClipboardList} label="Tickets" valor={kpi.total.toLocaleString('es-CO')} detalle={etiquetaPeriodo} cls="bg-sky-50 text-sky-600" />
+          <Kpi icon={Gauge} label="Atendidos" valor={`${kpi.pct}%`} detalle={`${kpi.atendidos.toLocaleString('es-CO')} cerrados o resueltos`} cls="bg-emerald-50 text-emerald-600" />
+          <Kpi icon={Timer} label="Respuesta promedio" valor={duracion(kpi.respuesta)} detalle="del reporte a recibido" cls="bg-amber-50 text-amber-600" />
+          <Kpi icon={Wrench} label="Solución promedio" valor={duracion(kpi.solucion)} detalle="fallas, del reporte a resuelto" cls="bg-orange-50 text-orange-600" />
+          <Kpi icon={Headset} label="Resueltos a distancia" valor={kpi.remotos.toLocaleString('es-CO')} detalle={`${kpi.preventivos.toLocaleString('es-CO')} preventivos`} cls="bg-indigo-50 text-indigo-600" />
+          <Kpi icon={DollarSign} label="Costo de reparaciones" valor={cop.format(kpi.costo)} cls="bg-gray-100 text-gray-600" />
+        </div>
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[1fr_320px] items-start">
         {/* Tickets */}
-        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden min-w-0">
-          <div className="flex overflow-x-auto no-scrollbar border-b border-gray-100 text-sm">
+        <div className="space-y-3 min-w-0">
+          <div className="flex overflow-x-auto no-scrollbar rounded-xl border border-gray-100 bg-white text-sm shadow-sm">
             {VISTAS.map((v) => {
               const n = v.estados ? tickets.filter((t) => v.estados!.includes(t.estado)).length : tickets.length
               return (
                 <button key={v.k} onClick={() => setVista(v.k)}
-                  className={`shrink-0 px-4 py-3 font-medium ${vista === v.k ? 'text-brand-green border-b-2 border-brand-green' : 'text-gray-500 hover:text-gray-700'}`}>
-                  {v.label} <span className="ml-1 text-xs text-gray-400">{n}</span>
+                  className={`shrink-0 px-4 py-2.5 font-medium ${vista === v.k ? 'text-brand-green border-b-2 border-brand-green' : 'text-gray-500 hover:text-gray-700'}`}>
+                  {v.label} <span className="ml-1 text-xs text-gray-400">{n.toLocaleString('es-CO')}</span>
                 </button>
               )
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-50">
-            <div className="flex flex-1 min-w-[180px] items-center gap-2 rounded-lg border border-gray-200 px-2.5">
-              <Search className="w-4 h-4 text-gray-400" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar ticket, equipo o persona"
-                className="flex-1 py-2 text-sm outline-none bg-transparent" />
-            </div>
-            <select value={prioridad} onChange={(e) => setPrioridad(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-2 text-sm" aria-label="Prioridad">
-              <option value="">Toda prioridad</option>
-              {Object.entries(PRIORIDAD_META).map(([k, m]) => <option key={k} value={k}>{m.label}</option>)}
-            </select>
-            {sedes.length > 1 && (
-              <select value={sede} onChange={(e) => setSede(e.target.value)} className="rounded-lg border border-gray-200 px-2 py-2 text-sm max-w-[180px]" aria-label="Sede">
-                <option value="">Todas las sedes</option>
-                {sedes.map(([id, n]) => <option key={id} value={id}>{n}</option>)}
-              </select>
+          <TablaEstandar
+            id="mantenimiento-tickets"
+            titulo={`Tickets de mantenimiento (${etiquetaPeriodo})`}
+            modulo="Mantenimiento"
+            entidad="mantenimiento_tickets"
+            datos={datos}
+            columnas={columnas}
+            filaId={(t) => t.id}
+            busqueda="Buscar ticket, equipo, sede o persona…"
+            vistaInicial="auto"
+            filasPorPagina={50}
+            onFilaClick={(t) => router.push(`/mantenimiento/${t.id}`)}
+            textoDetalle="Abrir ticket"
+            anchoAcciones="w-24"
+            filaClassName={(t) => t.prioridad === 'CRITICA' && ACTIVOS.includes(t.estado) ? 'bg-red-50/40' : ''}
+            acciones={(t) => permisos.tecnico && t.estado === 'ABIERTO' ? (
+              <button onClick={() => recibir(t.id)} disabled={pending}
+                className="inline-flex items-center gap-1 rounded-lg bg-brand-green px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
+                {recibiendo === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Inbox className="w-3 h-3" />} Recibir
+              </button>
+            ) : (
+              <Link href={`/mantenimiento/${t.id}`} className="inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold text-brand-green hover:bg-green-50">
+                Abrir <ChevronRight className="w-3 h-3" />
+              </Link>
             )}
-            {permisos.tecnico && (
+            herramientas={permisos.tecnico ? (
               <label className="flex items-center gap-1.5 text-sm text-gray-600 select-none">
-                <input type="checkbox" checked={mios} onChange={(e) => setMios(e.target.checked)} className="accent-brand-green" /> Asignados a mí
+                <input type="checkbox" checked={mios} onChange={(e) => setMios(e.target.checked)} className="accent-brand-green" />
+                <UserCheck className="w-3.5 h-3.5" /> Asignados a mí{backlog.mios ? ` (${backlog.mios} pendientes)` : ''}
               </label>
-            )}
-          </div>
-
-          {filtrados.length === 0 ? (
-            <p className="p-10 text-center text-sm text-gray-400">No hay tickets en esta vista.</p>
-          ) : (
-            <ul className="divide-y divide-gray-50">
-              {filtrados.map((t) => {
-                const est = ESTADO_TICKET_META[t.estado]
-                const pri = PRIORIDAD_META[t.prioridad]
-                return (
-                  <li key={t.id} className="flex items-center gap-3 px-3 sm:px-4 py-3 hover:bg-gray-50/70">
-                    <span className={`h-10 w-1 rounded-full shrink-0 ${t.prioridad === 'CRITICA' ? 'bg-red-600' : t.prioridad === 'ALTA' ? 'bg-orange-400' : t.prioridad === 'MEDIA' ? 'bg-yellow-300' : 'bg-gray-200'}`} />
-                    <Link href={`/mantenimiento/${t.id}`} className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <span className="font-mono text-[11px] text-gray-500">{t.numero}</span>
-                        {est && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${est.cls}`}>{est.label}</span>}
-                        {pri && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${pri.cls}`}>{pri.label}</span>}
-                        <span className="text-[10px] text-gray-400">{TIPO_TICKET_META[t.tipo]?.label}</span>
-                      </div>
-                      <p className="text-sm font-medium text-gray-900 truncate">{t.titulo}</p>
-                      <p className="text-[11px] text-gray-500 truncate">
-                        <span className="font-mono">{t.maquinaria?.codigo}</span> {t.maquinaria?.nombre}
-                        {t.sede && <> · <MapPin className="inline w-3 h-3 -mt-0.5" /> {t.sede.nombre}</>}
-                      </p>
-                      <p className="text-[11px] text-gray-400">
-                        {haceCuanto(t.created_at)} · {t.reportado_nombre ?? '—'}
-                        {t.asignado_nombre ? <> → <span className="text-gray-600">{t.asignado_nombre}</span></> : ACTIVOS.includes(t.estado) && <span className="text-red-500"> · sin asignar</span>}
-                        {t.ultimo_mensaje_at && <> · <MessageSquare className="inline w-3 h-3 -mt-0.5" /> {haceCuanto(t.ultimo_mensaje_at)}</>}
-                      </p>
-                    </Link>
-                    {permisos.tecnico && t.estado === 'ABIERTO' ? (
-                      <button onClick={() => recibir(t.id)} disabled={pending}
-                        className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
-                        {recibiendo === t.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Inbox className="w-3.5 h-3.5" />} Recibir
-                      </button>
-                    ) : (
-                      <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
-                    )}
-                  </li>
-                )
-              })}
-            </ul>
-          )}
+            ) : undefined}
+            vacio={<p className="font-body text-sm text-gray-400">No hay tickets en {etiquetaPeriodo} con estos filtros.</p>}
+          />
         </div>
 
         {/* Equipos que requieren atención */}
         <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
           <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-2">
-            <h2 className="font-heading font-semibold text-sm text-gray-900">Equipos con alerta</h2>
+            <h2 className="font-heading font-semibold text-sm text-gray-900">Equipos con alerta <span className="text-xs font-normal text-gray-400">{equipos.length}</span></h2>
             <Link href="/equipo" className="inline-flex items-center gap-1 text-xs font-semibold text-brand-green hover:underline"><ScanLine className="w-3.5 h-3.5" /> Escanear</Link>
           </div>
           {permisos.jefe && (
@@ -236,7 +319,7 @@ export function TableroClient({ tickets, equipos, usuarioId, permisos }: {
           {equipos.length === 0 ? (
             <p className="p-6 text-center text-sm text-gray-400">Sin equipos con alerta.</p>
           ) : (
-            <ul className="divide-y divide-gray-50 max-h-[60vh] overflow-y-auto">
+            <ul className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
               {equipos.map((e) => {
                 const m = ESTADO_MAQ_META[e.estado]
                 const vencido = e.proximo_mant && new Date(e.proximo_mant + 'T00:00:00') <= new Date()
