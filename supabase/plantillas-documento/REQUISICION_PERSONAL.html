@@ -1,0 +1,108 @@
+<!-- plantilla: {"nombre":"Requisición de personal","categoria":"REQUISICION","momento":"INTERNO","orden":90,"obligatoria":false,"requiere_firma_trabajador":false,"visible_candidato":false,"codigo_formato":"C_1.1 · Versión 3 · vigencia 01/11/2024","descripcion":"Formato C_1.1 de requisición de personal. Se imprime desde Gestión Humana → Requisiciones con los datos de la solicitud; no se genera por candidato."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Requisición de personal<br><span class="pequeno">{{requisicion.numero}}</span></td>
+      <td class="version">Vigencia: 01/11/2024</td>
+    </tr>
+    <tr><td class="version">Versión: 3</td></tr>
+  </table>
+
+  <table>
+    <tr><td class="etiqueta">Nombre solicitante</td><td>{{requisicion.solicitante_nombre}}</td><td class="etiqueta">Proceso</td><td>{{requisicion.proceso}}</td></tr>
+    <tr><td class="etiqueta">Fecha de solicitud</td><td colspan="3">Año {{requisicion.fecha_solicitud | anio}} · Mes {{requisicion.fecha_solicitud | mes}} · Día {{requisicion.fecha_solicitud | dia}}</td></tr>
+  </table>
+
+  <table>
+    <tr><th colspan="4">DATOS DEL CONTRATO</th></tr>
+    <tr><td class="etiqueta">Nombre del contrato (cliente)</td><td>{{requisicion.cliente_nombre}}</td><td class="etiqueta">Sede</td><td>{{requisicion.sede}}</td></tr>
+    <tr><td class="etiqueta">Centro de costos</td><td colspan="3">{{requisicion.centro_costo}}</td></tr>
+    <tr><td class="etiqueta">Fecha de inicio del contrato y/o inicio de labores</td><td colspan="3">{{requisicion.fecha_inicio | fecha}} {{requisicion.fecha_inicio_texto}}</td></tr>
+    <tr><td class="etiqueta">Número de trabajadores solicitados</td><td colspan="3">NÚMERO ({{requisicion.cantidad}}) &nbsp; LETRAS {{requisicion.cantidad | letras | mayusculas}}</td></tr>
+  </table>
+
+  <table>
+    <tr><th colspan="8">MOTIVO DE LA SOLICITUD</th></tr>
+    <tr>
+      <td class="etiqueta">Creación de cargo</td><td class="centro"><span class="casilla">{{requisicion.motivo | igual:"CREACION_CARGO" | x}}</span></td>
+      <td class="etiqueta">Empalme</td><td class="centro"><span class="casilla">{{requisicion.motivo | igual:"EMPALME" | x}}</span></td>
+      <td class="etiqueta">Reemplazo</td><td class="centro"><span class="casilla">{{requisicion.motivo | igual:"REEMPLAZO" | x}}</span></td>
+      <td class="etiqueta">Renuncia</td><td class="centro"><span class="casilla">{{requisicion.motivo | igual:"RENUNCIA" | x}}</span></td>
+    </tr>
+    <tr><td colspan="8" class="pequeno">{{requisicion.motivo_detalle}}</td></tr>
+    <tr>
+      <td class="etiqueta" colspan="3">Cargo operativo</td><td class="centro"><span class="casilla">{{requisicion.tipo_cargo | igual:"OPERATIVO" | x}}</span></td>
+      <td class="etiqueta" colspan="3">Cargo administrativo</td><td class="centro"><span class="casilla">{{requisicion.tipo_cargo | igual:"ADMINISTRATIVO" | x}}</span></td>
+    </tr>
+  </table>
+
+  <table>
+    <tr><td class="etiqueta">Cargo solicitado</td><td>{{requisicion.cantidad}} {{requisicion.cargo}}</td><td class="etiqueta">Perfil del cargo</td><td>{{requisicion.perfil_cargo}}</td></tr>
+    <tr><td class="etiqueta">Competencias técnicas</td><td colspan="3">{{requisicion.competencias_tecnicas}}</td></tr>
+  </table>
+
+  <table>
+    <tr><th colspan="6">CURSOS CALIFICADOS PARA EL CARGO</th></tr>
+    <tr>
+      <td class="etiqueta">Examen alturas</td><td class="centro"><span class="casilla">{{requisicion.requiere_curso_alturas | x}}</span></td>
+      <td class="etiqueta">Examen manipulación de alimentos</td><td class="centro"><span class="casilla">{{requisicion.requiere_curso_alimentos | x}}</span></td>
+      <td class="etiqueta">Examen de conducción (psicosensométrico)</td><td class="centro"><span class="casilla">{{requisicion.requiere_examen_conduccion | x}}</span></td>
+    </tr>
+  </table>
+
+  <table>
+    <tr><th colspan="2">SALARIO</th><th colspan="4">TURNOS</th></tr>
+    <tr>
+      <td class="etiqueta">Básico</td><td>{{requisicion.salario_basico | moneda}}</td>
+      <td>8 HD L-V <span class="casilla">{{requisicion.turnos | contiene:"8HD_LV" | x}}</span></td>
+      <td>8 HN L-D <span class="casilla">{{requisicion.turnos | contiene:"8HN_LD" | x}}</span></td>
+      <td>6 AM - 2 PM L-D <span class="casilla">{{requisicion.turnos | contiene:"6AM_2PM_LD" | x}}</span></td>
+      <td>2 PM - 10 PM L-D <span class="casilla">{{requisicion.turnos | contiene:"2PM_10PM_LD" | x}}</span></td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Edad</td><td>{{requisicion.edad_requerida | defecto:"No especificó"}}</td>
+      <td>8 HD L-S <span class="casilla">{{requisicion.turnos | contiene:"8HD_LS" | x}}</span></td>
+      <td>8 HD L-D <span class="casilla">{{requisicion.turnos | contiene:"8HD_LD" | x}}</span></td>
+      <td>10 PM - 6 AM L-D <span class="casilla">{{requisicion.turnos | contiene:"10PM_6AM_LD" | x}}</span></td>
+      <td>Rotativos 8 H <span class="casilla">{{requisicion.turnos | contiene:"ROTATIVO_8H" | x}}</span></td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Sexo</td><td>{{requisicion.sexo_requerido | defecto:"Indiferente"}}</td>
+      <td>4 HD L-V <span class="casilla">{{requisicion.turnos | contiene:"4HD_LV" | x}}</span></td>
+      <td>4 HD L-S <span class="casilla">{{requisicion.turnos | contiene:"4HD_LS" | x}}</span></td>
+      <td>4 HD L-D <span class="casilla">{{requisicion.turnos | contiene:"4HD_LD" | x}}</span></td>
+      <td>46 horas semana <span class="casilla">{{requisicion.turnos | contiene:"46H_SEMANA" | x}}</span></td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Nivel académico</td><td>{{requisicion.nivel_academico}}</td>
+      <td>8 HN L-V <span class="casilla">{{requisicion.turnos | contiene:"8HN_LV" | x}}</span></td>
+      <td>8 HN L-S <span class="casilla">{{requisicion.turnos | contiene:"8HN_LS" | x}}</span></td>
+      <td colspan="2">Otro, ¿cuál? {{requisicion.turno_otro}}</td>
+    </tr>
+  </table>
+
+  <table>
+    <tr><td class="etiqueta">Tiempo de experiencia</td><td>{{requisicion.experiencia_anios | defecto:"0"}} años · {{requisicion.experiencia_meses | defecto:"0"}} meses</td><td class="etiqueta">Modalidad del contrato</td><td>{{requisicion.modalidad_nombre}}</td></tr>
+    <tr><td class="etiqueta">Funciones y responsabilidades</td><td colspan="3">{{requisicion.funciones}}</td></tr>
+  </table>
+
+  <div class="caja pequeno">
+    <p class="negrita">ACUERDOS DE SERVICIO INTERNO</p>
+    <ul>
+      <li>De acuerdo con la requisición de personal, el perfil del cargo y/o la cantidad, se puede requerir un mayor tiempo para cubrir la solicitud. (Inicialmente el cubrimiento de una vacante operativa será de 05 días hábiles).</li>
+      <li>Si la requisición de personal se radica después de las 12 m. (días hábiles), el plazo empieza a correr desde el día siguiente.</li>
+      <li>En el caso de los empalmes y/o requerimientos especiales se revisarán los tiempos de entrega del personal.</li>
+      <li>Para cargos tácticos, estratégicos y/o administrativos, se definirá el tiempo de cubrimiento de la vacante con el líder inmediato.</li>
+    </ul>
+    {{#if requisicion.fecha_limite}}<p>Fecha límite de cubrimiento: <strong>{{requisicion.fecha_limite | fecha}}</strong></p>{{/if}}
+  </div>
+
+  <table class="firmas">
+    <tr>
+      <td>{{#if requisicion.aprobada_lider}}<strong>Aprobada</strong><br>{{/if}}<span class="linea-firma"></span><br><strong>FIRMA DEL LÍDER DEL PROCESO</strong></td>
+      <td>{{#if requisicion.aprobada_th}}<strong>Aprobada</strong><br>{{/if}}<span class="linea-firma"></span><br><strong>FIRMA LÍDER DE TALENTO HUMANO</strong></td>
+    </tr>
+  </table>
+  <p class="nota">El recibido de las requisiciones se puede realizar mediante correo electrónico a Talento Humano y por este medio serán aprobadas una vez sean aprobadas por las gerencias de los procesos correspondientes.</p>
+</div>

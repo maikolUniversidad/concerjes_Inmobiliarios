@@ -1,0 +1,83 @@
+<!-- plantilla: {"nombre":"Formato de entrevista","categoria":"FORMATO","momento":"SELECCION","orden":35,"obligatoria":false,"requiere_firma_trabajador":false,"visible_candidato":false,"codigo_formato":"Versión 4 · vigencia 01/05/2019","descripcion":"Uso interno de psicología: se llena con la entrevista registrada en el expediente y NO se muestra al candidato (el concepto es confidencial). La autorización de imagen e historia clínica que venía al final se firma aparte en «Autorización de imagen e historia clínica»."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Formato de entrevista</td>
+      <td class="version">Vigencia: 01/05/2019</td>
+    </tr>
+    <tr><td class="version">Versión: 4</td></tr>
+  </table>
+
+  <table>
+    <tr><td class="etiqueta">Fecha</td><td>{{entrevista.fecha | fecha}}</td><td class="etiqueta">Cargo</td><td>{{cargo.nombre}}</td></tr>
+    <tr><td class="etiqueta">Nombre y apellido del candidato</td><td colspan="3">{{candidato.nombre_completo}}</td></tr>
+    <tr>
+      <td class="etiqueta">Sexo</td><td>{{candidato.genero}} · Edad {{candidato.edad}}</td>
+      <td class="etiqueta">Nivel académico</td><td>{{candidato.nivel_escolaridad}} · N° de hijos {{candidato.numero_hijos}}</td>
+    </tr>
+  </table>
+
+  <h3>INFORMACIÓN PERSONAL</h3>
+  <p class="negrita">Describa con quién vive:</p>
+  <table>
+    <tr><th>Nombres y apellidos</th><th>Parentesco</th><th>Edad</th><th>Nivel académico</th><th>Ocupación</th></tr>
+    {{#each formato.convivientes}}
+    <tr><td>{{this.nombre}}&nbsp;</td><td>{{this.parentesco}}</td><td>{{this.edad}}</td><td>{{this.nivel_academico}}</td><td>{{this.ocupacion}}</td></tr>
+    {{/each}}
+  </table>
+  <table>
+    <tr><td class="etiqueta">¿Cuántas personas tiene a su cargo y quiénes son?</td><td>{{entrevista.personas_a_cargo}}</td></tr>
+    <tr><td class="etiqueta">Aspectos por mejorar</td><td>{{entrevista.aspectos_mejorar}}</td></tr>
+    <tr><td class="etiqueta">Aspectos buenos</td><td>{{entrevista.aspectos_buenos}}</td></tr>
+    <tr><td class="etiqueta">¿Qué actividades realiza en su tiempo libre?</td><td>{{entrevista.tiempo_libre}}</td></tr>
+    <tr><td class="etiqueta">¿Pertenece a algún grupo social o deportivo?</td><td>{{entrevista.grupo_social}}</td></tr>
+    <tr><td class="etiqueta">¿Qué metas tiene planeadas a su futuro?</td><td>{{entrevista.metas}}</td></tr>
+  </table>
+
+  <h3>INFORMACIÓN LABORAL</h3>
+  <p class="negrita">Trayectoria laboral (iniciando con la última empresa donde laboró):</p>
+  <table>
+    <tr><th>Empresa</th><th>Tiempo laborado</th><th>Fecha de retiro</th><th>Razones de retiro</th><th>Funciones</th></tr>
+    {{#each formato.trayectoria}}
+    <tr><td>{{this.empresa}}&nbsp;</td><td>{{this.tiempo}}</td><td>{{this.fecha_retiro | fecha}}</td><td>{{this.razon_retiro}}</td><td>{{this.funciones}}</td></tr>
+    {{/each}}
+  </table>
+  <p class="pie">GENTE CON CALIDAD PARA BRINDAR SERVICIOS DE CALIDAD · Página 1 de 2</p>
+</div>
+
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Formato de entrevista</td>
+      <td class="version">Vigencia: 01/05/2019</td>
+    </tr>
+    <tr><td class="version">Versión: 4</td></tr>
+  </table>
+  <table>
+    <tr><td class="etiqueta">¿Qué logros ha obtenido por su desempeño laboral?</td><td>{{entrevista.logros}}</td></tr>
+    <tr><td class="etiqueta">¿Cuál fue la situación más difícil que ha enfrentado en su trabajo?</td><td>{{entrevista.situacion_dificil}}</td></tr>
+    <tr><td class="etiqueta">¿Cómo la solucionó?</td><td>{{entrevista.solucion}}</td></tr>
+    <tr><td class="etiqueta">¿Qué aprendió de esta situación?</td><td>{{entrevista.aprendizaje}}</td></tr>
+    <tr><td class="etiqueta">¿Ha tenido personal a su cargo y cuántos?</td><td>{{entrevista.personal_a_cargo}}</td></tr>
+    <tr><td class="etiqueta">Si ha tenido personal a su cargo, ¿qué fue lo más difícil?</td><td>{{entrevista.personal_dificil}}</td></tr>
+  </table>
+
+  <h3>AUTORIZACIÓN</h3>
+  <p>Yo {{candidato.nombre_completo}}, identificado(a) con cédula de ciudadanía No. {{candidato.numero_documento}} expedida en {{candidato.lugar_expedicion_doc}}, autorizo a {{empresa.razon_social}} con NIT {{empresa.nit}} a emplear cualquier material fílmico, de voz o imágenes donde yo aparezca en actividades relacionadas con la compañía para fines de formación, publicidad y cualquier otra finalidad legal que la compañía considere necesaria. También autorizo el traslado de mi historia clínica laboral de la IPS donde repose a la IPS o personal de salud con tarjeta profesional que la compañía considere necesario para sus programas de medicina laboral.</p>
+  <p class="pequeno">(El candidato firma esta autorización en el documento «Autorización de imagen e historia clínica».)</p>
+
+  <div class="solo-interno">
+    <p class="negrita">Espacio exclusivo para {{empresa.razon_social}}, incluyendo resultados de pruebas psicológicas.</p>
+    <table>
+      <tr><td class="etiqueta">Concepto general</td><td>{{entrevista.concepto_general}}</td></tr>
+      <tr><td class="etiqueta">Observaciones</td><td>{{entrevista.observaciones}}</td></tr>
+    </table>
+    <table class="firmas">
+      <tr><td><strong>PSICÓLOGO(A) EVALUADOR(A):</strong> {{entrevista.evaluador_nombre}}</td><td><strong>FIRMA:</strong> {{FIRMA_EVALUADOR}}</td></tr>
+    </table>
+    <p class="nota">Las conclusiones expresadas en este documento son aplicables exclusivamente al cargo en concurso; no existe autorización para dar a conocer los resultados de este informe al postulante. Las pruebas psicométricas y psicológicas son documentos confidenciales tratados por el profesional de psicología.</p>
+  </div>
+  <p class="pie">GENTE CON CALIDAD PARA BRINDAR SERVICIOS DE CALIDAD · Página 2 de 2</p>
+</div>

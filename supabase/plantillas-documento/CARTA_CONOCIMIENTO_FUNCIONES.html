@@ -1,0 +1,59 @@
+<!-- plantilla: {"nombre":"Conocimiento de funciones, reglamento interno y políticas","categoria":"CARTA","momento":"CONTRATACION","orden":60,"obligatoria":true,"codigo_formato":"Carta de conocimiento","descripcion":"Una sola plantilla para todos los cargos: las funciones generales, específicas y operativas salen del catálogo de cargos y las políticas del catálogo de políticas organizacionales. El documento original mencionaba «vigilancia y seguridad privada» (texto heredado de otra empresa); aquí quedó neutral."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Conocimiento de funciones, reglamento interno de trabajo y políticas organizacionales</td>
+      <td class="version">Vigencia: {{hoy.anio}}</td>
+    </tr>
+    <tr><td class="version">Versión: 1</td></tr>
+  </table>
+
+  <h3>1. DATOS DEL TRABAJADOR</h3>
+  <p>Yo, <strong>{{candidato.nombre_completo}}</strong>, identificado(a) con cédula de ciudadanía No. <strong>{{candidato.numero_documento}}</strong> expedida en <strong>{{candidato.lugar_expedicion_doc}}</strong>, quien desempeña el cargo de <strong>{{cargo.nombre_carta}}</strong>, manifiesto que:</p>
+
+  <h3>2. CONOCIMIENTO DE FUNCIONES</h3>
+  <table>
+    <tr><th style="width:24%">Tipo de funciones</th><th>Descripción</th></tr>
+    <tr><td class="negrita">Funciones generales</td><td>{{cargo.funciones_generales | vinetas}}</td></tr>
+    <tr><td class="negrita">Funciones específicas</td><td>{{cargo.funciones_especificas | vinetas}}</td></tr>
+    <tr><td class="negrita">Funciones operativas</td><td>{{cargo.funciones_operativas | vinetas}}</td></tr>
+  </table>
+  <p>Declaro que he leído, comprendido y acepto las funciones, responsabilidades y obligaciones descritas para el cargo de {{cargo.nombre_carta | capitalizar}}. Me comprometo a cumplirlas de manera responsable, así como a acatar las políticas, procedimientos, normas de seguridad, normas viales y lineamientos ambientales establecidos por la empresa para el adecuado desempeño de mis funciones.</p>
+
+  <h3>3. CONOCIMIENTO DEL REGLAMENTO INTERNO DE TRABAJO (RIT)</h3>
+  <p>Manifiesto que recibí, leí y comprendí el Reglamento Interno de Trabajo de la empresa, el cual regula las condiciones laborales, derechos, deberes, prohibiciones, régimen disciplinario y procedimientos internos aplicables a mi cargo. Declaro conocer, entre otros aspectos:</p>
+  <ul>
+    <li>Derechos y obligaciones como trabajador(a).</li>
+    <li>Normas de disciplina y comportamiento en el servicio.</li>
+    <li>Prohibiciones especiales aplicables al personal.</li>
+    <li>Procedimiento disciplinario y garantías de debido proceso.</li>
+    <li>Consecuencias del incumplimiento de órdenes, consignas o protocolos de seguridad.</li>
+  </ul>
+  <p>Me comprometo a cumplir integralmente lo establecido en dicho reglamento y a acatar las instrucciones impartidas por la empresa y superiores jerárquicos.</p>
+
+  <h3>4. CONOCIMIENTO DE POLÍTICAS ORGANIZACIONALES</h3>
+  <p>Declaro que me fueron socializadas, explicadas y puestas a disposición las políticas organizacionales vigentes de la empresa, las cuales comprendo y me comprometo a cumplir estrictamente en el desarrollo de mis funciones:</p>
+  {{politicas | vinetas}}
+  <p>Reconozco que, por la naturaleza del servicio, el cumplimiento de estas políticas es de carácter obligatorio y su incumplimiento puede afectar la seguridad de personas, bienes y la operación del servicio. Así mismo, manifiesto que conozco y acataré las demás políticas, protocolos, órdenes operativas y disposiciones que establezca la empresa o que sean exigidas por la normatividad vigente.</p>
+
+  <h3>5. DECLARACIÓN FINAL</h3>
+  <p>Dejo constancia de que la información anteriormente descrita me fue explicada de manera clara, tuve la oportunidad de formular preguntas y entiendo plenamente su contenido, alcance y obligatoriedad. Acepto que el incumplimiento de las funciones, reglamentos, políticas, protocolos de seguridad o instrucciones impartidas podrá dar lugar a la aplicación de medidas disciplinarias, sin perjuicio de las acciones legales a que haya lugar.</p>
+
+  <table class="firmas">
+    <tr>
+      <td>
+        <strong>Firma del trabajador(a):</strong> {{FIRMA_TRABAJADOR}}<br>
+        <strong>Nombre:</strong> {{candidato.nombre_completo}}<br>
+        <strong>Cédula:</strong> {{candidato.numero_documento}}<br>
+        <strong>Fecha:</strong> {{hoy.fecha}} <span class="muy-pequeno">{{FECHA_FIRMA}}</span>
+      </td>
+      <td>
+        <strong>Firma del responsable de la socialización:</strong> {{FIRMA_RESPONSABLE}}<br>
+        <strong>Nombre:</strong> {{extras.responsable_nombre}}<br>
+        <strong>Cargo:</strong> {{extras.responsable_cargo}}<br>
+        <strong>Fecha:</strong> {{hoy.fecha}}
+      </td>
+    </tr>
+  </table>
+</div>

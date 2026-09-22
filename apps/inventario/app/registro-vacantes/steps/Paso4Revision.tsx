@@ -16,7 +16,7 @@ const DECLARACIONES = [
 ]
 
 export function Paso4Revision({ ctx }: { ctx: WizardCtx }) {
-  const { form, candidatoId, direccion, catalogos, vacanteSlug, setCredenciales, goTo, prev } = ctx
+  const { form, candidatoId, direccion, catalogos, vacanteSlug, setCredenciales, goTo, prev, estudios, experiencias, referencias } = ctx
   const [marcadas, setMarcadas] = useState<Record<string, boolean>>({})
   const [enviando, setEnviando] = useState(false)
 
@@ -68,14 +68,22 @@ export function Paso4Revision({ ctx }: { ctx: WizardCtx }) {
       </div>
 
       <div className="divide-y divide-gray-100 rounded-xl border border-gray-200 px-4">
-        {dato('Nombre', `${form.nombres ?? ''} ${form.apellidos ?? ''}`.trim())}
+        {dato('Nombre', [form.primer_nombre, form.segundo_nombre, form.primer_apellido, form.segundo_apellido].filter(Boolean).join(' '))}
         {dato('Documento', `${form.tipo_documento} ${form.numero_documento}`)}
+        {dato('Expedido en', [form.lugar_expedicion_doc, form.fecha_expedicion_doc].filter(Boolean).join(' · '))}
+        {dato('Nacimiento', form.fecha_nacimiento)}
         {dato('Celular', form.celular)}
         {dato('Correo', form.email)}
         {dato('Dirección', direccion.direccion)}
         {dato('Ciudad', nombreMun(direccion.municipio_codigo))}
+        {dato('Quiere trabajar en', nombreMun(form.municipio_trabajo))}
         {dato('EPS', nombreCat(catalogos.eps, form.eps_id))}
+        {dato('Pensión', nombreCat(catalogos.afp, form.afp_id))}
         {dato('Cargo', nombreCat(catalogos.cargos, form.cargo_postulacion_id))}
+        {dato('Cursos', [form.curso_alturas && 'Alturas', form.curso_alimentos && 'Alimentos', form.curso_grecas && 'Grecas'].filter(Boolean).join(', ') || 'Ninguno')}
+        {dato('Estudios', `${estudios.filter((e) => e.institucion || e.titulo).length} registrado(s)`)}
+        {dato('Empleos anteriores', `${experiencias.filter((e) => e.empresa.trim()).length} registrado(s)`)}
+        {dato('Referencias', `${referencias.filter((r) => r.nombre.trim()).length} registrada(s)`)}
       </div>
 
       <div className="space-y-2">

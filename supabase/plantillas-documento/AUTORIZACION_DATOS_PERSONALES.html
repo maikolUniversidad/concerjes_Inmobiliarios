@@ -1,0 +1,42 @@
+<!-- plantilla: {"nombre":"Autorización para el tratamiento de datos personales","categoria":"AUTORIZACION","momento":"SELECCION","orden":10,"obligatoria":true,"requiere_huella":false,"codigo_formato":"Versión 4 · 01/03/2023","descripcion":"Finalidades del tratamiento, derecho de supresión en 30 días hábiles y canal para ejercer los derechos (Ley 1581 de 2012). Digitalizado del formato físico versión 4."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Autorización para el tratamiento de datos personales</td>
+      <td class="version">Versión 4</td>
+    </tr>
+    <tr><td class="version">Fecha: 01/03/2023</td></tr>
+  </table>
+
+  <p><strong>FECHA:</strong> {{hoy.fecha}} &nbsp;&nbsp; <strong>Señor(a):</strong> {{candidato.nombre_completo}}</p>
+
+  <p>Los datos personales que le solicitamos tienen como finalidad:</p>
+  <ul>
+    <li>Lograr una eficiente comunicación relacionada con nuestros servicios, estudios, contenidos, así como los de nuestros clientes y empleados, y para facilitarle el acceso general a la información de éstos.</li>
+    <li>Proveer nuestros servicios y productos.</li>
+    <li>Informar sobre nuevos productos o servicios que estén relacionados con nuestro objeto social y con los servicios contratado(s) o adquirido(s).</li>
+    <li>Dar cumplimiento a obligaciones contraídas con nuestros clientes, proveedores y empleados.</li>
+    <li>Informar sobre cambios de nuestros productos o servicios.</li>
+    <li>Evaluar la calidad del servicio.</li>
+    <li>Establecer una relación directa con nuestros clientes e interesados de nuestros servicios.</li>
+    <li>Incluirla(o) en una base de datos.</li>
+    <li>Intercambiar, transferir y/o transmitir con terceros sus datos personales.</li>
+  </ul>
+
+  <p>Si Usted desea que sus datos sean suprimidos de nuestras bases de datos, le solicitamos manifestarlo en forma expresa en el término de treinta (30) días hábiles, contados a partir de la recepción de este comunicado. De lo contrario, se considerará que nos autoriza para que los mismos sean utilizados para las anteriores finalidades. Dicha base de datos se conserva y administra bajo responsabilidad de {{empresa.razon_social}}, y cuenta con las medidas de seguridad necesarias para la conservación adecuada de los datos.</p>
+
+  <p>Con la aceptación, el titular autoriza el tratamiento de sus datos para la finalidad mencionada y reconoce que los datos suministrados en la solicitud son ciertos y que no ha sido omitida o alterada ninguna información, quedando informado que la falsedad u omisión de algún dato supondrá la imposibilidad de prestar correctamente el servicio.</p>
+
+  <p>Le recordamos la posibilidad que tiene de acceder en cualquier momento a los datos suministrados, así como de solicitar la corrección, actualización o supresión, en los términos establecidos por la Ley 1581 de 2012, dirigiendo una comunicación escrita al responsable del tratamiento a la dirección {{empresa.direccion}}, {{empresa.ciudad}}, con los siguientes datos: nombre y apellidos, domicilio a efectos de notificaciones, petición en que se concreta la solicitud, fecha y firma de la persona interesada. Para su comodidad, puede ejercer estos mismos derechos a través del correo {{empresa.correo_datos}}.</p>
+
+  <p>En señal de aceptación de lo anterior:<br>
+  Consiento y autorizo que mis datos personales sean tratados conforme a lo previsto en la presente autorización.</p>
+
+  <table class="sin-borde" style="width:auto;margin-top:18px">
+    <tr><td class="negrita" style="width:90px">NOMBRE:</td><td>{{candidato.nombre_completo}}</td></tr>
+    <tr><td class="negrita">FIRMA:</td><td>{{FIRMA_TRABAJADOR}}</td></tr>
+    <tr><td class="negrita">C.C.:</td><td>{{candidato.numero_documento}}</td></tr>
+    <tr><td class="negrita">FECHA:</td><td>{{FECHA_FIRMA}}</td></tr>
+  </table>
+</div>

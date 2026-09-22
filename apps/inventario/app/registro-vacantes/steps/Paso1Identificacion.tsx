@@ -46,6 +46,12 @@ export function Paso1Identificacion({ ctx }: { ctx: WizardCtx }) {
 
   async function continuar() {
     setError(null)
+    // Historial con la empresa: obligatorio (así estaba en el proceso anterior
+    // y define si RRHH revisa la hoja de vida laboral antes de seguir).
+    if (antes === null || trabajado === null) {
+      setError('Responde las dos preguntas sobre tu historial con la empresa.')
+      return
+    }
     const num = numero.trim()
     if (!num || num.length < 4) { setError('Escribe tu número de documento completo.'); return }
     setCargando(true)
@@ -147,10 +153,10 @@ export function Paso1Identificacion({ ctx }: { ctx: WizardCtx }) {
         <p className="mt-1 text-sm text-gray-500">Con tu documento empezamos o retomamos tu hoja de vida.</p>
       </div>
 
-      <Field label="¿Habías hecho el proceso de contratación con nosotros antes?">
+      <Field label="¿Habías hecho el proceso de contratación con nosotros antes?" req>
         <SiNo value={antes} onChange={setAntes} />
       </Field>
-      <Field label="¿Habías trabajado con nosotros antes?">
+      <Field label="¿Habías trabajado con nosotros antes?" req>
         <SiNo value={trabajado} onChange={setTrabajado} />
       </Field>
 

@@ -17,8 +17,18 @@ export const ESTADOS_CIVILES = [
 ]
 export const RH = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-']
 export const ESCOLARIDAD = [
-  'Primaria', 'Bachillerato incompleto', 'Bachiller', 'Técnico', 'Tecnólogo', 'Profesional', 'Posgrado',
+  'Sin estudio', 'Primaria', 'Bachillerato básico', 'Bachiller', 'Técnico', 'Tecnólogo', 'Profesional', 'Posgrado',
 ]
+export const NIVELES_ESTUDIO: { value: string; label: string }[] = [
+  { value: 'PRIMARIA', label: 'Primaria' },
+  { value: 'SECUNDARIA', label: 'Bachillerato' },
+  { value: 'TECNICO', label: 'Técnico' },
+  { value: 'TECNOLOGO', label: 'Tecnólogo' },
+  { value: 'UNIVERSITARIO', label: 'Universitario' },
+  { value: 'POSGRADO', label: 'Posgrado' },
+  { value: 'CURSO', label: 'Curso / educación no formal' },
+]
+export const PARENTESCOS_FAMILIAR = ['Madre', 'Padre', 'Hermano(a)', 'Hijo(a)', 'Tío(a)', 'Primo(a)', 'Abuelo(a)', 'Cónyuge', 'Otro familiar']
 export const LIBRETA = ['1ª clase', '2ª clase', 'No aplica']
 export const TIPO_CUENTA = ['Ahorros', 'Corriente', 'Nequi', 'Daviplata']
 export const JORNADAS = ['Diurna', 'Nocturna', 'Turnos rotativos', 'Fines de semana', 'Festivos']
@@ -41,6 +51,11 @@ export interface CandidatoForm {
   lugar_expedicion_doc?: string | null
   nombres?: string | null
   apellidos?: string | null
+  primer_nombre?: string | null
+  segundo_nombre?: string | null
+  primer_apellido?: string | null
+  segundo_apellido?: string | null
+  estatura_cm?: number | null
   fecha_nacimiento?: string | null
   nacionalidad?: string | null
   pais_nacimiento?: string | null
@@ -57,6 +72,7 @@ export interface CandidatoForm {
   email?: string | null
   celular?: string | null
   telefono_alterno?: string | null
+  telefono_fijo?: string | null
   contacto_emergencia_nombre?: string | null
   contacto_emergencia_parentesco?: string | null
   contacto_emergencia_telefono?: string | null
@@ -83,6 +99,13 @@ export interface CandidatoForm {
   aspiracion_salarial?: number | null
   fuente_reclutamiento?: string | null
   referido_por?: string | null
+  perfil_laboral?: string | null
+  // Cursos (aparecen al elegir el cargo)
+  curso_alturas?: boolean | null
+  curso_alturas_vigencia?: string | null
+  curso_alimentos?: boolean | null
+  curso_alimentos_vigencia?: string | null
+  curso_grecas?: boolean | null
   // Sección 5
   talla_camisa?: string | null
   talla_pantalon?: string | null
@@ -119,6 +142,41 @@ export interface Beneficiario {
   fecha_nacimiento?: string | null
 }
 
+export interface Estudio {
+  nivel: string
+  institucion?: string | null
+  titulo?: string | null
+  ciudad?: string | null
+  anio_finalizacion?: number | null
+  ultimo_curso_aprobado?: string | null
+  en_curso?: boolean | null
+  intensidad_horaria?: string | null
+}
+
+export interface Experiencia {
+  empresa: string
+  cargo?: string | null
+  telefono?: string | null
+  direccion?: string | null
+  jefe_inmediato?: string | null
+  cargo_jefe?: string | null
+  fecha_ingreso?: string | null
+  fecha_retiro?: string | null
+  trabaja_actualmente?: boolean | null
+  motivo_retiro?: string | null
+  funciones?: string | null
+}
+
+export interface Referencia {
+  tipo: 'FAMILIAR' | 'PERSONAL' | 'LABORAL'
+  nombre: string
+  parentesco?: string | null
+  ocupacion?: string | null
+  telefono?: string | null
+  direccion?: string | null
+  empresa?: string | null
+}
+
 export interface OpcionCatalogo { id: string; nombre: string }
 export interface OpcionGeo { codigo_dane: string; nombre: string; departamento_codigo?: string }
 
@@ -136,6 +194,9 @@ export interface TipoDocumental {
   aplica_si: Record<string, unknown> | null
   ola: number
   orden: number
+  descripcion?: string | null
+  sube_staff?: boolean
+  activo?: boolean
 }
 
 export interface Catalogos {

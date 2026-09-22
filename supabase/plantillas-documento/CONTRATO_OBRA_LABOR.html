@@ -1,0 +1,87 @@
+<!-- plantilla: {"nombre":"Contrato individual de trabajo por obra o labor","categoria":"CONTRATO","momento":"CONTRATACION","orden":50,"obligatoria":true,"requiere_contrato":true,"requiere_firma_empleador":true,"requiere_testigos":true,"codigo_formato":"Minuta vigente","descripcion":"Digitalización de la minuta «1MINUTA CONTRATO.doc» con las 12 cláusulas y la hoja de cláusulas adicionales. Los datos salen del registro y del contrato que arma RRHH. Se corrigieron dos errores de la minuta: el NIT (800093388-324) y la cláusula décima primera, que repetía el mismo párrafo dos veces. Ley 2466 de 2025: describa la obra o labor con precisión en «contrato de servicio»."} -->
+<div class="hoja">
+  <h2 class="centro" style="font-size:11pt;margin-top:0">Contrato individual de trabajo por la duración de una obra o labor determinada</h2>
+  <table>
+    <tr>
+      <td style="width:50%"><span class="etiqueta" style="background:none">Nombre del empleador</span><br>{{empresa.razon_social}} &nbsp; NIT {{empresa.nit}}</td>
+      <td><span class="etiqueta" style="background:none">Dirección del empleador</span><br>{{empresa.direccion}}</td>
+    </tr>
+    <tr>
+      <td><span class="etiqueta" style="background:none">Nombre del trabajador</span><br>{{candidato.nombre_completo}}</td>
+      <td><span class="etiqueta" style="background:none">Documento de identificación</span><br>{{candidato.tipo_documento_nombre | mayusculas}} N° {{candidato.numero_documento}}</td>
+    </tr>
+    <tr>
+      <td><span class="etiqueta" style="background:none">Fecha de nacimiento y nacionalidad</span><br>{{candidato.fecha_nacimiento | fecha}} &nbsp; {{candidato.nacionalidad}}</td>
+      <td><span class="etiqueta" style="background:none">Dirección del trabajador</span><br>{{candidato.direccion}}</td>
+    </tr>
+    <tr>
+      <td><span class="etiqueta" style="background:none">Cargo u oficio que desempeñará el trabajador</span><br>{{cargo.nombre}}</td>
+      <td><span class="etiqueta" style="background:none">Fecha de iniciación de labores</span><br>{{contrato.fecha_inicio_labores | fecha}}</td>
+    </tr>
+    <tr>
+      <td><span class="etiqueta" style="background:none">Salario</span><br>{{contrato.salario_texto}}</td>
+      <td><span class="etiqueta" style="background:none">Periodos de pago</span><br>{{contrato.periodo_pago}}</td>
+    </tr>
+    <tr>
+      <td><span class="etiqueta" style="background:none">Lugar donde desempeñará las labores</span><br>{{contrato.lugar_labores}}</td>
+      <td><span class="etiqueta" style="background:none">Ciudad donde ha sido contratado el trabajador</span><br>{{contrato.ciudad_contratacion}}</td>
+    </tr>
+    <tr>
+      <td colspan="2"><span class="etiqueta" style="background:none">Obra o labor contratada</span><br>{{contrato.contrato_servicio}}</td>
+    </tr>
+  </table>
+
+  <p>EL EMPLEADOR y EL TRABAJADOR, de las condiciones ya dichas, identificados como aparece al pie de sus firmas, han celebrado el presente contrato.</p>
+
+  <p><strong>PRIMERA: OBJETO.</strong> EL EMPLEADOR contrata los servicios personales del TRABAJADOR y éste se obliga: a) a poner al servicio del EMPLEADOR toda su capacidad normal de trabajo, en forma exclusiva en el desempeño de las funciones propias del oficio mencionado y en las labores anexas y complementarias del mismo, de conformidad con las órdenes e instrucciones que le imparta EL EMPLEADOR directamente o a través de sus representantes; b) a no prestar directa ni indirectamente servicios laborales a otros EMPLEADORES, ni a trabajar por cuenta propia en el mismo oficio, durante la vigencia de este contrato; c) a guardar absoluta reserva sobre los hechos, documentos físicos y/o electrónicos, informaciones y, en general, sobre todos los asuntos y materias que lleguen a su conocimiento por causa o con ocasión de su contrato de trabajo; y d) a desarrollar las funciones del cargo para el cual es contratado (según manual de funciones).</p>
+
+  <p><strong>SEGUNDA: REMUNERACIÓN.</strong> EL EMPLEADOR pagará al TRABAJADOR por la prestación de sus servicios el salario indicado, pagadero en las oportunidades también señaladas arriba. Dentro de este pago se encuentra incluida la remuneración de los descansos dominicales y festivos de que tratan los Capítulos I, II y III del Título VII del C.S.T. <strong>PARÁGRAFO PRIMERO:</strong> Se aclara y se conviene que en los casos en los que EL TRABAJADOR devengue comisiones o cualquiera otra modalidad de salario variable, el 82.5% de dichos ingresos constituye remuneración de la labor realizada, y el 17.5% restante está destinado a remunerar el descanso en los días dominicales y festivos de que tratan los Capítulos I y II del Título VIII del C.S.T. <strong>PARÁGRAFO SEGUNDO:</strong> Las partes acuerdan que en los casos en que se le reconozcan al TRABAJADOR beneficios diferentes al salario, por concepto de alimentación, habitación o vivienda, transporte y vestuario, se considerarán tales beneficios o reconocimientos como no salariales y por tanto no se tendrán en cuenta como factor salarial para la liquidación de acreencias laborales, ni el pago de aportes parafiscales (diferentes a los de la seguridad social), de conformidad con los Arts. 15 y 16 de la Ley 50/90, en concordancia con el Art. 17 de la Ley 344/96.</p>
+
+  <p><strong>TERCERA: TRABAJO NOCTURNO, SUPLEMENTARIO, DOMINICAL Y/O FESTIVO.</strong> Todo trabajo suplementario o en horas extras o en horas nocturnas o en días domingos o festivos en los que legalmente se debe conceder descanso, se remunerará conforme lo dispone expresamente la ley, salvo acuerdo en contrario contenido en convención, pacto colectivo o laudo arbitral. Para el reconocimiento y pago del trabajo suplementario, nocturno, dominical o festivo, EL EMPLEADOR o sus representantes deberán haberlo autorizado previamente y por escrito. Cuando la necesidad de este trabajo se presente de manera imprevista o inaplazable, deberá ejecutarse y darse cuenta de él por escrito, a la mayor brevedad, al EMPLEADOR o a sus representantes para su aprobación. EL EMPLEADOR, en consecuencia, no reconocerá ningún trabajo suplementario, o trabajo nocturno o en días de descanso legalmente obligatorio que no haya sido autorizado previamente o que, habiendo sido avisado inmediatamente, no haya sido aprobado como queda dicho.</p>
+
+  <p><strong>CUARTA: JORNADA DE TRABAJO.</strong> EL TRABAJADOR se obliga a laborar la jornada máxima legal, salvo estipulación expresa y escrita en contrario, cumpliendo con los turnos y horarios que señale EL EMPLEADOR, quien podrá cambiarlos o ajustarlos cuando lo estime conveniente. Por el acuerdo expreso o tácito de las partes, podrán repartirse total o parcialmente las horas de la jornada ordinaria, con base en lo dispuesto por el Art. 164 del C.S.T., modificado por el Art. 23 de la Ley 50/90, teniendo en cuenta que los tiempos de descanso entre las secciones de la jornada no se computan dentro de la misma, según el Art. 167 ibídem. De igual manera, las partes podrán acordar que se preste el servicio en los turnos de jornada flexible contemplados en el Art. 51 de la Ley 789 de 2002. Jornada pactada: {{contrato.modalidad_jornada}}.</p>
+
+  <p><strong>QUINTA: DURACIÓN DEL CONTRATO.</strong> El presente contrato se celebra por el tiempo que dure la realización de la obra o labor contratada, de acuerdo con las condiciones generales que se señalan al inicio del presente contrato.</p>
+
+  <p><strong>SEXTA: PERIODO DE PRUEBA.</strong> Acuerdan las partes fijar como periodo de prueba {{contrato.periodo_prueba_texto}}. Durante este periodo las partes pueden dar por terminado unilateralmente el contrato en cualquier momento, sin que se cause indemnización alguna. Este periodo de prueba solo es para el contrato inicial y no se aplica en las prórrogas.</p>
+
+  <p><strong>SÉPTIMA: TERMINACIÓN UNILATERAL.</strong> Son justas causas para dar por terminado unilateralmente este contrato, por cualquiera de las partes, las enumeradas en los Arts. 62 y 63 del C.S.T., modificados por el Art. 7° del Decreto 2351/65 y, además, por parte del EMPLEADOR, las faltas que para el efecto se califiquen como graves en reglamentos y demás documentos que contengan reglamentaciones, órdenes, instrucciones o prohibiciones de carácter general o particular, pactos, convenciones colectivas, laudos arbitrales y las que expresamente convengan calificar así en escritos que formarán parte integrante del presente contrato. Expresamente se califican en este acto como faltas graves la violación a las obligaciones y prohibiciones contenidas en la cláusula primera del presente contrato.</p>
+
+  <p><strong>OCTAVA: INVENCIONES.</strong> Las invenciones realizadas por EL TRABAJADOR le pertenecen, salvo: a) en el evento que la invención haya sido realizada por EL TRABAJADOR contratado para investigar, siempre y cuando la invención sea el resultado de la misión específica para la cual ha sido contratado; b) cuando el trabajador no ha sido contratado para investigar y la invención se obtiene mediante datos o medios conocidos o utilizados en razón de la labor desempeñada. En este último evento, el trabajador tendrá derecho a una compensación que se fijará por un tribunal de arbitramento designado por las partes en cumplimiento de las normas laborales y de arbitraje vigentes para el momento en que se origine el conflicto, de acuerdo con el monto del salario, la importancia del invento o descubrimiento, el beneficio que reporte al EMPLEADOR u otros factores similares.</p>
+
+  <p><strong>NOVENA: DERECHOS DE AUTOR.</strong> Los derechos patrimoniales de autor sobre las obras creadas por EL TRABAJADOR en ejercicio de sus funciones o con ocasión de ellas pertenecen al EMPLEADOR. Todo lo anterior sin perjuicio de los derechos morales de autor que permanecerán en cabeza del creador de la obra, de acuerdo con la Ley 23 de 1982 y la Decisión 351 de la Comisión del Acuerdo de Cartagena.</p>
+
+  <p><strong>DÉCIMA: MODIFICACIÓN DE LAS CONDICIONES LABORALES.</strong> EL TRABAJADOR acepta desde ahora expresamente todas las modificaciones determinadas por EL EMPLEADOR, en ejercicio de su poder subordinante, de sus condiciones laborales, tales como los turnos y jornadas de trabajo, el lugar de prestación de servicio, el cargo u oficio y/o funciones y la forma de remuneración, siempre que tales modificaciones no afecten su honor, dignidad o sus derechos mínimos ni impliquen desmejoras sustanciales o graves perjuicios para él, de conformidad con lo dispuesto por el Art. 23 del C.S.T., modificado por el Art. 1° de la Ley 50/90. Los gastos que se originen con el traslado de lugar de prestación del servicio serán cubiertos por EL EMPLEADOR de conformidad con el numeral 8° del Art. 57 del C.S.T.</p>
+
+  <p><strong>DÉCIMA PRIMERA: DIRECCIÓN DEL TRABAJADOR.</strong> EL TRABAJADOR, para todos los efectos legales y en especial para la aplicación del parágrafo 1 del artículo 29 de la Ley 789/02, norma que modificó el 65 del C.S.T., se compromete a informar por escrito y de manera inmediata al EMPLEADOR cualquier cambio en su dirección de residencia, teniéndose en todo caso como suya la última dirección registrada en su hoja de vida.</p>
+
+  <p><strong>DÉCIMA SEGUNDA: EFECTOS.</strong> El presente contrato reemplaza en su integridad y deja sin efecto cualquier otro contrato, verbal o escrito, celebrado entre las partes con anterioridad, pudiendo las partes convenir por escrito modificaciones al mismo, las que formarán parte integrante de este contrato.</p>
+
+  <p>Para constancia se firma en dos o más ejemplares del mismo tenor y valor, ante testigos, un ejemplar de los cuales recibe EL TRABAJADOR en este acto, en la ciudad y fecha que se indican a continuación:</p>
+
+  <table>
+    <tr>
+      <td style="width:50%"><strong>CIUDAD:</strong> {{contrato.ciudad_firma}}</td>
+      <td><strong>FECHA (DD/MM/AAAA):</strong> {{contrato.fecha_firma | fecha}}</td>
+    </tr>
+  </table>
+  <p class="pequeno">{{contrato.codigo}}</p>
+</div>
+
+<div class="hoja">
+  <h3>** CLÁUSULAS ADICIONALES **</h3>
+  <ol>
+    {{#each contrato.clausulas_adicionales}}<li><p>{{this}}</p></li>{{/each}}
+  </ol>
+
+  <table class="firmas" style="margin-top:40px">
+    <tr>
+      <td>{{FIRMA_EMPLEADOR}}<br><strong>EL EMPLEADOR</strong><br><span class="pequeno">{{empresa.representante_legal}} · C.C. ó NIT {{empresa.nit}}</span></td>
+      <td>{{FIRMA_TRABAJADOR}}<br><strong>EL TRABAJADOR</strong><br><span class="pequeno">{{candidato.nombre_completo}} · C.C. N° {{candidato.numero_documento}}</span><br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td>
+    </tr>
+    <tr>
+      <td style="padding-top:28px">{{FIRMA_TESTIGO1}}<br><strong>TESTIGO</strong><br><span class="pequeno">{{contrato.testigo1_nombre}} · C.C. N° {{contrato.testigo1_documento}}</span></td>
+      <td style="padding-top:28px">{{FIRMA_TESTIGO2}}<br><strong>TESTIGO</strong><br><span class="pequeno">{{contrato.testigo2_nombre}} · C.C. N° {{contrato.testigo2_documento}}</span></td>
+    </tr>
+  </table>
+</div>

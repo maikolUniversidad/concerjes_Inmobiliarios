@@ -1,0 +1,19 @@
+<!-- plantilla: {"nombre":"Pagaré y autorización de descuento","categoria":"AUTORIZACION","momento":"CONTRATACION","orden":70,"obligatoria":true,"permite_firma_electronica":false,"codigo_formato":"Pagaré","descripcion":"Se firma en físico: un pagaré con espacios en blanco necesita carta de instrucciones (Art. 622 del Código de Comercio) y firma manuscrita. Los valores se pueden dejar en blanco o indicar al generar."} -->
+<div class="hoja">
+  <h2 class="centro">PAGARÉ</h2>
+  <p>YO <strong>{{candidato.nombre_completo}}</strong>, identificado(a) con cédula de ciudadanía número <strong>{{candidato.numero_documento}}</strong> expedida en <strong>{{candidato.lugar_expedicion_doc}}</strong>, DECLARO QUE DEBO Y PAGARÉ a la empresa {{empresa.razon_social}} la suma de:</p>
+  <p class="caja">{{extras.pagare_valor | defecto:"X ______________________________________________"}}</p>
+  <table class="firmas">
+    <tr><td><strong>Cordialmente:</strong> {{FIRMA_TRABAJADOR}}</td><td><strong>Cédula de ciudadanía número:</strong> {{candidato.numero_documento}}</td></tr>
+  </table>
+
+  <h2 class="centro" style="margin-top:36px">AUTORIZACIÓN DE DESCUENTO</h2>
+  <p>YO <strong>{{candidato.nombre_completo}}</strong>, identificado(a) con cédula de ciudadanía número <strong>{{candidato.numero_documento}}</strong> expedida en <strong>{{candidato.lugar_expedicion_doc}}</strong>, AUTORIZO en forma expresa e irrevocable a la empresa {{empresa.razon_social}} para que en mi nombre y representación me efectúe el siguiente descuento, en cuantía de:</p>
+  <p class="caja">{{extras.descuento_valor | defecto:"X ______________________________________________"}}</p>
+  <p>suma esta que será tomada de mi salario y/o prestaciones a que tengo derecho.</p>
+
+  <table class="firmas" style="margin-top:28px">
+    <tr><td>{{candidato.apellidos_nombres}}<br><span class="pequeno">Apellidos y nombre</span></td><td>{{FIRMA_TRABAJADOR}}<br><span class="pequeno">Firma</span></td></tr>
+    <tr><td>{{candidato.numero_documento}}<br><span class="pequeno">Cédula número</span></td><td></td></tr>
+  </table>
+</div>

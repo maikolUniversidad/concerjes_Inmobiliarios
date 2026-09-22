@@ -1,0 +1,110 @@
+<!-- plantilla: {"nombre":"Hoja de vida","categoria":"HOJA_VIDA","momento":"SELECCION","orden":5,"obligatoria":true,"codigo_formato":"Generada por la plataforma","descripcion":"Reemplaza la hoja de vida Minerva 10-03 que se llenaba a mano: se arma con lo que el candidato registró (datos, estudios, experiencia y referencias). El candidato solo firma la certificación de veracidad."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Hoja de vida para solicitud de empleo</td>
+      <td class="version">Fecha: {{hoy.fecha}}<br>Cargo: {{candidato.cargo}}</td>
+    </tr>
+  </table>
+
+  <h2>I. Información general</h2>
+  <table>
+    <tr>
+      <td class="etiqueta">Apellidos</td><td>{{candidato.apellidos}}</td>
+      <td class="etiqueta">Nombres</td><td>{{candidato.nombres}}</td>
+      <td rowspan="6" class="centro" style="width:110px">{{FOTO_CARNET}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Documento</td><td>{{candidato.tipo_documento}} {{candidato.numero_documento}}</td>
+      <td class="etiqueta">Expedido en</td><td>{{candidato.lugar_expedicion_doc}} · {{candidato.fecha_expedicion_doc | fecha}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Nacimiento</td><td>{{candidato.fecha_nacimiento | fecha}} · {{candidato.lugar_nacimiento}}</td>
+      <td class="etiqueta">Nacionalidad</td><td>{{candidato.nacionalidad}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Dirección</td><td>{{candidato.direccion}} · {{candidato.barrio}}</td>
+      <td class="etiqueta">Ciudad</td><td>{{candidato.ciudad_residencia}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Celular</td><td>{{candidato.celular}}{{#if candidato.telefono_alterno}} · {{candidato.telefono_alterno}}{{/if}}</td>
+      <td class="etiqueta">Correo</td><td>{{candidato.email}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Estado civil</td><td>{{candidato.estado_civil}}</td>
+      <td class="etiqueta">Experiencia</td><td>{{candidato.experiencia_texto}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Libreta militar</td><td>{{candidato.libreta_militar_tipo | defecto:"No aplica"}}{{#if candidato.libreta_militar_numero}} No. {{candidato.libreta_militar_numero}}{{/if}}{{#if candidato.distrito_militar}} · Distrito {{candidato.distrito_militar}}{{/if}}</td>
+      <td class="etiqueta">RH</td><td colspan="2">{{candidato.grupo_sanguineo}}</td>
+    </tr>
+  </table>
+
+  <h2>II. Perfil laboral</h2>
+  <div class="caja">{{candidato.perfil_laboral | defecto:"—"}}</div>
+
+  <h2>III. Información personal</h2>
+  <table>
+    <tr>
+      <td class="etiqueta">¿Trabajó antes en esta empresa?</td><td>{{candidato.ha_trabajado_antes | si_no}}</td>
+      <td class="etiqueta">¿Hizo antes el proceso?</td><td>{{candidato.ha_hecho_proceso_antes | si_no}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Vivienda</td><td>{{candidato.vivienda_tipo}}{{#if candidato.estrato}} · estrato {{candidato.estrato}}{{/if}}</td>
+      <td class="etiqueta">¿Cómo conoció la vacante?</td><td>{{candidato.fuente_reclutamiento}}{{#if candidato.referido_por}} ({{candidato.referido_por}}){{/if}}</td>
+    </tr>
+    <tr>
+      <td class="etiqueta">Disponibilidad</td><td>{{candidato.disponibilidad_jornada | lista}}</td>
+      <td class="etiqueta">Aspiración salarial</td><td>{{candidato.aspiracion_salarial | moneda}}</td>
+    </tr>
+  </table>
+
+  <h2>IV. Información familiar</h2>
+  <table>
+    <tr><th>Nombre</th><th>Parentesco</th><th>Documento</th><th>Edad</th></tr>
+    {{#each candidato.beneficiarios}}
+    <tr><td>{{this.nombre_completo}}</td><td>{{this.parentesco}}</td><td>{{this.tipo_documento}} {{this.numero_documento}}</td><td>{{this.edad}}</td></tr>
+    {{/each}}
+  </table>
+  <p class="pequeno">Personas que dependen económicamente: {{candidato.numero_personas_cargo}}.</p>
+</div>
+
+<div class="hoja">
+  <h2>V. Educación y aptitudes</h2>
+  <table>
+    <tr><th>Nivel</th><th>Título / curso</th><th>Institución</th><th>Ciudad</th><th>Año</th><th>Último curso aprobado</th></tr>
+    {{#each candidato.estudios}}
+    <tr><td>{{this.nivel | capitalizar}}</td><td>{{this.titulo}}{{#if this.en_curso}} (en curso){{/if}}</td><td>{{this.institucion}}</td><td>{{this.ciudad}}</td><td>{{this.anio_finalizacion}}</td><td>{{this.ultimo_curso_aprobado}}</td></tr>
+    {{/each}}
+  </table>
+  <p class="pequeno">Cursos declarados: alturas {{candidato.curso_alturas | si_no | defecto:"sin dato"}}{{#if candidato.curso_alturas_vigencia}} (vence {{candidato.curso_alturas_vigencia | fecha}}){{/if}} · manipulación de alimentos {{candidato.curso_alimentos | si_no | defecto:"sin dato"}} · manejo de grecas {{candidato.curso_grecas | si_no | defecto:"sin dato"}}.</p>
+
+  <h2>VI. Experiencia laboral</h2>
+  {{#each formato.experiencias3}}
+  <table>
+    <tr><td class="etiqueta">Empresa</td><td>{{this.empresa}}</td><td class="etiqueta">Teléfono</td><td>{{this.telefono}}</td></tr>
+    <tr><td class="etiqueta">Cargo</td><td>{{this.cargo}}</td><td class="etiqueta">Dirección</td><td>{{this.direccion}}</td></tr>
+    <tr><td class="etiqueta">Ingreso</td><td>{{this.fecha_ingreso | fecha}}</td><td class="etiqueta">Retiro</td><td>{{this.fecha_retiro | fecha}}{{#if this.trabaja_actualmente}}Actualmente{{/if}}</td></tr>
+    <tr><td class="etiqueta">Jefe inmediato</td><td>{{this.jefe_inmediato}}</td><td class="etiqueta">Cargo del jefe</td><td>{{this.cargo_jefe}}</td></tr>
+    <tr><td class="etiqueta">Funciones</td><td colspan="3">{{this.funciones}}</td></tr>
+    <tr><td class="etiqueta">Motivo de retiro</td><td colspan="3">{{this.motivo_retiro}}</td></tr>
+  </table>
+  {{/each}}
+
+  <h2>VII. Referencias</h2>
+  <table>
+    <tr><th>Tipo</th><th>Nombre</th><th>Parentesco / ocupación</th><th>Teléfono</th><th>Dirección</th></tr>
+    {{#each candidato.referencias_personales}}<tr><td>Personal</td><td>{{this.nombre}}</td><td>{{this.ocupacion}}</td><td>{{this.telefono}}</td><td>{{this.direccion}}</td></tr>{{/each}}
+    {{#each candidato.referencias_familiares}}<tr><td>Familiar</td><td>{{this.nombre}}</td><td>{{this.parentesco}}</td><td>{{this.telefono}}</td><td>{{this.direccion}}</td></tr>{{/each}}
+  </table>
+  <p class="pequeno">Contacto de emergencia: {{candidato.contacto_emergencia_nombre}} ({{candidato.contacto_emergencia_parentesco}}) {{candidato.contacto_emergencia_telefono}}.</p>
+
+  <div class="caja">
+    <p class="negrita">Certificación</p>
+    <p>Para todos los efectos legales, certifico que todas las respuestas y la información anotada por mí en la presente hoja de vida son veraces (C.S.T., Art. 62, Num. 1°). Autorizo pedir información de mi hoja de vida sin ninguna restricción.</p>
+    <table class="firmas">
+      <tr><td>{{FIRMA_TRABAJADOR}}<br><span class="pequeno">Firma del solicitante</span></td><td>C.C. {{candidato.numero_documento}}<br><span class="pequeno">{{FECHA_FIRMA}}</span></td></tr>
+    </table>
+  </div>
+</div>

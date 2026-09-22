@@ -1,0 +1,38 @@
+<!-- plantilla: {"nombre":"Consolidación de datos · incorporación de personal","categoria":"FORMATO","momento":"CONTRATACION","orden":45,"obligatoria":true,"codigo_formato":"Consolidación de datos","descripcion":"Datos del puesto, del trabajador y tallas de dotación. En el papel el trabajador escribía sus propios datos en «datos del puesto»; aquí el puesto sale del contrato y lo que no se conoce (dirección, interventor) se pide al generar."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Consolidación de datos<br>incorporación de personal</td>
+    </tr>
+  </table>
+
+  <table>
+    <tr><th colspan="2" class="centro">DATOS GENERALES DEL PUESTO</th></tr>
+    <tr><td class="etiqueta">Nombre del puesto</td><td>{{cargo.nombre}}{{#if contrato.centro_costo}} · {{contrato.centro_costo}}{{/if}}</td></tr>
+    <tr><td class="etiqueta">No. telefónico</td><td>{{extras.puesto_telefono}}</td></tr>
+    <tr><td class="etiqueta">Ciudad y/o barrio</td><td>{{contrato.lugar_labores}}</td></tr>
+    <tr><td class="etiqueta">Dirección</td><td>{{extras.puesto_direccion}}</td></tr>
+    <tr><td class="etiqueta">Nombre del interventor</td><td>{{extras.puesto_interventor}}</td></tr>
+    <tr><th colspan="2" class="centro">DATOS GENERALES DEL TRABAJADOR</th></tr>
+    <tr><td class="etiqueta">Apellidos y nombres</td><td>{{candidato.apellidos_nombres}}</td></tr>
+    <tr><td class="etiqueta">No. de cédula de ciudadanía</td><td>{{candidato.numero_documento}}</td></tr>
+    <tr><td class="etiqueta">Lugar de expedición de la cédula</td><td>{{candidato.lugar_expedicion_doc}}</td></tr>
+    <tr><td class="etiqueta">Fecha y lugar de nacimiento</td><td>{{candidato.fecha_nacimiento | fecha}} · {{candidato.lugar_nacimiento}}</td></tr>
+    <tr><td class="etiqueta">Correo electrónico</td><td>{{candidato.email}}</td></tr>
+    <tr><td class="etiqueta">No. telefónico y celular</td><td>{{candidato.celular}}{{#if candidato.telefono_alterno}} · {{candidato.telefono_alterno}}{{/if}}</td></tr>
+    <tr><td class="etiqueta">Dirección de casa</td><td>{{candidato.direccion}}</td></tr>
+    <tr><td class="etiqueta">Barrio</td><td>{{candidato.barrio}}</td></tr>
+    <tr><td class="etiqueta">Estado civil</td><td>{{candidato.estado_civil}}</td></tr>
+    <tr><td class="etiqueta">E.P.S. (Entidad Promotora de Salud)</td><td>{{candidato.eps}}</td></tr>
+    <tr><td class="etiqueta">F.P. (Fondo de Pensiones)</td><td>{{candidato.afp}}</td></tr>
+    <tr><th colspan="2" class="centro">DOTACIÓN</th></tr>
+    <tr><td class="etiqueta">Talla camisa</td><td>{{candidato.talla_camisa}}</td></tr>
+    <tr><td class="etiqueta">Talla pantalón</td><td>{{candidato.talla_pantalon}}</td></tr>
+    <tr><td class="etiqueta">Zapatos N°</td><td>{{candidato.talla_calzado}}</td></tr>
+  </table>
+
+  <table class="firmas">
+    <tr><td><strong>FIRMA:</strong> {{FIRMA_TRABAJADOR}}</td><td><strong>FECHA:</strong> {{hoy.fecha}} <span class="muy-pequeno">{{FECHA_FIRMA}}</span></td></tr>
+  </table>
+</div>

@@ -1,0 +1,36 @@
+<!-- plantilla: {"nombre":"Documentos que debe anexar (lista de chequeo)","categoria":"FORMATO","momento":"SELECCION","orden":1,"obligatoria":false,"requiere_firma_trabajador":false,"codigo_formato":"Volante de documentos","descripcion":"El volante que se entregaba en papel, ahora con el estado real del expediente: qué documento ya está cargado y cuál falta. Informativo, no se firma."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Documentos que debe anexar a su hoja de vida como aspirante a un cargo en {{empresa.razon_social}}</td>
+    </tr>
+  </table>
+
+  <p>Aspirante: <strong>{{candidato.nombre_completo}}</strong> · {{candidato.tipo_documento}} {{candidato.numero_documento}} · Cargo: {{candidato.cargo}} · Corte: {{hoy.fecha}}</p>
+
+  <table>
+    <tr><th style="width:32px">#</th><th>Documento</th><th>Detalle</th><th style="width:90px" class="centro">Estado</th></tr>
+    {{#each documentos.lista}}
+    <tr>
+      <td class="centro">{{@numero}}</td>
+      <td>{{this.nombre}}{{#if this.obligatorio}} <strong>*</strong>{{/if}}</td>
+      <td class="pequeno">{{this.descripcion}}</td>
+      <td class="centro negrita">{{#if this.cargado}}Cargado{{else}}{{#if this.obligatorio}}FALTA{{else}}Opcional{{/if}}{{/if}}</td>
+    </tr>
+    {{/each}}
+  </table>
+  <p class="nota">* Obligatorio. Los certificados de antecedentes, las referencias y las certificaciones de afiliación a salud y pensión no pueden tener más de 30 días (no sirve la consulta de ADRES ni de FOSYGA).</p>
+
+  <div class="caja">
+    <p class="negrita">Tenga en cuenta que presentar documentos con información falsa o inexacta tendrá como consecuencia:</p>
+    <ul>
+      <li>La no aceptación como aspirante en el proceso de selección.</li>
+      <li>En caso de haber sido contratado(a), podrá enfrentar procesos disciplinarios, la terminación del contrato por justa causa y/o las acciones penales correspondientes.</li>
+    </ul>
+  </div>
+
+  <p>Los formatos de ingreso ya vienen diligenciados con la información que usted registró en la plataforma: revíselos y fírmelos. Las huellas deben ser claras y sin remarcar. Todos los empleados quedan afiliados a un plan exequial que permite afiliar hasta 7 personas con un costo mensual; si usted ya tiene un plan exequial, entregue el certificado donde aparezca su nombre y cédula y una carta firmada solicitando el retiro del plan de la empresa.</p>
+
+  <p class="pie">{{empresa.direccion}} {{empresa.ciudad}}, Colombia · {{empresa.telefono}} · {{empresa.sitio_web}}</p>
+</div>

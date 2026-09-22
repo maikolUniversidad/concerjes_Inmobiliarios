@@ -1,0 +1,29 @@
+<!-- plantilla: {"nombre":"Constancia de documentos para afiliar al núcleo familiar","categoria":"CONSTANCIA","momento":"CONTRATACION","orden":66,"obligatoria":true,"codigo_formato":"Constancia","descripcion":"El trabajador hace constar que conoce los documentos que debe anexar para afiliar a su núcleo familiar a la EPS y a la caja de compensación. Lista los beneficiarios que registró."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Constancia · afiliación del núcleo familiar</td>
+    </tr>
+  </table>
+
+  <p>{{hoy.ciudad | capitalizar}}, Fecha: {{hoy.fecha}}</p>
+
+  <p>HAGO CONSTAR QUE ESTOY ENTERADO(A) DE TODOS LOS DOCUMENTOS QUE DEBO ANEXAR PARA LA AFILIACIÓN DE MI NÚCLEO FAMILIAR A LA E.P.S. ({{candidato.eps | defecto:"—"}}) Y A LA CAJA DE COMPENSACIÓN FAMILIAR ({{candidato.caja | defecto:"la que corresponda"}}).</p>
+
+  {{#if candidato.beneficiarios}}
+  <p class="negrita">Beneficiarios registrados:</p>
+  <table>
+    <tr><th>Nombre</th><th>Parentesco</th><th>Documento</th><th>Fecha de nacimiento</th></tr>
+    {{#each candidato.beneficiarios}}
+    <tr><td>{{this.nombre_completo}}</td><td>{{this.parentesco}}</td><td>{{this.tipo_documento}} {{this.numero_documento}}</td><td>{{this.fecha_nacimiento | fecha}}</td></tr>
+    {{/each}}
+  </table>
+  {{else}}
+  <p class="nota">No registró beneficiarios en la plataforma.</p>
+  {{/if}}
+
+  <table class="firmas">
+    <tr><td><strong>FIRMA:</strong> {{FIRMA_TRABAJADOR}}<br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td><td><strong>CÉDULA:</strong> {{candidato.numero_documento}}<br>{{candidato.nombre_completo}}</td></tr>
+  </table>
+</div>

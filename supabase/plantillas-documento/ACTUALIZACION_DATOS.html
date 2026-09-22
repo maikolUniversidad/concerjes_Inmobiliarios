@@ -1,0 +1,114 @@
+<!-- plantilla: {"nombre":"Actualización de datos","categoria":"FORMATO","momento":"CONTRATACION","orden":40,"obligatoria":true,"requiere_huella":true,"codigo_formato":"Versión 8 · 16/02/2016","descripcion":"Formato de dos páginas con datos personales, nivel académico, referencias familiares y personales, empleos anteriores, huella y firma. Se llena solo con el registro del candidato."} -->
+<div class="hoja compacta">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Actualización de datos</td>
+      <td class="version">Versión: 8</td>
+    </tr>
+    <tr><td class="version">Fecha: 16/02/2016</td></tr>
+  </table>
+
+  <table class="sin-borde" style="margin-bottom:6px">
+    <tr>
+      <td>
+        <table style="width:auto">
+          <tr><th rowspan="2">FECHA</th><th>DD</th><th>MM</th><th>AAAA</th><th>CIUDAD</th></tr>
+          <tr><td>{{hoy.dia}}</td><td>{{hoy.mes}}</td><td>{{hoy.anio}}</td><td>{{hoy.ciudad}}</td></tr>
+        </table>
+        <p class="pequeno negrita" style="margin-top:6px">Formato diligenciado con la información que el trabajador registró en la plataforma. Revísela antes de firmar.</p>
+      </td>
+      <td class="derecha" style="width:110px">{{FOTO_CARNET}}</td>
+    </tr>
+  </table>
+
+  <h3>1. DATOS PERSONALES</h3>
+  <table>
+    <tr><th>PRIMER APELLIDO</th><th>SEGUNDO APELLIDO</th><th>PRIMER NOMBRE</th><th>SEGUNDO NOMBRE</th></tr>
+    <tr><td>{{candidato.primer_apellido}}</td><td>{{candidato.segundo_apellido}}</td><td>{{candidato.primer_nombre}}</td><td>{{candidato.segundo_nombre}}</td></tr>
+  </table>
+  <table>
+    <tr><td class="etiqueta">Cédula No.</td><td>{{candidato.numero_documento}}</td><td class="etiqueta">Libreta militar No.</td><td>{{candidato.libreta_militar_numero}}</td></tr>
+    <tr><td class="etiqueta">Expedida en</td><td>{{candidato.lugar_expedicion_doc}}</td><td class="etiqueta">Clase</td><td>{{candidato.libreta_militar_tipo}}</td></tr>
+    <tr><td class="etiqueta">Fecha nacimiento</td><td>{{candidato.fecha_nacimiento | fecha}}</td><td class="etiqueta">Estatura</td><td>{{#if candidato.estatura_cm}}{{candidato.estatura_cm}} cm{{/if}}</td></tr>
+    <tr><td class="etiqueta">Lugar nacimiento</td><td>{{candidato.lugar_nacimiento}}</td><td class="etiqueta">Estado civil</td><td>{{candidato.estado_civil}}</td></tr>
+    <tr><td class="etiqueta">Dirección</td><td colspan="3">{{candidato.direccion}}</td></tr>
+    <tr><td class="etiqueta">Barrio</td><td>{{candidato.barrio}}</td><td class="etiqueta">Número celular</td><td>{{candidato.celular}}</td></tr>
+    <tr><td class="etiqueta">Teléfono fijo</td><td>{{candidato.telefono_fijo}}</td><td class="etiqueta">Otro número cel.</td><td>{{candidato.telefono_alterno}}</td></tr>
+    <tr><td class="etiqueta">Correo electrónico *</td><td colspan="3">{{candidato.email}}</td></tr>
+    <tr><td class="etiqueta">EPS</td><td>{{candidato.eps}}</td><td class="etiqueta">Fondo pensiones</td><td>{{candidato.afp}}</td></tr>
+    <tr><th colspan="4">PERSONA DE CONTACTO (en caso de no poder ser ubicado en los números anteriores)</th></tr>
+    <tr><td class="etiqueta">Nombre contacto</td><td>{{candidato.contacto_emergencia_nombre}}</td><td class="etiqueta">Parentesco</td><td>{{candidato.contacto_emergencia_parentesco}}</td></tr>
+    <tr><td class="etiqueta">Teléfono</td><td colspan="3">{{candidato.contacto_emergencia_telefono}}</td></tr>
+  </table>
+  <p class="nota">* Recuerde que debe suministrar correo electrónico para comunicados formales de la empresa; en caso de no suministrarlo, el contrato de trabajo se puede invalidar.</p>
+
+  <h3>2. NIVEL ACADÉMICO</h3>
+  <table>
+    <tr><th>NIVEL</th><th>NOMBRE DE LA INSTITUCIÓN</th><th>AÑO DE FINALIZACIÓN</th><th>CURSO APROBADO</th></tr>
+    <tr><td class="etiqueta">Primaria</td><td>{{candidato.estudio_primaria.institucion}}</td><td>{{candidato.estudio_primaria.anio_finalizacion}}</td><td>{{candidato.estudio_primaria.ultimo_curso_aprobado}}</td></tr>
+    <tr><td class="etiqueta">Secundaria</td><td>{{candidato.estudio_secundaria.institucion}}</td><td>{{candidato.estudio_secundaria.anio_finalizacion}}</td><td>{{candidato.estudio_secundaria.ultimo_curso_aprobado}}</td></tr>
+    <tr><td class="etiqueta">Técnica o tecnológica</td><td>{{candidato.estudio_tecnica.institucion}}</td><td>{{candidato.estudio_tecnica.anio_finalizacion}}</td><td>{{candidato.estudio_tecnica.titulo}}</td></tr>
+    <tr><td class="etiqueta">Universitaria</td><td>{{candidato.estudio_universitaria.institucion}}</td><td>{{candidato.estudio_universitaria.anio_finalizacion}}</td><td>{{candidato.estudio_universitaria.titulo}}</td></tr>
+    {{#each formato.estudios_otros}}
+    <tr><td class="etiqueta">Otro **</td><td>{{this.titulo}}{{#if this.institucion}} · {{this.institucion}}{{/if}}</td><td>{{this.anio_finalizacion}}</td><td>{{this.intensidad_horaria}}</td></tr>
+    {{/each}}
+  </table>
+  <p class="nota">** Educación no formal, por ejemplo: curso de trabajo seguro en alturas, manipulación de alimentos, etiqueta y protocolo, etc.</p>
+  <p class="pie">Página 1 de 2</p>
+</div>
+
+<div class="hoja compacta">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Actualización de datos</td>
+      <td class="version">Versión: 8</td>
+    </tr>
+    <tr><td class="version">Fecha: 16/02/2016</td></tr>
+  </table>
+
+  <h3>3. REFERENCIAS FAMILIARES (que no vivan con usted)</h3>
+  {{#each formato.referencias_familiares}}
+  <table>
+    <tr><td class="etiqueta">Nombre</td><td>{{this.nombre}}</td><td class="etiqueta">Parentesco</td><td>{{this.parentesco}}</td></tr>
+    <tr><td class="etiqueta">Dirección residencia</td><td>{{this.direccion}}</td><td class="etiqueta">Teléfono</td><td>{{this.telefono}}</td></tr>
+    <tr><td class="etiqueta">Dir. empresa</td><td>{{this.empresa}}</td><td class="etiqueta">Teléfono</td><td>{{this.telefono_empresa}}</td></tr>
+    <tr><td class="etiqueta">Ocupación</td><td colspan="3">{{this.ocupacion}}</td></tr>
+  </table>
+  {{/each}}
+
+  <h3>4. REFERENCIAS PERSONALES (diferentes a familiares o empleadores)</h3>
+  {{#each formato.referencias_personales}}
+  <table>
+    <tr><td class="etiqueta">Nombre</td><td>{{this.nombre}}</td><td class="etiqueta">Parentesco</td><td>{{this.parentesco}}</td></tr>
+    <tr><td class="etiqueta">Dirección residencia</td><td>{{this.direccion}}</td><td class="etiqueta">Teléfono</td><td>{{this.telefono}}</td></tr>
+    <tr><td class="etiqueta">Dir. empresa</td><td>{{this.empresa}}</td><td class="etiqueta">Teléfono</td><td>{{this.telefono_empresa}}</td></tr>
+    <tr><td class="etiqueta">Ocupación</td><td colspan="3">{{this.ocupacion}}</td></tr>
+  </table>
+  {{/each}}
+
+  <h3>5. EMPLEOS ANTERIORES (referencias laborales, últimas empresas donde haya laborado)</h3>
+  {{#each formato.experiencias}}
+  <table>
+    <tr><td class="etiqueta">Empresa</td><td>{{this.empresa}}</td><td class="etiqueta">Cargo</td><td>{{this.cargo}}</td></tr>
+    <tr><td class="etiqueta">Dirección</td><td>{{this.direccion}}</td><td class="etiqueta">Teléfono</td><td>{{this.telefono}}</td></tr>
+    <tr><td class="etiqueta">Jefe inmediato</td><td>{{this.jefe_inmediato}}</td><td class="etiqueta">Cargo jefe</td><td>{{this.cargo_jefe}}</td></tr>
+    <tr><td class="etiqueta">Fecha ingreso</td><td>{{this.fecha_ingreso | fecha}}</td><td class="etiqueta">Fecha retiro</td><td>{{this.fecha_retiro | fecha}}</td></tr>
+    <tr><td class="etiqueta">Motivo retiro</td><td colspan="3">{{this.motivo_retiro}}</td></tr>
+  </table>
+  {{/each}}
+
+  <table class="sin-borde" style="margin-top:12px">
+    <tr>
+      <td style="vertical-align:bottom">
+        {{FIRMA_TRABAJADOR}}<br><span class="negrita pequeno">FIRMA EMPLEADO</span> <span class="pequeno">{{FECHA_FIRMA}}</span>
+      </td>
+      <td class="derecha">{{HUELLA}}</td>
+    </tr>
+  </table>
+  <table style="margin-top:10px">
+    <tr><td class="etiqueta">Nombre de quien recibe</td><td>{{extras.responsable_nombre}}</td><td class="etiqueta">Fecha</td><td style="width:110px">{{hoy.fecha}}</td></tr>
+  </table>
+  <p class="pie">Página 2 de 2</p>
+</div>

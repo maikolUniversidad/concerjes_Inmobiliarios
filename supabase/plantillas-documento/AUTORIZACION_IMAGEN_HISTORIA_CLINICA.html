@@ -1,0 +1,22 @@
+<!-- plantilla: {"nombre":"Autorización de imagen e historia clínica","categoria":"AUTORIZACION","momento":"SELECCION","orden":36,"obligatoria":true,"codigo_formato":"Tomada del formato de entrevista v4","descripcion":"La autorización que el candidato firmaba al pie del formato de entrevista, separada para que la firme en la plataforma sin ver el concepto psicológico."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Autorización de uso de imagen y traslado de historia clínica laboral</td>
+      <td class="version">Formato de entrevista</td>
+    </tr>
+    <tr><td class="version">Versión: 4</td></tr>
+  </table>
+
+  <p>{{hoy.ciudad | capitalizar}}, {{hoy.fecha_larga}}.</p>
+  <p>Yo <strong>{{candidato.nombre_completo}}</strong>, identificado(a) con cédula de ciudadanía No. <strong>{{candidato.numero_documento}}</strong> expedida en <strong>{{candidato.lugar_expedicion_doc}}</strong>, autorizo a {{empresa.razon_social}} con NIT {{empresa.nit}} a emplear cualquier material fílmico, de voz o imágenes donde yo aparezca en actividades relacionadas con la compañía para fines de formación, publicidad y cualquier otra finalidad legal que {{empresa.razon_social}} considere necesaria.</p>
+  <p>También autorizo el traslado de mi historia clínica laboral de la IPS donde repose a la IPS o personal de salud con tarjeta profesional que {{empresa.razon_social}} considere necesario para sus programas de medicina laboral.</p>
+
+  <table class="firmas">
+    <tr>
+      <td>{{FIRMA_TRABAJADOR}}<br><strong>Firma</strong><br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td>
+      <td>{{candidato.nombre_completo}}<br>C.C. {{candidato.numero_documento}}</td>
+    </tr>
+  </table>
+</div>

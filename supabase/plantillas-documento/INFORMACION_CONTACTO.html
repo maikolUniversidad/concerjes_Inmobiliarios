@@ -1,0 +1,20 @@
+<!-- plantilla: {"nombre":"Información oficial de contacto","categoria":"AUTORIZACION","momento":"CONTRATACION","orden":46,"obligatoria":true,"codigo_formato":"Información oficial de contacto","descripcion":"El trabajador declara correo, celular y dirección como canales oficiales de notificación y se compromete a revisar el correo cada semana."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Información oficial de contacto</td>
+    </tr>
+  </table>
+
+  <p>Yo <strong>{{candidato.nombre_completo}}</strong>, con número de cédula <strong>{{candidato.numero_documento}}</strong>, manifiesto que mi correo electrónico es <strong>{{candidato.email}}</strong>, mi número de celular es <strong>{{candidato.celular}}</strong>{{#if candidato.telefono_alterno}}, otro número es <strong>{{candidato.telefono_alterno}}</strong>{{/if}} y mi dirección actual es <strong>{{candidato.direccion_completa}}</strong>.</p>
+
+  <p>Declaro que los anteriores datos son verdaderos y autorizo a {{empresa.razon_social}} a que me envíe información por estos medios y se me notifique de cualquier actividad que realice la empresa, como capacitaciones o comunicados, entre otros, tanto al correo como al celular. Me comprometo a revisar mínimo cada semana el correo electrónico, con el fin de verificar cualquier notificación por parte de la empresa y poder estar al tanto de la información que sea útil o necesaria.</p>
+
+  <table style="margin-top:18px">
+    <tr><th class="centro">NOMBRE DEL TRABAJADOR</th><th class="centro">CÉDULA</th><th class="centro">FIRMA</th></tr>
+    <tr><td class="centro">{{candidato.nombre_completo}}</td><td class="centro">{{candidato.numero_documento}}</td><td class="centro">{{FIRMA_TRABAJADOR}}<br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td></tr>
+  </table>
+
+  <p class="pie">{{empresa.direccion}} {{empresa.ciudad}}, Colombia · Tel: {{empresa.telefono}} · {{empresa.sitio_web}}</p>
+</div>

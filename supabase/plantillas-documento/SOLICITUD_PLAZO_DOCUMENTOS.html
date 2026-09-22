@@ -1,0 +1,24 @@
+<!-- plantilla: {"nombre":"Solicitud de plazo para completar documentos","categoria":"CONSTANCIA","momento":"CONTRATACION","orden":68,"obligatoria":false,"codigo_formato":"Solicitud","descripcion":"Solo cuando el trabajador ingresa con documentos pendientes. Los días se piden al generar y la lista de faltantes sale del expediente. Revisar con jurídica la frase «autorizo que me sea cancelado el contrato por justa causa»: las justas causas son las de la ley."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Solicitud de plazo para completar la documentación</td>
+    </tr>
+  </table>
+
+  <p>{{hoy.ciudad | capitalizar}}, Fecha: {{hoy.fecha}}</p>
+  <p>Señores:<br><strong>{{empresa.razon_social}}</strong><br>Dpto. de Recursos Humanos<br>Ciudad</p>
+
+  <p>Yo <strong>{{candidato.nombre_completo}}</strong>, identificado(a) con la cédula de ciudadanía No. <strong>{{candidato.numero_documento}}</strong> expedida en <strong>{{candidato.lugar_expedicion_doc}}</strong>, solicito <strong>{{extras.plazo_dias | letras}} ({{extras.plazo_dias}})</strong> días contados a partir de la fecha para completar toda la documentación exigida para continuar en la prestación del servicio para el cual fui contratado(a); de no cumplir, autorizo que me sea cancelado el contrato de trabajo por justa causa.</p>
+
+  {{#if documentos.faltantes}}
+  <p class="negrita">Documentos pendientes a la fecha:</p>
+  {{documentos.faltantes | vinetas}}
+  {{/if}}
+
+  <p>Atentamente,</p>
+  <table class="firmas">
+    <tr><td><strong>FIRMA:</strong> {{FIRMA_TRABAJADOR}}<br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td><td><strong>CÉDULA:</strong> {{candidato.numero_documento}}</td></tr>
+  </table>
+</div>

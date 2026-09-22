@@ -1,0 +1,25 @@
+<!-- plantilla: {"nombre":"Autorización Conserjes (veracidad y verificación)","categoria":"AUTORIZACION","momento":"SELECCION","orden":30,"obligatoria":true,"codigo_formato":"Versión 1 · 23/07/2018","descripcion":"Certifica la veracidad de la información y autoriza verificación de antecedentes, referencias, estudios de seguridad, grafología y pruebas de alcohol y drogas. El formato físico traía el NIT con un error (800.0993.388-2); aquí sale el de la configuración."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Autorización Conserjes</td>
+      <td class="version">Versión 1</td>
+    </tr>
+    <tr><td class="version">23/07/2018</td></tr>
+  </table>
+
+  <p>Yo <strong>{{candidato.nombre_completo}}</strong>, identificado(a) con cédula de ciudadanía No. <strong>{{candidato.numero_documento}}</strong> expedida en <strong>{{candidato.lugar_expedicion_doc}}</strong>, certifico que toda la información suministrada para efectos de la vinculación laboral corresponde a la verdad y no contiene omisiones sustanciales que afecten el desarrollo del proceso de selección, y autorizo a {{empresa.razon_social}}, con NIT {{empresa.nit}}, a realizar la verificación de antecedentes penales y/o disciplinarios, referencias laborales y personales, información del estado actual de salud que afecte el desarrollo seguro de las actividades, documentos y toda la información suministrada en mi hoja de vida, antes de mi vinculación y durante todo el tiempo que esté empleado(a) por esta organización.</p>
+
+  <p>Para esta verificación autorizo realizar procedimientos como estudios de seguridad, visitas domiciliarias, estudio dactiloscópico, estudio grafológico, exámenes para la detección de consumo de drogas y alcohol y cualquier otro control que {{empresa.razon_social}} considere necesario.</p>
+
+  <p>Manifiesto que conozco que, en caso de encontrarse algún tipo de anotación o antecedente de los indicados en el párrafo anterior durante el proceso de selección y/o durante el contrato laboral, o si se comprobase que omití información en el mismo sentido, o si no se pueden verificar las referencias por mí aportadas y demás documentos o información suministrada, se incurrirá en causal de no suscripción o de cancelación del contrato en el evento de haberse suscrito. Todo lo anterior en razón del objeto social de esta compañía.</p>
+
+  <table class="firmas">
+    <tr>
+      <td><strong>FIRMA:</strong> {{FIRMA_TRABAJADOR}}</td>
+      <td><strong>Cédula:</strong> {{candidato.numero_documento}}</td>
+    </tr>
+    <tr><td class="pequeno">{{FECHA_FIRMA}}</td><td></td></tr>
+  </table>
+</div>

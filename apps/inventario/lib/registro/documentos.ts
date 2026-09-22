@@ -130,7 +130,7 @@ export async function fetchCargoFlags(cargoId: string): Promise<Record<string, b
   const sb = getSupabase()
   const { data } = await sb
     .from('cargos')
-    .select('requiere_manipulacion_alimentos, requiere_trabajo_alturas, requiere_libreta_militar')
+    .select('requiere_manipulacion_alimentos, requiere_trabajo_alturas, requiere_libreta_militar, requiere_curso_grecas')
     .eq('id', cargoId)
     .maybeSingle()
   return (data as any) ?? {}

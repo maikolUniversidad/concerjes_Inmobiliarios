@@ -1,0 +1,18 @@
+<!-- plantilla: {"nombre":"Constancia de políticas, reglamento y capacitaciones","categoria":"CONSTANCIA","momento":"CONTRATACION","orden":62,"obligatoria":true,"codigo_formato":"Constancia","descripcion":"El trabajador hace constar que conoce las políticas y el reglamento interno y que asistirá a las capacitaciones."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Constancia de conocimiento de políticas y reglamento interno</td>
+    </tr>
+  </table>
+
+  <p>{{hoy.ciudad | capitalizar}}, Fecha: {{hoy.fecha}}</p>
+  <p>Señores:<br><strong>{{empresa.razon_social}}</strong><br>{{hoy.ciudad | capitalizar}}</p>
+
+  <p>Hago constar que estoy enterado(a) de las políticas y del reglamento interno de trabajo de la empresa {{empresa.razon_social}}, por lo que me comprometo a cumplirlas y, sobre todo, a asistir a las capacitaciones dando cumplimiento al programa de capacitación de la organización, y sé que el incumplimiento a cualquiera de las capacitaciones sin justa causa será causal de la cancelación de mi contrato de trabajo por justa causa.</p>
+
+  <table class="firmas">
+    <tr><td><strong>FIRMA:</strong> {{FIRMA_TRABAJADOR}}<br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td><td><strong>CÉDULA:</strong> {{candidato.numero_documento}}<br>{{candidato.nombre_completo}}</td></tr>
+  </table>
+</div>

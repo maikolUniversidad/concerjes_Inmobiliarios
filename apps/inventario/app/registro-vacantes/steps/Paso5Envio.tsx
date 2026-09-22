@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { CheckCircle2, ScanFace, Check, KeyRound, Copy } from 'lucide-react'
+import { CheckCircle2, ScanFace, Check, KeyRound, Copy, ClipboardCheck, ListChecks } from 'lucide-react'
 import { toast } from 'sonner'
 import { CapturaFacial, type ResultadoFacial } from '../CapturaFacial'
 import type { Credenciales } from '@/lib/registro/datos'
@@ -33,9 +33,14 @@ export function Paso5Envio({
       </div>
       <h2 className="font-heading text-2xl font-bold text-gray-900">¡Registro enviado!</h2>
       <p className="max-w-sm text-gray-600">
-        Recibimos tu hoja de vida. Nuestro equipo de Recursos Humanos la revisará y te
-        contactará por <strong>correo</strong> o <strong>WhatsApp</strong> si continúas en el proceso.
+        Recibimos tu hoja de vida. <strong>Ahora presenta las dos pruebas de selección</strong>: son cortas
+        y hacen parte del proceso.
       </p>
+
+      <Link href="/registro-vacantes/pruebas"
+        className="flex w-full max-w-sm items-center justify-center gap-2 rounded-xl bg-brand-green px-6 py-3.5 font-body text-base font-semibold text-white hover:bg-brand-green-dark">
+        <ClipboardCheck className="h-5 w-5" /> Continuar con las pruebas
+      </Link>
 
       {/* Credenciales de acceso a la plataforma */}
       {credenciales && (
@@ -90,14 +95,14 @@ export function Paso5Envio({
       <div className="mt-2 w-full max-w-sm rounded-xl bg-brand-green-bg/60 p-4 text-left text-sm text-gray-600">
         <p className="font-semibold text-gray-800">¿Qué sigue?</p>
         <ul className="mt-2 list-inside list-disc space-y-1">
-          <li>Verificaremos tus documentos.</li>
-          <li>Si eres preseleccionado(a), te pediremos los documentos de vinculación.</li>
-          <li>Puedes volver a esta página con tu mismo dispositivo para ver tu estado.</li>
+          <li>Presenta la prueba de aptitud y la de conocimientos.</li>
+          <li>Verificaremos tus documentos y te citaremos a entrevista.</li>
+          <li>Los formatos de contratación te llegan ya llenos: solo los firmas desde tu celular.</li>
         </ul>
       </div>
 
-      <Link href="/" className="mt-4 rounded-xl bg-brand-green px-6 py-3 font-body font-semibold text-white hover:bg-brand-green-dark">
-        Volver al inicio
+      <Link href="/registro-vacantes/mi-proceso" className="mt-2 inline-flex items-center gap-2 rounded-xl border border-brand-green px-6 py-3 font-body font-semibold text-brand-green hover:bg-brand-green/5">
+        <ListChecks className="h-5 w-5" /> Ver mi proceso
       </Link>
 
       {camara && candidatoId && (

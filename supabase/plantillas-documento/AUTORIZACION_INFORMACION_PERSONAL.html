@@ -1,0 +1,39 @@
+<!-- plantilla: {"nombre":"Autorización información del personal","categoria":"AUTORIZACION","momento":"SELECCION","orden":20,"obligatoria":true,"requiere_huella":true,"codigo_formato":"Versión 4 · 01/03/2023","descripcion":"Autoriza verificación de antecedentes, centrales de riesgo, estudio de seguridad con visita domiciliaria, dactiloscopia y pruebas de alcohol y drogas. Lleva huellas. OJO: el formato físico dirige los reclamos a asistente.gerencia@vigiasdecolombia.com; confirmar si ese es el canal correcto."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo" rowspan="2"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo" rowspan="2">Autorización información del personal</td>
+      <td class="version">Versión 4</td>
+    </tr>
+    <tr><td class="version">Fecha: 01/03/2023</td></tr>
+  </table>
+
+  <p>{{hoy.ciudad | capitalizar}}, {{hoy.fecha}}.</p>
+
+  <p>Yo <strong>{{candidato.nombre_completo}}</strong> identificado(a) con
+    CC <span class="casilla">{{candidato.tipo_documento | igual:"CC" | x}}</span>
+    TI <span class="casilla"></span>
+    CE <span class="casilla">{{candidato.tipo_documento | igual:"CE" | x}}</span>
+    PP <span class="casilla">{{candidato.tipo_documento | igual:"PASAPORTE" | x}}</span>
+    número <strong>{{candidato.numero_documento}}</strong> expedida(o) en la ciudad de <strong>{{candidato.lugar_expedicion_doc}}</strong>
+    autorizo de manera expresa e irrevocable a {{empresa.razon_social}}, de conformidad con lo dispuesto en la Ley Estatutaria 1581 de 2012, el tratamiento de mis datos personales y sensibles, lo que incluye la consulta, recolección, almacenamiento, actualización, circulación, reporte y divulgación de los resultados obtenidos de la verificación de anotaciones ante organismos de seguridad colombianos para cualquier información que requieran, verificación de antecedentes penales y/o disciplinarios, mi comportamiento crediticio, financiero y comercial en centrales de riesgo, así mismo referenciar ante empleadores anteriores, institutos o entidades educativas. Autorizo el traslado de mi historia clínica laboral de la IPS a donde la compañía lo considere necesario, el uso de cualquier material fílmico, de voz o imágenes donde yo aparezca en actividades relacionadas con la compañía para fines de formación, publicidad y cualquier otra finalidad legal de la compañía antes de mi vinculación, durante todo el tiempo que esté empleado en la organización y posterior a la desvinculación.</p>
+
+  <p>Declaro que {{empresa.razon_social}} me ha asegurado la protección y tratamiento que dará a mis datos personales, así como el derecho a actualizarlos, rectificarlos y el uso exclusivo que se le dará a los mismos desde el inicio de este proceso al cual he sido convocado(a), garantizando que dicha información no será transferida a terceros distintos al proceso de selección de la Compañía {{empresa.razon_social}}. De igual manera manifiesto que, dado el caso de ejercer mis derechos, podré solicitar expresamente y en cualquier momento su corrección, actualización o suspensión, en los términos establecidos por la Ley 1581 de 2012, por medio de una comunicación escrita dirigida al correo electrónico asistente.gerencia@vigiasdecolombia.com para tal fin. Autorizo la realización del correspondiente estudio de seguridad a través de visita domiciliaria, que atenderé personalmente, en la cual consiento plenamente en aportar los datos biográficos, de arraigo y patrimoniales que me sean solicitados, así como la realización de imágenes fotográficas de contexto de mi residencia, verificación de información de mi hoja de vida y la entrega de los resultados a la empresa en que curso actualmente el proceso de selección o control; adicionalmente autorizo que la empresa realice el estudio dactiloscópico, exámenes para detección de consumo de drogas y alcohol, o cualquier otro control que {{empresa.razon_social}} considere necesario.</p>
+
+  <p>Manifiesto que conozco que en caso de encontrarse algún tipo de anotación o antecedente en las validaciones y verificaciones realizadas por {{empresa.razon_social}} durante el proceso de selección y/o durante el contrato laboral, o si se comprobase que omití información en el mismo sentido; si no pueden verificar las referencias por mí aportadas; y demás documentos o información suministrada, conllevará a incurrir en causal de no suscripción del contrato o terminación por justa causa del mismo en el evento de haberse suscrito. Todo lo anterior en razón del objeto social de esta compañía.</p>
+
+  <table class="sin-borde" style="margin-top:14px">
+    <tr>
+      <td style="width:62%">
+        <p class="negrita">FIRMA:</p>
+        <p>{{FIRMA_TRABAJADOR}}</p>
+        <p><strong>Nombre completo:</strong> {{candidato.nombre_completo}}</p>
+        <p><strong>Documento de identificación:</strong> {{candidato.tipo_documento}} No. {{candidato.numero_documento}}</p>
+        <p class="pequeno">{{FECHA_FIRMA}}</p>
+      </td>
+      <td class="centro">{{HUELLA}}</td>
+      <td class="centro">{{HUELLA_IZQUIERDA}}</td>
+    </tr>
+  </table>
+</div>

@@ -1,14 +1,14 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, Check, ShieldCheck } from 'lucide-react'
 import { toast } from 'sonner'
 import {
-  fetchCatalogos, cargarCandidatoActual, guardarCandidato, cargarDireccion, cargarBeneficiarios,
+  fetchCatalogos, cargarCandidatoActual, guardarCandidato, cargarDireccion, cargarBeneficiarios, cargarHojaVida,
   type Credenciales,
 } from '@/lib/registro/datos'
-import type { Catalogos, CandidatoForm, DireccionForm, Beneficiario } from '@/lib/registro/tipos'
+import type { Catalogos, CandidatoForm, DireccionForm, Beneficiario, Estudio, Experiencia, Referencia } from '@/lib/registro/tipos'
 import { Paso0Consentimientos } from './steps/Paso0Consentimientos'
 import { Paso1Identificacion } from './steps/Paso1Identificacion'
 import { Paso2Formulario } from './steps/Paso2Formulario'
@@ -28,6 +28,12 @@ export interface WizardCtx {
   setDireccion: (d: DireccionForm) => void
   beneficiarios: Beneficiario[]
   setBeneficiarios: (b: Beneficiario[]) => void
+  estudios: Estudio[]
+  setEstudios: (e: Estudio[]) => void
+  experiencias: Experiencia[]
+  setExperiencias: (e: Experiencia[]) => void
+  referencias: Referencia[]
+  setReferencias: (r: Referencia[]) => void
   consentBiometrico: boolean
   vacanteSlug: string | null
   setCredenciales: (c: Credenciales) => void
@@ -35,6 +41,12 @@ export interface WizardCtx {
   prev: () => void
   goTo: (n: number) => void
 }
+
+/** Dos referencias familiares y dos personales, como pide la actualización de datos. */
+const REFERENCIAS_VACIAS: Referencia[] = [
+  { tipo: 'FAMILIAR', nombre: '' }, { tipo: 'FAMILIAR', nombre: '' },
+  { tipo: 'PERSONAL', nombre: '' }, { tipo: 'PERSONAL', nombre: '' },
+]
 
 const FORM_VACIO: CandidatoForm = {
   tipo_documento: 'CC',
@@ -44,6 +56,7 @@ const FORM_VACIO: CandidatoForm = {
 
 export function RegistroWizard() {
   const search = useSearchParams()
+  const router = useRouter()
   const vacanteSlug = search.get('vacante')
 
   const [cargando, setCargando] = useState(true)
@@ -54,6 +67,9 @@ export function RegistroWizard() {
   const [form, setForm] = useState<CandidatoForm>(FORM_VACIO)
   const [direccion, setDireccion] = useState<DireccionForm>({ direccion: '' })
   const [beneficiarios, setBeneficiarios] = useState<Beneficiario[]>([])
+  const [estudios, setEstudios] = useState<Estudio[]>([{ nivel: 'SECUNDARIA' }])
+  const [experiencias, setExperiencias] = useState<Experiencia[]>([])
+  const [referencias, setReferencias] = useState<Referencia[]>(REFERENCIAS_VACIAS)
   const [consentBiometrico, setConsentBiometrico] = useState(false)
   const [credenciales, setCredenciales] = useState<Credenciales | null>(null)
 
@@ -63,6 +79,7 @@ export function RegistroWizard() {
   // ── Carga inicial: catálogos + reanudar si hay registro previo ──────────────
   useEffect(() => {
     let vivo = true
+    let redirige = false
     ;(async () => {
       try {
         const cat = await fetchCatalogos()
@@ -70,15 +87,32 @@ export function RegistroWizard() {
         setCatalogos(cat)
         const previo = await cargarCandidatoActual()
         if (previo && vivo) {
+          // Quien ya envió su registro sigue su proceso en "Mi proceso"
+          // (pruebas, documentos para firmar y estado).
+          if (previo.estado && previo.estado !== 'BORRADOR') {
+            redirige = true
+            router.replace('/registro-vacantes/mi-proceso')
+            return
+          }
           setCandidatoIdState(previo.id!)
           setForm({ ...FORM_VACIO, ...previo })
-          const [dir, bens] = await Promise.all([
-            cargarDireccion(previo.id!), cargarBeneficiarios(previo.id!),
+          const [dir, bens, hv] = await Promise.all([
+            cargarDireccion(previo.id!), cargarBeneficiarios(previo.id!), cargarHojaVida(previo.id!),
           ])
           if (dir) setDireccion(dir)
           if (bens.length) setBeneficiarios(bens)
+          if (hv.estudios.length) setEstudios(hv.estudios)
+          if (hv.experiencias.length) setExperiencias(hv.experiencias)
+          if (hv.referencias.length) {
+            // Completa hasta 2 + 2 renglones para que el formulario se vea igual.
+            const fam = hv.referencias.filter((r) => r.tipo === 'FAMILIAR')
+            const per = hv.referencias.filter((r) => r.tipo === 'PERSONAL')
+            while (fam.length < 2) fam.push({ tipo: 'FAMILIAR', nombre: '' })
+            while (per.length < 2) per.push({ tipo: 'PERSONAL', nombre: '' })
+            setReferencias([...fam, ...per, ...hv.referencias.filter((r) => r.tipo === 'LABORAL')])
+          }
           // Reanuda donde quedó (mínimo el paso 2 = formulario).
-          setPaso(previo.estado === 'POSTULADO' ? 5 : Math.max(2, previo.paso_actual ?? 2))
+          setPaso(Math.max(2, Math.min(4, previo.paso_actual ?? 2)))
           toast.info('Retomamos tu registro donde lo dejaste.')
         }
       } catch (e) {
@@ -86,11 +120,11 @@ export function RegistroWizard() {
         if (vivo) setErrorCarga(msg)
         toast.error(msg)
       } finally {
-        if (vivo) setCargando(false)
+        if (vivo && !redirige) setCargando(false)
       }
     })()
     return () => { vivo = false }
-  }, [])
+  }, [router])
 
   // ── Autosave con rebote (solo cuando ya existe el candidato) ────────────────
   const update = useCallback((patch: Partial<CandidatoForm>) => {
@@ -152,6 +186,7 @@ export function RegistroWizard() {
   const ctx: WizardCtx = {
     catalogos, form, update, candidatoId, setCandidatoId,
     direccion, setDireccion, beneficiarios, setBeneficiarios,
+    estudios, setEstudios, experiencias, setExperiencias, referencias, setReferencias,
     consentBiometrico, vacanteSlug, setCredenciales, next, prev, goTo,
   }
 

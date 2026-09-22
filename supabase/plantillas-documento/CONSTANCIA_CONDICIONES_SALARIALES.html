@@ -1,0 +1,29 @@
+<!-- plantilla: {"nombre":"Constancia de condiciones salariales","categoria":"CONSTANCIA","momento":"CONTRATACION","orden":64,"obligatoria":true,"requiere_contrato":true,"codigo_formato":"Constancia","descripcion":"El trabajador hace constar que recibió la información de sus condiciones salariales. A diferencia del papel, aquí esas condiciones quedan escritas (salen del contrato)."} -->
+<div class="hoja">
+  <table class="encabezado">
+    <tr>
+      <td class="logo"><img src="/logo-horizontal.png" alt="Conserjes Inmobiliarios"></td>
+      <td class="titulo">Constancia de condiciones salariales</td>
+    </tr>
+  </table>
+
+  <p>{{hoy.ciudad | capitalizar}}, Fecha: {{hoy.fecha}}</p>
+
+  <p>YO <strong>{{candidato.nombre_completo}}</strong>, IDENTIFICADO(A) CON LA CÉDULA DE CIUDADANÍA No. <strong>{{candidato.numero_documento}}</strong> EXPEDIDA EN <strong>{{candidato.lugar_expedicion_doc | mayusculas}}</strong>, HAGO CONSTAR QUE HE RECIBIDO LA INFORMACIÓN DE MIS CONDICIONES SALARIALES Y CON LAS CUALES ESTOY DE ACUERDO.</p>
+
+  {{#if contrato.existe}}
+  <table>
+    <tr><td class="etiqueta">Cargo</td><td>{{cargo.nombre}}</td></tr>
+    <tr><td class="etiqueta">Salario</td><td>{{contrato.salario_texto}}{{#if contrato.salario}} ({{contrato.salario | moneda}}){{/if}}</td></tr>
+    <tr><td class="etiqueta">Periodo de pago</td><td>{{contrato.periodo_pago}}</td></tr>
+    <tr><td class="etiqueta">Fecha de ingreso</td><td>{{contrato.fecha_inicio_labores | fecha}}</td></tr>
+    <tr><td class="etiqueta">Lugar de labores</td><td>{{contrato.lugar_labores}}{{#if contrato.centro_costo_nombre}} · {{contrato.centro_costo_nombre}}{{/if}}</td></tr>
+  </table>
+  {{/if}}
+
+  <p class="caja-gris"><strong>NOTA:</strong> LLAMAR LOS PRIMEROS 4 DÍAS DEL MES SIGUIENTE AL INGRESO PARA SOLICITAR EL ENVÍO DE SU TARJETA DE NÓMINA AL TELÉFONO {{empresa.telefono_nomina}} CON {{empresa.contacto_nomina | mayusculas}}.</p>
+
+  <table class="firmas">
+    <tr><td><strong>FIRMA:</strong> {{FIRMA_TRABAJADOR}}<br><span class="muy-pequeno">{{FECHA_FIRMA}}</span></td><td><strong>CÉDULA:</strong> {{candidato.numero_documento}}</td></tr>
+  </table>
+</div>

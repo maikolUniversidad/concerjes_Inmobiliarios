@@ -57,3 +57,6 @@ _cloner_ref/
 
 # Fotos originales sin optimizar (fuente de las de public/images). No se publican.
 fotos-originales/
+
+# Archivos originales de las plantillas de contratación (contienen datos de ejemplo): viven en el bucket privado plantillas-documentos
+supabase/plantillas-documento/originales/

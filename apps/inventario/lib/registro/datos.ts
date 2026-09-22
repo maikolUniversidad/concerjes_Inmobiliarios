@@ -2,21 +2,23 @@
 // Convención del repo: escrituras/lecturas con casts laxos (no hay tipos generados).
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { getSupabase, ensureAnonSession } from '@/lib/supabase/anon'
+import { traerTodo } from '@/lib/supabase/paginado'
 import type {
-  Catalogos, CandidatoForm, DireccionForm, Beneficiario, TipoDocumental, TipoDoc,
+  Catalogos, CandidatoForm, DireccionForm, Beneficiario, TipoDocumental, TipoDoc, Estudio, Experiencia, Referencia,
 } from './tipos'
 
 export async function fetchCatalogos(): Promise<Catalogos> {
   const sb = getSupabase()
   const [deptos, munis, eps, afp, ces, cajas, bancos, cargos] = await Promise.all([
     sb.from('departamentos').select('codigo_dane, nombre').order('nombre'),
-    sb.from('municipios').select('codigo_dane, nombre, departamento_codigo').order('nombre'),
+    traerTodo((desde, hasta) => sb.from('municipios').select('codigo_dane, nombre, departamento_codigo')
+      .order('nombre').order('codigo_dane').range(desde, hasta)).then((data) => ({ data })),
     sb.from('eps').select('id, nombre').eq('activo', true).order('nombre'),
     sb.from('afp').select('id, nombre').eq('activo', true).order('nombre'),
     sb.from('cesantias').select('id, nombre').eq('activo', true).order('nombre'),
     sb.from('cajas_compensacion').select('id, nombre').eq('activo', true).order('nombre'),
     sb.from('bancos').select('id, nombre').eq('activo', true).order('nombre'),
-    sb.from('cargos').select('id, nombre').eq('activo', true).order('nombre'),
+    sb.from('cargos').select('id, nombre').eq('activo', true).eq('postulable', true).order('nombre'),
   ])
   return {
     departamentos: (deptos.data as any) ?? [],
@@ -37,21 +39,79 @@ export async function fetchTiposDocumentales(ola = 1): Promise<TipoDocumental[]>
     .select('*')
     .eq('ola', ola)
     .order('orden')
-  return (data as any) ?? []
+  return ((data as any) ?? []).filter((t: TipoDocumental) => t.activo !== false)
 }
 
-/** Carga el candidato BORRADOR de la sesión anónima actual (para reanudar). */
+/**
+ * Carga el candidato de la sesión actual (para reanudar). Trae cualquier fase:
+ * antes solo buscaba BORRADOR/POSTULADO y, en cuanto RRHH lo movía de fase, al
+ * volver a entrar le aparecía un formulario vacío.
+ */
 export async function cargarCandidatoActual(): Promise<CandidatoForm | null> {
-  await ensureAnonSession()
+  const uid = await ensureAnonSession()
   const sb = getSupabase()
   const { data } = await sb
     .from('candidatos')
     .select('*')
-    .in('estado', ['BORRADOR', 'POSTULADO'])
+    .eq('auth_uid', uid)
     .order('updated_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return (data as any) ?? null
+}
+
+// ── Hoja de vida estructurada (estudios, experiencia, referencias) ──────────
+// Se reemplaza la lista completa en cada guardado: son pocas filas y así el
+// orden queda igual al que ve el candidato.
+async function reemplazar(tabla: string, candidatoId: string, filas: Record<string, unknown>[]): Promise<string | null> {
+  const sb = getSupabase()
+  const del = await sb.from(tabla).delete().eq('candidato_id', candidatoId)
+  if (del.error) return del.error.message
+  if (!filas.length) return null
+  const ins = await sb.from(tabla).insert(filas.map((f, i) => ({ ...f, candidato_id: candidatoId, orden: i + 1 })) as any)
+  return ins.error ? ins.error.message : null
+}
+
+const nulo = (v: unknown) => (v === '' || v === undefined ? null : v)
+
+export async function guardarEstudios(candidatoId: string, lista: Estudio[]): Promise<string | null> {
+  return reemplazar('candidato_estudios', candidatoId, lista
+    .filter((e) => e.nivel && (e.institucion?.trim() || e.titulo?.trim()))
+    .map((e) => ({
+      nivel: e.nivel, institucion: nulo(e.institucion?.trim()), titulo: nulo(e.titulo?.trim()), ciudad: nulo(e.ciudad?.trim()),
+      anio_finalizacion: e.anio_finalizacion ? Number(e.anio_finalizacion) : null, ultimo_curso_aprobado: nulo(e.ultimo_curso_aprobado?.trim()),
+      en_curso: !!e.en_curso, intensidad_horaria: nulo(e.intensidad_horaria?.trim()),
+    })))
+}
+
+export async function guardarExperiencias(candidatoId: string, lista: Experiencia[]): Promise<string | null> {
+  return reemplazar('candidato_experiencias', candidatoId, lista
+    .filter((e) => e.empresa?.trim())
+    .map((e) => ({
+      empresa: e.empresa.trim(), cargo: nulo(e.cargo?.trim()), telefono: nulo(e.telefono?.trim()), direccion: nulo(e.direccion?.trim()),
+      jefe_inmediato: nulo(e.jefe_inmediato?.trim()), cargo_jefe: nulo(e.cargo_jefe?.trim()), fecha_ingreso: nulo(e.fecha_ingreso),
+      fecha_retiro: e.trabaja_actualmente ? null : nulo(e.fecha_retiro), trabaja_actualmente: !!e.trabaja_actualmente,
+      motivo_retiro: nulo(e.motivo_retiro?.trim()), funciones: nulo(e.funciones?.trim()),
+    })))
+}
+
+export async function guardarReferencias(candidatoId: string, lista: Referencia[]): Promise<string | null> {
+  return reemplazar('candidato_referencias', candidatoId, lista
+    .filter((r) => r.nombre?.trim())
+    .map((r) => ({
+      tipo: r.tipo, nombre: r.nombre.trim().toUpperCase(), parentesco: nulo(r.parentesco?.trim()), ocupacion: nulo(r.ocupacion?.trim()),
+      telefono: nulo(r.telefono?.trim()), direccion: nulo(r.direccion?.trim()), empresa: nulo(r.empresa?.trim()),
+    })))
+}
+
+export async function cargarHojaVida(candidatoId: string): Promise<{ estudios: Estudio[]; experiencias: Experiencia[]; referencias: Referencia[] }> {
+  const sb = getSupabase()
+  const [e, x, r] = await Promise.all([
+    sb.from('candidato_estudios').select('nivel, institucion, titulo, ciudad, anio_finalizacion, ultimo_curso_aprobado, en_curso, intensidad_horaria').eq('candidato_id', candidatoId).order('orden'),
+    sb.from('candidato_experiencias').select('empresa, cargo, telefono, direccion, jefe_inmediato, cargo_jefe, fecha_ingreso, fecha_retiro, trabaja_actualmente, motivo_retiro, funciones').eq('candidato_id', candidatoId).order('orden'),
+    sb.from('candidato_referencias').select('tipo, nombre, parentesco, ocupacion, telefono, direccion, empresa').eq('candidato_id', candidatoId).order('orden'),
+  ])
+  return { estudios: (e.data as any) ?? [], experiencias: (x.data as any) ?? [], referencias: (r.data as any) ?? [] }
 }
 
 export interface ResultadoIdentificar {
