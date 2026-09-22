@@ -101,6 +101,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_plantillas_correo',  label: 'Crear / editar plantillas de correo' },
       { key: 'ver_flujos_notificacion',      label: 'Ver eventos, flujos y su historial' },
       { key: 'gestionar_flujos_notificacion', label: 'Crear / editar eventos y flujos de notificación' },
+      { key: 'ver_directorio_correos',       label: 'Ver el directorio de correos (centros médicos y listas)' },
+      { key: 'gestionar_directorio_correos', label: 'Editar el directorio de correos (centros médicos, listas y contactos)' },
       { key: 'gestionar_alertas',            label: 'Configurar reglas de alerta' },
     ],
   },

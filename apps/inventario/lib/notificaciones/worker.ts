@@ -1,5 +1,6 @@
 import 'server-only'
 import { renderPlantilla, renderTexto, htmlATexto, type Payload } from '@/lib/email/plantillas'
+import { separarCorreos, unirDestinos, type DestinoCorreo } from './correos'
 
 /**
  * Worker del motor de flujos de notificación.
@@ -23,6 +24,8 @@ import { renderPlantilla, renderTexto, htmlATexto, type Payload } from '@/lib/em
 type DB = any
 
 const MAX_INTENTOS = 3
+// Las plantillas pueden enlazar a la plataforma con {{app_url}}.
+const APP_URL = (process.env.APP_BASE_URL || 'https://concerjes-inmobiliarios-inventario.vercel.app').replace(/\/+$/, '')
 
 export interface ResultadoWorker {
   ejecutados: number
@@ -37,6 +40,19 @@ interface Destinatarios {
   usuarios?: string[]
   correos?: string[]
   campos?: string[]
+  /** Listas del directorio de correos (`directorio_listas.codigo`). */
+  listas?: string[]
+  /** Entidad que trae el evento con su propio correo (p. ej. el centro médico). */
+  entidades?: string[]
+}
+
+/**
+ * Entidades cuyo correo (y copias) se toma del registro que trae el evento.
+ * Lista cerrada: un paso no puede leer cualquier tabla. Si el evento no trae
+ * el id (p. ej. "Otra IPS" escrita a mano), se usa el correo del payload.
+ */
+const ENTIDADES: Record<string, { tabla: string; campoId: string; campoCorreo: string }> = {
+  ips: { tabla: 'ips', campoId: 'ips_id', campoCorreo: 'ips_correo' },
 }
 
 interface Verificacion {
@@ -147,25 +163,59 @@ async function verificar(
     : { continuar: false, motivo: `La condición ya no se cumple: ${v.campo} = "${String(actual)}".` }
 }
 
-/** Resuelve los destinatarios de un paso a correos y a usuarios de la app. */
+/**
+ * Resuelve los destinatarios de un paso: correos (cada uno con sus copias) y
+ * usuarios de la app. Los contactos del directorio y el centro médico del
+ * evento se leen al momento de enviar, así que un cambio en el directorio
+ * aplica de una vez.
+ */
 async function resolverDestinatarios(
   supabase: DB,
   dest: Destinatarios | null,
   payload: Payload,
-): Promise<{ correos: string[]; usuarios: { id: string; email: string | null }[] }> {
+): Promise<{ destinos: DestinoCorreo[]; usuarios: { id: string; email: string | null }[] }> {
   const d = dest ?? {}
-  const correos = new Set<string>()
+  const destinos: DestinoCorreo[] = []
   const usuarios = new Map<string, { id: string; email: string | null }>()
+  const agregar = (para: string, copia: string[] = []) => destinos.push({ para, copia })
 
-  for (const c of d.correos ?? []) {
-    const email = String(c).trim()
-    if (RE_EMAIL.test(email)) correos.add(email.toLowerCase())
-  }
+  for (const c of separarCorreos(d.correos ?? [])) agregar(c)
 
   // Campos del payload que traen el correo del destinatario (cliente, aspirante…).
   for (const campo of d.campos ?? []) {
-    const v = valorPayload(payload, campo)
-    if (typeof v === 'string' && RE_EMAIL.test(v.trim())) correos.add(v.trim().toLowerCase())
+    for (const c of separarCorreos(valorPayload(payload, campo))) agregar(c)
+  }
+
+  // Listas del directorio de correos: cada contacto recibe su correo con sus copias.
+  if ((d.listas ?? []).length > 0) {
+    const { data: listas } = await supabase
+      .from('directorio_listas').select('codigo').in('codigo', d.listas as string[]).eq('activo', true)
+    const activas = ((listas ?? []) as { codigo: string }[]).map((l) => l.codigo)
+    if (activas.length > 0) {
+      const { data: contactos } = await supabase
+        .from('directorio_contactos').select('correo, correos_copia').in('lista_codigo', activas).eq('activo', true)
+      for (const c of (contactos ?? []) as { correo: string | null; correos_copia: string[] | null }[]) {
+        const [para] = separarCorreos(c.correo)
+        if (para) agregar(para, separarCorreos(c.correos_copia))
+      }
+    }
+  }
+
+  // Entidad que trae el evento (p. ej. el centro médico de la remisión).
+  for (const nombre of d.entidades ?? []) {
+    const e = ENTIDADES[nombre]
+    if (!e) continue
+    const id = valorPayload(payload, e.campoId)
+    let resuelto = false
+    if (typeof id === 'string' && id) {
+      const { data } = await supabase.from(e.tabla).select('correo, correos_copia').eq('id', id).maybeSingle()
+      const [para] = separarCorreos(data?.correo)
+      if (para) { agregar(para, separarCorreos(data?.correos_copia)); resuelto = true }
+    }
+    if (!resuelto) {
+      const [para] = separarCorreos(valorPayload(payload, e.campoCorreo))
+      if (para) agregar(para)
+    }
   }
 
   if ((d.roles ?? []).length > 0) {
@@ -174,7 +224,7 @@ async function resolverDestinatarios(
       .eq('activo', true).in('rol', d.roles as string[])
     for (const u of (data ?? []) as { id: string; email: string | null }[]) {
       usuarios.set(u.id, u)
-      if (u.email) correos.add(u.email.toLowerCase())
+      if (u.email && RE_EMAIL.test(u.email)) agregar(u.email)
     }
   }
 
@@ -184,11 +234,11 @@ async function resolverDestinatarios(
       .in('id', d.usuarios as string[])
     for (const u of (data ?? []) as { id: string; email: string | null }[]) {
       usuarios.set(u.id, u)
-      if (u.email) correos.add(u.email.toLowerCase())
+      if (u.email && RE_EMAIL.test(u.email)) agregar(u.email)
     }
   }
 
-  return { correos: [...correos], usuarios: [...usuarios.values()] }
+  return { destinos: unirDestinos(destinos), usuarios: [...usuarios.values()] }
 }
 
 /** Encola los correos del paso en el buzón de salida. */
@@ -198,11 +248,22 @@ async function ejecutarEmail(
   payload: Payload,
   ejecucionPasoId: string,
   entidadId: string | null,
-): Promise<{ enviados: number; detalle: string }> {
-  const { correos } = await resolverDestinatarios(supabase, paso.destinatarios, payload)
-  if (correos.length === 0) return { enviados: 0, detalle: 'Sin destinatarios con correo.' }
+): Promise<{ enviados: number; detalle: string; omitido?: boolean }> {
+  // Sin cuenta de correo no se encola nada: así no salen avisos viejos (una
+  // remisión de hace semanas) el día que se conecte la cuenta.
+  const { data: hayCuenta, error: errorCuenta } = await supabase.rpc('correo_envio_configurado')
+  if (!errorCuenta && hayCuenta === false) {
+    return {
+      enviados: 0, omitido: true,
+      detalle: 'No hay una cuenta de correo conectada (Integraciones → Correo): el correo no se envió.',
+    }
+  }
 
-  let asunto = paso.asunto ? renderTexto(paso.asunto, payload) : ''
+  const { destinos } = await resolverDestinatarios(supabase, paso.destinatarios, payload)
+  if (destinos.length === 0) return { enviados: 0, detalle: 'Sin destinatarios con correo.' }
+
+  const datos: Payload = { ...payload, app_url: APP_URL }
+  let asunto = paso.asunto ? renderTexto(paso.asunto, datos) : ''
   let html = ''
   let texto = ''
   let plantillaCodigo: string | null = null
@@ -216,22 +277,23 @@ async function ejecutarEmail(
     if (!plantilla) return { enviados: 0, detalle: 'La plantilla del paso ya no existe.' }
     if (!plantilla.activa) return { enviados: 0, detalle: 'La plantilla del paso está desactivada.' }
 
-    const r = renderPlantilla(plantilla, payload)
+    const r = renderPlantilla(plantilla, datos)
     asunto = asunto || r.asunto
     html = r.html
     texto = r.texto
     plantillaCodigo = plantilla.codigo
   } else {
-    const cuerpo = renderTexto(paso.mensaje ?? '', payload)
+    const cuerpo = renderTexto(paso.mensaje ?? '', datos)
     texto = cuerpo
     html = `<div style="font-family:Arial,Helvetica,sans-serif;color:#1f2937;line-height:1.6">${cuerpo.replace(/\n/g, '<br>')}</div>`
     asunto = asunto || (paso.nombre ?? 'Notificación · Conserjes Inmobiliarios')
   }
 
-  const enlace = paso.enlace ? renderTexto(paso.enlace, payload) : null
+  const enlace = paso.enlace ? renderTexto(paso.enlace, datos) : null
 
-  const filas = correos.map((para) => ({
+  const filas = destinos.map(({ para, copia }) => ({
     para,
+    copia: copia.length > 0 ? copia.join(', ') : null,
     asunto: asunto.slice(0, 300),
     cuerpo_texto: texto || htmlATexto(html),
     cuerpo_html: html,
@@ -368,6 +430,11 @@ export async function procesarFlujosPendientes(supabase: DB, limite = 50): Promi
       let detalle = ''
       if (paso.tipo === 'EMAIL') {
         const r = await ejecutarEmail(supabase, paso, payload, fila.id, ejecucion.entidad_id ?? null)
+        if (r.omitido) {
+          await marcar('OMITIDO', r.detalle)
+          res.omitidos++
+          continue
+        }
         res.correos += r.enviados
         detalle = r.detalle
       } else if (paso.tipo === 'APP') {

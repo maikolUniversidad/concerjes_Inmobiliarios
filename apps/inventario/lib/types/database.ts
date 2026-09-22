@@ -976,6 +976,50 @@ export interface DestinatariosPaso {
   correos: string[]
   /** Campos del payload que traen un correo (p. ej. `cliente_email`). */
   campos: string[]
+  /** Listas del directorio de correos (`directorio_listas.codigo`). */
+  listas?: string[]
+  /** Entidad del evento que trae su propio correo; hoy: `ips` (centro médico). */
+  entidades?: string[]
+}
+
+/** Lista de distribución del directorio de correos. */
+export interface DirectorioLista {
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  uso: string | null
+  orden: number
+  activo: boolean
+  es_sistema: boolean
+}
+
+/** Contacto de una lista del directorio de correos. */
+export interface DirectorioContacto {
+  id: string
+  lista_codigo: string
+  nombre: string
+  cargo: string | null
+  correo: string | null
+  correos_copia: string[]
+  telefono: string | null
+  notas: string | null
+  activo: boolean
+  orden: number
+}
+
+/** Centro médico (IPS) al que se remiten los exámenes de ingreso. */
+export interface CentroMedico {
+  id: string
+  nombre: string
+  correo: string | null
+  correos_copia: string[]
+  telefono: string | null
+  direccion: string | null
+  ciudad: string | null
+  contacto: string | null
+  notas: string | null
+  activo: boolean
+  orden: number
 }
 
 /**

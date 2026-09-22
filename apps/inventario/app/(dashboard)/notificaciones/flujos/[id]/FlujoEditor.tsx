@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useMemo, useState, useTransition } from 'react'
 import { useFormStatus } from 'react-dom'
+import Link from 'next/link'
 import { toast } from 'sonner'
 import {
   Plus, Save, Trash2, Loader2, X, ChevronUp, ChevronDown, Mail, Bell, Clock, Webhook,
@@ -33,8 +34,13 @@ const ICONO_TIPO: Record<TipoPasoFlujo, typeof Mail> = {
 
 type PlantillaLite = Pick<PlantillaCorreo, 'id' | 'codigo' | 'nombre' | 'asunto' | 'activa'>
 type UsuarioLite = { id: string; nombre: string; email: string | null; rol: string }
+type ListaLite = { codigo: string; nombre: string; activo: boolean; conCorreo: number }
 
-const DEST_VACIO: DestinatariosPaso = { roles: [], usuarios: [], correos: [], campos: [] }
+const DEST_VACIO: DestinatariosPaso = { roles: [], usuarios: [], correos: [], campos: [], listas: [], entidades: [] }
+
+/** El evento trae un centro médico (p. ej. la remisión a exámenes)? */
+const traeCentroMedico = (evento: EventoNotificacion | null) =>
+  !!evento && ((evento.variables ?? []).some((v) => v.clave === 'ips_id') || 'ips_id' in (evento.payload_ejemplo ?? {}))
 
 /** Convierte minutos a la unidad más legible para el formulario. */
 function desglosarDemora(minutos: number): { valor: number; unidad: 'minutos' | 'horas' | 'dias' } {
@@ -61,13 +67,14 @@ function GuardarBtn() {
 }
 
 export function FlujoEditor({
-  flujo, evento, pasos, plantillas, usuarios, ejecuciones, pasosEjecucion, puedeGestionar,
+  flujo, evento, pasos, plantillas, usuarios, listas, ejecuciones, pasosEjecucion, puedeGestionar,
 }: {
   flujo: FlujoNotificacion
   evento: EventoNotificacion | null
   pasos: FlujoPaso[]
   plantillas: PlantillaLite[]
   usuarios: UsuarioLite[]
+  listas: ListaLite[]
   ejecuciones: FlujoEjecucion[]
   pasosEjecucion: FlujoEjecucionPaso[]
   puedeGestionar: boolean
@@ -183,6 +190,8 @@ export function FlujoEditor({
               ...(d.usuarios ?? []).map((u) => usuarios.find((x) => x.id === u)?.nombre ?? 'usuario'),
               ...(d.correos ?? []),
               ...(d.campos ?? []).map((c) => `{{${c}}}`),
+              ...(d.listas ?? []).map((c) => `lista ${listas.find((l) => l.codigo === c)?.nombre ?? c}`),
+              ...(d.entidades ?? []).map((e) => (e === 'ips' ? 'centro médico del evento' : e)),
             ]
             return (
               <div key={p.id} className={`bg-white border rounded-2xl p-4 shadow-sm ${p.activo ? 'border-gray-100' : 'border-dashed border-gray-200 opacity-70'}`}>
@@ -313,6 +322,7 @@ export function FlujoEditor({
           evento={evento}
           plantillas={plantillas}
           usuarios={usuarios}
+          listas={listas}
           onCerrar={() => setEditando(null)}
         />
       )}
@@ -322,13 +332,14 @@ export function FlujoEditor({
 
 // ── Editor de un paso ────────────────────────────────────────────────────────
 function EditorPaso({
-  flujoId, paso, evento, plantillas, usuarios, onCerrar,
+  flujoId, paso, evento, plantillas, usuarios, listas, onCerrar,
 }: {
   flujoId: string
   paso: FlujoPaso | null
   evento: EventoNotificacion | null
   plantillas: PlantillaLite[]
   usuarios: UsuarioLite[]
+  listas: ListaLite[]
   onCerrar: () => void
 }) {
   const [state, action] = useActionState<ActionResult, FormData>(guardarPaso, {})
@@ -353,6 +364,13 @@ function EditorPaso({
       ...d,
       roles: d.roles.includes(rol) ? d.roles.filter((r) => r !== rol) : [...d.roles, rol],
     }))
+  }
+
+  function alternar(clave: 'listas' | 'entidades', valor: string) {
+    setDest((d) => {
+      const actual = d[clave] ?? []
+      return { ...d, [clave]: actual.includes(valor) ? actual.filter((x) => x !== valor) : [...actual, valor] }
+    })
   }
 
   return (
@@ -475,6 +493,42 @@ function EditorPaso({
 
               {tipo === 'EMAIL' && (
                 <>
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-body text-[11px] text-gray-400">Listas del directorio de correos</p>
+                      <Link href="/notificaciones/directorio" className="font-body text-[11px] font-semibold text-brand-green hover:underline">
+                        Administrar el directorio
+                      </Link>
+                    </div>
+                    {listas.length === 0 ? (
+                      <p className="font-body text-xs text-gray-400 mt-1">Aún no hay listas en el directorio.</p>
+                    ) : (
+                      <div className="grid sm:grid-cols-2 gap-1.5 mt-1">
+                        {listas.map((l) => (
+                          <label key={l.codigo} className={`flex items-center gap-2 font-body text-xs ${l.activo ? 'text-gray-700' : 'text-gray-400'}`}>
+                            <input type="checkbox" checked={(dest.listas ?? []).includes(l.codigo)} onChange={() => alternar('listas', l.codigo)}
+                              className="accent-brand-green w-3.5 h-3.5" />
+                            {l.nombre}
+                            <span className={`text-[10px] ${l.conCorreo === 0 ? 'text-amber-600' : 'text-gray-400'}`}>
+                              {l.conCorreo === 0 ? 'sin correos' : `${l.conCorreo} con correo`}{!l.activo && ' · inactiva'}
+                            </span>
+                          </label>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {(traeCentroMedico(evento) || (dest.entidades ?? []).includes('ips')) && (
+                    <label className="flex items-start gap-2 font-body text-xs text-gray-700">
+                      <input type="checkbox" checked={(dest.entidades ?? []).includes('ips')} onChange={() => alternar('entidades', 'ips')}
+                        className="accent-brand-green w-3.5 h-3.5 mt-0.5" />
+                      <span>
+                        Centro médico (IPS) que trae el evento
+                        <span className="block text-[11px] text-gray-400">Su correo y sus copias se toman del directorio al enviar.</span>
+                      </span>
+                    </label>
+                  )}
+
                   <label className="block">
                     <span className="font-body text-[11px] text-gray-400">Correos fijos (separados por coma)</span>
                     <input value={dest.correos.join(', ')}

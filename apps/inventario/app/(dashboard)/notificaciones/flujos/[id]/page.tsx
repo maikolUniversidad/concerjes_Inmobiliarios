@@ -23,7 +23,7 @@ export default async function FlujoDetallePage({ params }: { params: Promise<{ i
 
   const f = flujo as FlujoNotificacion
 
-  const [{ data: evento }, { data: pasos }, { data: plantillas }, { data: usuarios }, { data: ejecuciones }] =
+  const [{ data: evento }, { data: pasos }, { data: plantillas }, { data: usuarios }, { data: ejecuciones }, { data: listasDir }] =
     await Promise.all([
       supabase.from('eventos_notificacion').select('*').eq('codigo', f.evento_codigo).maybeSingle(),
       supabase.from('flujo_pasos').select('*').eq('flujo_id', id).order('orden', { ascending: true }),
@@ -31,7 +31,15 @@ export default async function FlujoDetallePage({ params }: { params: Promise<{ i
       supabase.from('usuarios').select('id, nombre, email, rol').eq('activo', true).order('nombre'),
       supabase.from('flujo_ejecuciones').select('*').eq('flujo_id', id)
         .order('created_at', { ascending: false }).limit(15),
+      supabase.from('directorio_listas').select('codigo, nombre, activo, directorio_contactos(correo, activo)').order('orden'),
     ])
+
+  // Listas del directorio de correos con cuántos contactos tienen correo.
+  const listas = ((listasDir ?? []) as { codigo: string; nombre: string; activo: boolean; directorio_contactos: { correo: string | null; activo: boolean }[] | null }[])
+    .map((l) => ({
+      codigo: l.codigo, nombre: l.nombre, activo: l.activo,
+      conCorreo: (l.directorio_contactos ?? []).filter((c) => c.activo && c.correo).length,
+    }))
 
   const idsEjecucion = ((ejecuciones ?? []) as FlujoEjecucion[]).map((e) => e.id)
   const { data: pasosEjecucion } = idsEjecucion.length
@@ -57,6 +65,7 @@ export default async function FlujoDetallePage({ params }: { params: Promise<{ i
         pasos={(pasos as FlujoPaso[]) ?? []}
         plantillas={(plantillas as Pick<PlantillaCorreo, 'id' | 'codigo' | 'nombre' | 'asunto' | 'activa'>[]) ?? []}
         usuarios={(usuarios as { id: string; nombre: string; email: string | null; rol: string }[]) ?? []}
+        listas={listas}
         ejecuciones={(ejecuciones as FlujoEjecucion[]) ?? []}
         pasosEjecucion={(pasosEjecucion as FlujoEjecucionPaso[]) ?? []}
         puedeGestionar={permisos.puede('gestionar_flujos_notificacion')}

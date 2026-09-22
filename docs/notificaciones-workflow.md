@@ -102,6 +102,9 @@ Un flujo es: **evento → condiciones → pasos**.
   - `ESPERA` — solo marca tiempo.
   - `WEBHOOK` — POST con el payload a una URL externa.
 
+  Además, desde el 2026-09-23, a **listas del directorio de correos** (`destinatarios.listas`) y
+  al **centro médico que trae el evento** (`destinatarios.entidades = ["ips"]`). Ver la sección 4.
+
 ### El escalamiento: «si a las 24 h sigue pasando»
 
 Cada paso puede llevar una **verificación**: antes de ejecutarse se relee el registro en la base de
@@ -117,6 +120,51 @@ datos y solo continúa si la condición se mantiene.
 Con «Probar flujo» se dispara el evento con el payload de ejemplo del catálogo, sin esperar a que
 ocurra en la operación real. El historial de la pantalla muestra cada ejecución, sus pasos, cuándo
 están programados y qué resultó.
+
+---
+
+## 4. Directorio de correos
+
+`/notificaciones/directorio` · permisos `ver_directorio_correos` y `gestionar_directorio_correos`
+(sembrados en Coordinador y Supervisor de Conserjería; Auditor solo ver). Migraciones
+`20260923000000_directorio_correos.sql` y `20260923000001_directorio_usos.sql`.
+
+A quién le escribe la plataforma, en un solo lugar:
+
+| Pestaña | Qué guarda | Quién lo usa |
+|---|---|---|
+| **Centros médicos** | La tabla `ips` (la misma de la remisión del expediente) con correo principal, **correos en copia**, teléfono, dirección, contacto y notas | Flujo «Remisión a exámenes médicos → centro médico» y el botón «Abrir correo a la IPS» |
+| **Listas de distribución** | `directorio_listas` + `directorio_contactos` (correo y copias por contacto). Sembradas: Selección (buzón de selección), Nómina (contacto sin correo: falta), Seguridad (vacía) | Flujos que eligen la lista |
+| **Empresa y otros correos** | Correos de `vac_empresa` (selección, datos personales, nómina) y un resumen de los correos que viven en otros módulos (usuarios, proveedores, clientes, empresas) | Formatos y avisos; los demás se editan en su módulo |
+
+Cada lista y los centros médicos muestran qué flujos les escriben (`directorio_usos()`, SECURITY
+DEFINER: solo devuelve nombre del flujo, evento y si está activo). Los correos se validan en la
+base (`correo_valido`, `correos_validos`).
+
+**Cómo resuelve el motor** (`lib/notificaciones/worker.ts`): los contactos de la lista y el centro
+médico se leen **al momento de enviar**, así que un cambio en el directorio aplica de una vez sin
+tocar los flujos. Cada contacto recibe un correo con sus copias en `copia` (CC). Nadie recibe dos
+veces: si una persona es destinataria principal, no va además en copia de otro
+(`lib/notificaciones/correos.ts`). Si el evento no trae `ips_id` (una «Otra IPS» escrita a mano),
+se usa `ips_correo` del payload. Las plantillas pueden enlazar a la plataforma con `{{app_url}}`.
+
+**Sin cuenta de correo conectada no se encola nada**: el paso queda OMITIDO con el motivo
+(`correo_envio_configurado()`, SECURITY DEFINER). Así no salen avisos viejos (remisiones de hace
+semanas) el día que se conecte la cuenta.
+
+### Flujos y plantillas sembrados (proceso de selección)
+
+| Flujo | Evento | Destinatario | Plantilla |
+|---|---|---|---|
+| Remisión a exámenes médicos → centro médico | `ATS_REMISION_IPS` | Centro médico del evento (+ copias) | `ats_remision_ips` |
+| Documentos listos para firmar → candidato | `ATS_DOCUMENTO_PARA_FIRMA` | `candidato_email` | `ats_documentos_para_firmar` |
+| Nuevo ingreso → Nómina | `ATS_CONTRATADO` | Lista Nómina | `ats_ingreso_nomina` |
+| Pruebas completadas → Selección | `ATS_PRUEBAS_COMPLETADAS` | Lista Selección | `ats_pruebas_completadas` |
+
+Los eventos del proceso de selección ya traen sus campos y un ejemplo (datos ficticios) para
+«Probar flujo». La remisión desde el expediente manda todo lo que usa la plantilla (datos del
+aspirante, cargo, alturas/alimentos, observaciones, empresa y correo de respuesta) y, si se
+escribe una «Otra IPS», la guarda en el directorio.
 
 ---
 
@@ -140,6 +188,8 @@ envía solo). Los pasos que fallan se reintentan hasta 3 veces; los correos, has
 | `gestionar_plantillas_correo` | Crear y editar plantillas |
 | `ver_flujos_notificacion` | Ver eventos, flujos y su historial |
 | `gestionar_flujos_notificacion` | Crear y editar eventos y flujos, disparar pruebas |
+| `ver_directorio_correos` | Ver centros médicos, listas y correos de la empresa |
+| `gestionar_directorio_correos` | Editar el directorio (los centros médicos también los edita quien tiene `gestionar_postulaciones`) |
 
 Las políticas RLS de las tablas nuevas usan `auth_permiso()` / `auth_permiso_any()`, así que basta
 con otorgar el permiso desde `/roles` (SUPER_ADMIN y ADMIN lo tienen implícito).

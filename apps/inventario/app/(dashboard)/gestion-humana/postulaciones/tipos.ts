@@ -50,7 +50,10 @@ export interface CargoOpcion extends Opcion {
 }
 export interface CentroOpcion { id: string; codigo: string; nombre: string; ciudad: string | null }
 export interface RequisicionOpcion { id: string; numero: string; cliente_nombre: string | null; cargo_texto: string | null; cantidad: number; cupos_cubiertos: number; estado: string }
-export interface IpsOpcion { id: string; nombre: string; correo: string | null; telefono: string | null; direccion: string | null }
+export interface IpsOpcion {
+  id: string; nombre: string; correo: string | null; correos_copia: string[] | null
+  telefono: string | null; direccion: string | null; ciudad: string | null; notas: string | null
+}
 export interface MotivoOpcion { valor: string; etiqueta: string }
 export interface TipoDocOpcion {
   id: string; codigo: string; nombre: string; grupo: string; obligatorio: boolean

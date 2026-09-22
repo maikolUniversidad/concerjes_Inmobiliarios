@@ -6,7 +6,7 @@ import {
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
-  ScanLine, HardHat, ClipboardPlus, FileSignature,
+  ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -152,6 +152,7 @@ export const navigation: NavModule[] = [
       { label: 'Notificaciones',     href: '/notificaciones',   icon: Bell,          permiso: 'ver_notificaciones' },
       { label: 'Plantillas de correo', href: '/notificaciones/plantillas', icon: MailPlus, permiso: 'gestionar_plantillas_correo' },
       { label: 'Eventos y flujos',   href: '/notificaciones/flujos', icon: Workflow,  permiso: 'ver_flujos_notificacion' },
+      { label: 'Directorio de correos', href: '/notificaciones/directorio', icon: BookUser, permiso: 'ver_directorio_correos' },
       { label: 'Usuarios',           href: '/usuarios',         icon: Users,         permiso: 'ver_usuarios' },
       { label: 'Roles y Permisos',   href: '/roles',            icon: Shield,        permiso: 'gestionar_roles' },
       { label: 'Integraciones',      href: '/integraciones',    icon: Plug,          permiso: 'gestionar_integraciones' },

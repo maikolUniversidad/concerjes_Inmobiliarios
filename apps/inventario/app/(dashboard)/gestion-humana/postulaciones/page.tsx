@@ -24,7 +24,7 @@ export default async function PostulacionesPage() {
     sb.from('cargos').select('id, nombre, requiere_manipulacion_alimentos, requiere_trabajo_alturas, requiere_libreta_militar, requiere_curso_grecas').eq('activo', true).order('nombre'),
     sb.from('centros_costo').select('id, codigo, nombre, ciudad').eq('activo', true).order('codigo'),
     sb.from('requisiciones').select('id, numero, cliente_nombre, cargo_texto, cantidad, cupos_cubiertos, estado').in('estado', ['ABIERTA', 'EN_PROCESO']).order('created_at', { ascending: false }),
-    sb.from('ips').select('id, nombre, correo, telefono, direccion').eq('activo', true).order('orden'),
+    sb.from('ips').select('id, nombre, correo, correos_copia, telefono, direccion, ciudad, notas').eq('activo', true).order('orden'),
     sb.from('vac_listas_opciones').select('valor, etiqueta').eq('lista', 'MOTIVO_DESCARTE').eq('activo', true).order('orden'),
     sb.from('vac_tipos_documentales').select('*').order('ola').order('orden'),
     sb.from('roles').select('id, nombre, rol_base').eq('activo', true).order('nombre'),

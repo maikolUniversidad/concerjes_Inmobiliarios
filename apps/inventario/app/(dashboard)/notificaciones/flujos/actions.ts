@@ -147,6 +147,7 @@ export async function guardarPaso(_prev: ActionResult, formData: FormData): Prom
   if (tipo === 'EMAIL') {
     const hayDestino = (destinatarios.roles?.length ?? 0) + (destinatarios.usuarios?.length ?? 0)
       + (destinatarios.correos?.length ?? 0) + (destinatarios.campos?.length ?? 0)
+      + (destinatarios.listas?.length ?? 0) + (destinatarios.entidades?.length ?? 0)
     if (hayDestino === 0) return { error: 'Indica a quién se le envía el correo.' }
   }
   if (tipo === 'WEBHOOK' && !String(formData.get('webhook_url') ?? '').trim()) {
