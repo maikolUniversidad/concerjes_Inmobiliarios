@@ -19,7 +19,7 @@
   </table>
 
   <h3>INFORMACIÓN PERSONAL</h3>
-  <p class="negrita">Describa con quién vive:</p>
+  <p class="negrita">Describa con quién vive:{{#if entrevista.vive_solo}} vive solo(a).{{/if}}</p>
   <table>
     <tr><th>Nombres y apellidos</th><th>Parentesco</th><th>Edad</th><th>Nivel académico</th><th>Ocupación</th></tr>
     {{#each formato.convivientes}}

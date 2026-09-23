@@ -142,6 +142,7 @@ llegó vacío (0 bytes); se trabajó con el expediente de 40 folios.
 | `20260922000002_ats_hoja_vida_firma.sql` | Estudios, experiencia y referencias del candidato; firma con IP; documentos ocultos al candidato; guardia antes de la bitácora; `sha256()` nativo en vez de `digest()` (pgcrypto vive en `extensions`) |
 | `20260922000003_ats_correcciones.sql` | Fecha de fin del periodo de prueba (restaba entero a timestamp) |
 | `20260922000004_ats_foto_perfil.sql` | El candidato puede ver su foto de perfil aunque la haya subido RRHH (solo esa ruta); `FOTO_CARNET` solo acepta imágenes |
+| `20260923000002_paquetes_documentos.sql` | Órdenes guardados del paquete de contratación en PDF (uno predeterminado) |
 
 Datos cargados con scripts: `importar-municipios-dane.mjs` (1.122 municipios
 DIVIPOLA; antes 73), `importar-centros-costo-historicos.mjs` (catálogo completo
@@ -206,6 +207,44 @@ continuar con justificación (queda en la bitácora como `EXCEPCION_DOCUMENTAL`)
   nunca llega al navegador: califica `vac_finalizar_prueba`.
 - `/registro-vacantes/mi-proceso`: fases, pruebas pendientes, documentos para
   firmar con el dedo, documentos por subir y documentos firmados.
+
+### Expediente por etapas (2026-09-23)
+- Las pestañas del expediente son **las mismas bandejas** de Postulaciones, en el mismo orden
+  (`lib/ats/etapas.ts`): 1 Postulación · 2 Psicológica · 3 Seguridad AAA · 4 Exámenes ·
+  5 Contratación (también Contratados) · Historial (también Descartados). El expediente **abre en
+  la etapa en que va el candidato** y, si cambia de fase (Aprobar, Mover, Reactivar), pasa solo a
+  la etapa nueva.
+- Cada etapa arranca con su lista de chequeo (`requisitosEtapa`, calculada en `expediente/resumen.ts`):
+  qué está listo en verde y qué falta; en la etapa actual dice cuándo ya se puede Aprobar.
+- **Postulación** abre en **«Registro y validación»**: los datos que registró el candidato al lado de
+  los documentos que subió (ola 1), para comparar y validar. «Pruebas de selección» es la otra vista.
+- **Psicológica**: entrevista (con quién vive y trayectoria con **listas de opciones**, no texto
+  libre: parentesco, nivel académico, ocupación, tiempo laborado por rangos, motivo de retiro;
+  «Vive solo(a)» sale en el formato de entrevista v2) y verificación de referencias.
+- **Seguridad AAA**: estudio de seguridad y antecedentes. **Exámenes**: remisión a IPS y concepto.
+- **Contratación**: foto del trabajador (la toma el administrativo con la persona al frente),
+  documentos de vinculación e ingreso (olas 2 y 3), contrato, formatos, **paquete en un solo PDF** y
+  entrega a nómina. **Historial**: observaciones, bitácora y autorizaciones.
+- Todo documento subido tiene **miniatura** (foto, primera página del PDF en computador o ícono) y al
+  tocarla se abre a **pantalla completa** con zoom y flechas entre archivos
+  (`components/documentos/MiniaturaArchivo.tsx`, `VisorArchivo.tsx`): expediente, concepto médico,
+  escaneados firmados en papel y el paso de documentos del formulario.
+- El motivo de retiro de los empleos del formulario del candidato también es una lista.
+
+### Paquete de contratación (un solo PDF)
+- En Contratación se elige un **orden guardado** (`paquetes_documentos`, migración
+  `20260923000002`), se ajusta (subir, bajar, quitar, agregar) y se **descarga todo en un PDF**:
+  formatos generados (o el escaneado si se firmó en papel), documentos subidos y resultados de las
+  pruebas. Lo que el candidato no tiene se salta. Al principio va un índice con la página de cada
+  documento.
+- Se pueden guardar varios órdenes (carpeta física, nómina, cliente…) y uno queda
+  **predeterminado** (al marcar uno se desmarca el anterior). Vienen «Carpeta completa de
+  contratación» (predeterminado) y «Documentos para nómina». Leer: `ver_postulaciones`; editar:
+  `gestionar_postulaciones`.
+- Se arma en el navegador (`lib/documentos/paquete.ts` con `pdf-lib` + `html2canvas`): los PDF
+  subidos se copian tal cual; las fotos se reducen a ~1800 px; los formatos se pasan a páginas
+  carta con los márgenes de la impresión, cortando en huecos en blanco entre renglones o filas (se
+  mide sobre la imagen ya dibujada para no partir letras). Word y HEIC van como una página de aviso.
 
 ### Foto de perfil (tipo carné)
 - La toma el candidato en el paso de documentos o en "Mi proceso" (botón de la

@@ -1,10 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { ExternalLink, Briefcase, KeyRound, AlertTriangle, Landmark, MapPin, HeartPulse, GraduationCap, Users, Loader2, Check } from 'lucide-react'
+import { ExternalLink, Briefcase, KeyRound, AlertTriangle, Landmark, MapPin, HeartPulse, GraduationCap, Users, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ComboBuscador } from '@/components/ui/ComboBuscador'
-import { FASES_PUBLICAS, faseMeta } from '@/lib/ats/fases'
 import { Seccion, Dato, Boton, inputCls, fechaCorta } from '../ui'
 import type { PropsTab } from './tipos'
 
@@ -12,14 +11,14 @@ import type { PropsTab } from './tipos'
 
 const siNo = (v: boolean | null | undefined) => (v === true ? 'Sí' : v === false ? 'No' : '')
 
-export function TabPersonal({ d, sb, catalogos, puedeGestionar, recargar, onCambio }: PropsTab) {
+/** Datos del registro del candidato (etapa 1 · Postulación, junto a los documentos). */
+export function TabPersonal({ d, sb, catalogos, puedeGestionar, recargar, onCambio, columnas = 2 }: PropsTab & { columnas?: 1 | 2 }) {
   const c = d.c
   const n = d.nombres
   const [centro, setCentro] = useState<string>(c.centro_costo_id ?? '')
   const [req, setReq] = useState<string>(c.requisicion_id ?? '')
   const [rolId, setRolId] = useState<string>(d.rolId)
   const [guardando, setGuardando] = useState<string | null>(null)
-  const publica = faseMeta(c.estado).publica
 
   async function guardarVinculacion() {
     setGuardando('vinc')
@@ -56,26 +55,7 @@ export function TabPersonal({ d, sb, catalogos, puedeGestionar, recargar, onCamb
 
   return (
     <div className="space-y-4">
-      {/* Línea de fases (las 5 que ve el candidato) */}
-      <div className="rounded-xl border border-gray-100 bg-white p-3">
-        <ol className="grid grid-cols-5 gap-1">
-          {FASES_PUBLICAS.map((f) => {
-            const hecho = publica > f.n || ['CONTRATADO', 'ACTIVO'].includes(c.estado)
-            const actual = publica === f.n
-            return (
-              <li key={f.n} className="text-center">
-                <div className={'mx-auto flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold ' +
-                  (hecho ? 'bg-brand-green text-white' : actual ? 'bg-brand-green/15 text-brand-green ring-2 ring-brand-green' : 'bg-gray-100 text-gray-400')}>
-                  {hecho ? <Check className="h-4 w-4" /> : f.n}
-                </div>
-                <p className={'mt-1 text-[11px] leading-tight ' + (actual ? 'font-bold text-brand-green' : 'text-gray-500')}>{f.label}</p>
-              </li>
-            )
-          })}
-        </ol>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className={'grid gap-4 ' + (columnas === 2 ? 'lg:grid-cols-2' : '')}>
         <Seccion titulo="Identificación" icono={<Users className="h-4 w-4 text-brand-green" />}>
           <div className="grid grid-cols-2 gap-3">
             <Dato label="Tipo y número" valor={`${c.tipo_documento} ${c.numero_documento}`} />

@@ -3,6 +3,7 @@
 import { History, ShieldCheck, ArrowRight } from 'lucide-react'
 import { faseMeta } from '@/lib/ats/fases'
 import { Seccion, Badge, fechaHora } from '../ui'
+import { ObservacionesCandidato } from './TabEvaluaciones'
 import type { PropsTab } from './tipos'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -20,7 +21,8 @@ const TIPO_EVENTO: Record<string, { label: string; color: string }> = {
   CENTRO_COSTO: { label: 'Vinculación', color: 'bg-teal-100 text-teal-700' },
 }
 
-export function TabHistorial({ d, catalogos }: PropsTab) {
+export function TabHistorial(props: PropsTab) {
+  const { d, catalogos } = props
   // El trigger guarda "CODIGO_MOTIVO · detalle": se muestra la etiqueta del motivo.
   const motivo = (m: string | null) => {
     if (!m) return m
@@ -29,6 +31,8 @@ export function TabHistorial({ d, catalogos }: PropsTab) {
     return etiqueta ? [etiqueta, ...resto].join(' · ') : m
   }
   return (
+    <div className="space-y-4">
+    <ObservacionesCandidato {...props} />
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
       <Seccion titulo="Historial de cambios" icono={<History className="h-4 w-4 text-brand-green" />}>
         {d.eventos.length === 0 ? <p className="text-sm text-gray-400">No hay eventos registrados.</p> : (
@@ -69,6 +73,7 @@ export function TabHistorial({ d, catalogos }: PropsTab) {
           </ul>
         )}
       </Seccion>
+    </div>
     </div>
   )
 }

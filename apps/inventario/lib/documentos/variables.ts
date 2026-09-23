@@ -232,6 +232,7 @@ export const GRUPOS_VARIABLES: GrupoVariables[] = [
       { ruta: 'entrevista.fecha', descripcion: 'Fecha de la entrevista' },
       { ruta: 'entrevista.evaluador_nombre', descripcion: 'Psicólogo(a) / evaluador' },
       { ruta: 'entrevista.convivientes', descripcion: 'Lista: nombre, parentesco, edad, nivel_academico, ocupacion' },
+      { ruta: 'entrevista.vive_solo', descripcion: 'Verdadero si en la entrevista se marcó que vive solo(a)' },
       { ruta: 'entrevista.personas_a_cargo', descripcion: 'Texto' },
       { ruta: 'entrevista.aspectos_mejorar', descripcion: 'Texto' },
       { ruta: 'entrevista.aspectos_buenos', descripcion: 'Texto' },

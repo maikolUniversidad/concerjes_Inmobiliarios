@@ -6,6 +6,9 @@ import { Stethoscope, Mail, Loader2, CheckCircle2, XCircle, Building2, Upload, E
 import { toast } from 'sonner'
 import { emitirEvento } from '@/lib/notificaciones/eventos'
 import { ordenFase } from '@/lib/ats/fases'
+import { MiniaturaArchivo } from '@/components/documentos/MiniaturaArchivo'
+import { VisorArchivo } from '@/components/documentos/VisorArchivo'
+import { useUrlsFirmadas } from '@/components/documentos/useUrlsFirmadas'
 import { fechaCorta, parsearFecha } from '@/lib/documentos/plantilla'
 
 /** dd/mm/aaaa para el correo a la IPS ('' si no hay fecha). */
@@ -26,6 +29,8 @@ export function TabExamenes({ d, sb, catalogos, puedeGestionar, recargar, onCamb
   const cargo = cargoCat?.nombre ?? ''
   const tipoConcepto = catalogos.tipos.find((t) => t.codigo === 'CONCEPTO_APTITUD')
   const conceptos = d.docs.filter((x) => x.tipo_documental_id === tipoConcepto?.id)
+  const urlsConceptos = useUrlsFirmadas(sb, conceptos.map((x) => x.storage_path))
+  const [verConceptoI, setVerConceptoI] = useState<number | null>(null)
 
   const ipsElegida: { id: string | null; nombre: string; correo: string | null; correos_copia?: string[] | null } | null =
     ipsSel === 'OTRA'
@@ -106,11 +111,6 @@ export function TabExamenes({ d, sb, catalogos, puedeGestionar, recargar, onCamb
     await recargar(); onCambio()
   }
 
-  async function verConcepto(doc: any) {
-    const { data } = await sb.storage.from('registro-vacantes').createSignedUrl(doc.storage_path, 300)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
-  }
-
   return (
     <div className="space-y-4">
       <Seccion titulo="Remisión a IPS" icono={<Stethoscope className="h-4 w-4 text-brand-green" />}
@@ -178,11 +178,12 @@ export function TabExamenes({ d, sb, catalogos, puedeGestionar, recargar, onCamb
       <Seccion titulo="Concepto de aptitud médica" icono={<CheckCircle2 className="h-4 w-4 text-brand-green" />}>
         <p className="mb-2 text-xs text-gray-500">Solo el concepto de aptitud (apto, apto con restricciones o no apto). La historia clínica no se sube: es reserva de la IPS.</p>
         {conceptos.length === 0 ? <p className="mb-2 text-sm text-gray-400">Aún no se ha cargado el concepto.</p> : (
-          <ul className="mb-2 space-y-1">
-            {conceptos.map((x) => (
-              <li key={x.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-1.5 text-sm">
-                <span className="truncate">{x.nombre_original}</span>
-                <button onClick={() => verConcepto(x)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-green"><Eye className="h-3.5 w-3.5" /> Ver</button>
+          <ul className="mb-2 space-y-1.5">
+            {conceptos.map((x, i) => (
+              <li key={x.id} className="flex items-center gap-3 rounded-lg bg-gray-50 px-3 py-2 text-sm">
+                <MiniaturaArchivo url={urlsConceptos[x.storage_path] ?? null} nombre={x.nombre_original ?? 'concepto'} mime={x.mime} onAbrir={() => setVerConceptoI(i)} />
+                <span className="min-w-0 flex-1 truncate">{x.nombre_original}</span>
+                <button onClick={() => setVerConceptoI(i)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-green"><Eye className="h-3.5 w-3.5" /> Ver</button>
               </li>
             ))}
           </ul>
@@ -209,6 +210,11 @@ export function TabExamenes({ d, sb, catalogos, puedeGestionar, recargar, onCamb
           </div>
         )}
       </Seccion>
+
+      {verConceptoI !== null && (
+        <VisorArchivo inicial={verConceptoI} onCerrar={() => setVerConceptoI(null)}
+          archivos={conceptos.map((x) => ({ url: urlsConceptos[x.storage_path] ?? null, nombre: x.nombre_original ?? 'Concepto de aptitud', mime: x.mime, grupo: 'Concepto de aptitud médica' }))} />
+      )}
     </div>
   )
 }

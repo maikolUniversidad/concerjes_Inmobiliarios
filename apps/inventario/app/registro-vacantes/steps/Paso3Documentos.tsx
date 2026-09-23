@@ -11,7 +11,11 @@ import {
   type DocumentoSubido,
 } from '@/lib/registro/documentos'
 import type { TipoDocumental } from '@/lib/registro/tipos'
+import { getSupabase } from '@/lib/supabase/anon'
 import { BotonesFoto } from '@/components/foto/BotonesFoto'
+import { MiniaturaArchivo } from '@/components/documentos/MiniaturaArchivo'
+import { VisorArchivo, type ArchivoVisible } from '@/components/documentos/VisorArchivo'
+import { useUrlsFirmadas } from '@/components/documentos/useUrlsFirmadas'
 
 const GRUPOS: Record<string, string> = {
   PERSONALES: 'Documentos personales',
@@ -26,6 +30,9 @@ export function Paso3Documentos({ ctx }: { ctx: WizardCtx }) {
   const [docs, setDocs] = useState<DocumentoSubido[]>([])
   const [cargoFlags, setCargoFlags] = useState<Record<string, boolean> | null>(null)
   const [cargando, setCargando] = useState(true)
+  const sb = useMemo(() => getSupabase(), [])
+  const urls = useUrlsFirmadas(sb, docs.map((x) => x.storage_path))
+  const [visor, setVisor] = useState<{ archivos: ArchivoVisible[]; inicial: number } | null>(null)
 
   useEffect(() => {
     if (!candidatoId) return
@@ -96,6 +103,11 @@ export function Paso3Documentos({ ctx }: { ctx: WizardCtx }) {
                 tipo={tipo}
                 candidatoId={candidatoId!}
                 docs={docsDe(tipo.id)}
+                urls={urls}
+                onAbrir={(docsTipo, i) => setVisor({
+                  inicial: i,
+                  archivos: docsTipo.map((x) => ({ url: urls[x.storage_path] ?? null, nombre: x.nombre_original ?? tipo.nombre, mime: x.mime, grupo: tipo.nombre })),
+                })}
                 onSubido={onSubido}
                 onEliminar={onEliminar}
               />
@@ -103,6 +115,8 @@ export function Paso3Documentos({ ctx }: { ctx: WizardCtx }) {
           })}
         </section>
       ))}
+
+      {visor && <VisorArchivo archivos={visor.archivos} inicial={visor.inicial} onCerrar={() => setVisor(null)} />}
 
       <div className="flex gap-3 pt-2">
         <button type="button" onClick={prev} className="rounded-xl border border-gray-300 px-5 py-3 font-body font-semibold text-gray-600">Atrás</button>
@@ -117,6 +131,7 @@ export function Paso3Documentos({ ctx }: { ctx: WizardCtx }) {
 
 interface PropsTarjeta {
   tipo: TipoDocumental; candidatoId: string; docs: DocumentoSubido[]
+  urls: Record<string, string>; onAbrir: (docs: DocumentoSubido[], i: number) => void
   onSubido: (d: DocumentoSubido) => void; onEliminar: (d: DocumentoSubido) => void | Promise<void>
 }
 
@@ -184,7 +199,7 @@ function FotoCard({ tipo, candidatoId, docs, onSubido, onEliminar }: PropsTarjet
   )
 }
 
-function TipoCard({ tipo, candidatoId, docs, onSubido, onEliminar }: PropsTarjeta) {
+function TipoCard({ tipo, candidatoId, docs, urls, onAbrir, onSubido, onEliminar }: PropsTarjeta) {
   const [subiendo, setSubiendo] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
   const fotoRef = useRef<HTMLInputElement>(null)
@@ -240,9 +255,9 @@ function TipoCard({ tipo, candidatoId, docs, onSubido, onEliminar }: PropsTarjet
       {docs.length > 0 && (
         <ul className="mt-3 space-y-1.5">
           {docs.map((d, i) => (
-            <li key={d.id} className="flex items-center justify-between rounded-lg bg-gray-50 px-3 py-2">
-              <span className="flex min-w-0 items-center gap-2 text-xs text-gray-600">
-                <FileText className="h-4 w-4 shrink-0 text-brand-green" />
+            <li key={d.id} className="flex items-center justify-between gap-2 rounded-lg bg-gray-50 px-2 py-2">
+              <span className="flex min-w-0 items-center gap-2.5 text-xs text-gray-600">
+                <MiniaturaArchivo url={urls[d.storage_path] ?? null} nombre={d.nombre_original ?? 'archivo'} mime={d.mime} tamano="sm" onAbrir={() => onAbrir(docs, i)} />
                 <span className="truncate">{d.nombre_original ?? `Archivo${etiquetaSlot(i)}`}{etiquetaSlot(i)}</span>
               </span>
               <button type="button" onClick={() => onEliminar(d)} className="shrink-0 text-red-400 hover:text-red-600">

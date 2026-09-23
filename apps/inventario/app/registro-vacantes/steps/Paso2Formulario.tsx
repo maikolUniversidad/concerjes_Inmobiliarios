@@ -4,7 +4,9 @@ import { useMemo, useState } from 'react'
 import { Loader2, Plus, Trash2, ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import type { WizardCtx } from '../RegistroWizard'
-import { Field, Input, Select, Textarea, SiNo, Chips, Grid, SeccionTitulo } from '../ui'
+import { Field, Input, Select, Textarea, SiNo, Chips, Grid, SeccionTitulo, campoCls } from '../ui'
+import { SelectConOtro } from '@/components/ui/SelectConOtro'
+import { MOTIVOS_RETIRO } from '@/lib/ats/opciones'
 import {
   guardarDireccion, guardarBeneficiarios, guardarCandidato, guardarEstudios, guardarExperiencias, guardarReferencias,
 } from '@/lib/registro/datos'
@@ -521,7 +523,8 @@ export function Paso2Formulario({ ctx }: { ctx: WizardCtx }) {
             <label className="flex items-center gap-2 text-sm text-gray-600">
               <input type="checkbox" checked={!!x.trabaja_actualmente} onChange={(e) => setExp(i, { trabaja_actualmente: e.target.checked, fecha_retiro: e.target.checked ? null : x.fecha_retiro })} className="h-4 w-4 accent-[#2E7D32]" /> Trabajo ahí actualmente
             </label>
-            <Input placeholder="Motivo del retiro" value={x.motivo_retiro ?? ''} onChange={(e) => setExp(i, { motivo_retiro: e.target.value })} />
+            <SelectConOtro value={x.motivo_retiro ?? ''} onChange={(v) => setExp(i, { motivo_retiro: v })} opciones={MOTIVOS_RETIRO}
+              placeholder="Motivo del retiro" className={campoCls + ' appearance-none'} />
             <Textarea placeholder="Funciones que realizabas" value={x.funciones ?? ''} onChange={(e) => setExp(i, { funciones: e.target.value })} />
           </div>
         ))}

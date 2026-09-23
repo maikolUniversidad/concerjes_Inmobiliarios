@@ -6,7 +6,11 @@ import {
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { VisorDocumento } from '@/components/documentos/VisorDocumento'
+import { MiniaturaArchivo } from '@/components/documentos/MiniaturaArchivo'
+import { VisorArchivo } from '@/components/documentos/VisorArchivo'
+import { useUrlsFirmadas } from '@/components/documentos/useUrlsFirmadas'
 import { htmlParaMostrar, imprimirHtml } from '@/lib/documentos/html'
+import { PaqueteDocumentos } from './PaqueteDocumentos'
 import { contratoVacio, MODALIDADES_CONTRATO, CLASES_SALARIO, CLAUSULAS_ADICIONALES_POR_DEFECTO, type ContratoForm } from '@/lib/ats/contrato'
 import { ordenFase } from '@/lib/ats/fases'
 import { DOCGEN_ESTADO } from '../estados'
@@ -72,6 +76,9 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
   const up = (patch: Partial<ContratoForm>) => setK((x) => ({ ...x, ...patch }))
   const generadosActivos = d.generados.filter((g) => g.estado !== 'ANULADO')
   const porFirmar = generadosActivos.filter((g) => g.estado === 'PENDIENTE_FIRMA')
+  // Escaneados de lo firmado en papel: miniatura y visor a pantalla completa.
+  const urlsEscaneados = useUrlsFirmadas(sb, generadosActivos.map((g) => g.archivo_firmado_path))
+  const [escaneado, setEscaneado] = useState<any | null>(null)
   const grupos = useMemo(() => {
     const m = new Map<string, typeof catalogos.plantillas>()
     for (const p of catalogos.plantillas) m.set(p.momento, [...(m.get(p.momento) ?? []), p])
@@ -162,11 +169,6 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
     if (error) { toast.error(error.message); return }
     toast.success('Documento firmado en papel registrado.')
     await recargar(); onCambio()
-  }
-
-  async function verEscaneado(g: any) {
-    const { data } = await sb.storage.from('registro-vacantes').createSignedUrl(g.archivo_firmado_path, 300)
-    if (data?.signedUrl) window.open(data.signedUrl, '_blank', 'noopener')
   }
 
   async function entregarNomina() {
@@ -388,7 +390,11 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
                 const e = DOCGEN_ESTADO[g.estado] ?? DOCGEN_ESTADO.GENERADO
                 return (
                   <li key={g.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-                    <div className="min-w-0">
+                    {g.archivo_firmado_path && (
+                      <MiniaturaArchivo url={urlsEscaneados[g.archivo_firmado_path] ?? null} nombre={g.archivo_firmado_path.split('/').pop() ?? g.nombre}
+                        tamano="sm" onAbrir={() => setEscaneado(g)} />
+                    )}
+                    <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-gray-800">{g.nombre}</p>
                       <p className="text-[11px] text-gray-400">
                         Generado {fechaHora(g.generado_at)}{g.generado_por_nombre ? ` por ${g.generado_por_nombre}` : ''}
@@ -400,7 +406,7 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
                       <Badge className={e.color}>{e.label}</Badge>
                       <button onClick={() => ver(g)} className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"><Eye className="h-3.5 w-3.5" /> Ver</button>
                       <button onClick={() => ver(g, true)} className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"><Printer className="h-3.5 w-3.5" /> Imprimir</button>
-                      {g.archivo_firmado_path && <button onClick={() => verEscaneado(g)} className="inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"><FileCheck2 className="h-3.5 w-3.5" /> Escaneado</button>}
+                      {g.archivo_firmado_path && <button onClick={() => setEscaneado(g)} className="inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"><FileCheck2 className="h-3.5 w-3.5" /> Escaneado</button>}
                       {puedeGestionar && g.estado === 'PENDIENTE_FIRMA' && (
                         <label className="inline-flex cursor-pointer items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
                           {guardando === g.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Firmado en papel
@@ -416,6 +422,9 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
           )}
         </div>
       </Seccion>
+
+      {/* ── Paquete en un solo PDF ───────────────────────────────────────── */}
+      <PaqueteDocumentos d={d} sb={sb} catalogos={catalogos} puedeGestionar={puedeGestionar} recargar={recargar} onCambio={onCambio} />
 
       {/* ── Entrega a nómina ─────────────────────────────────────────────── */}
       <Seccion titulo="Entrega a nómina" icono={<UserCheck className="h-4 w-4 text-brand-green" />}>
@@ -439,6 +448,12 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
         <Modal titulo={visor.titulo} onClose={() => setVisor(null)} ancho="max-w-4xl">
           <VisorDocumento cuerpo={visor.cuerpo} titulo={visor.titulo} />
         </Modal>
+      )}
+      {escaneado && (
+        <VisorArchivo onCerrar={() => setEscaneado(null)} archivos={[{
+          url: urlsEscaneados[escaneado.archivo_firmado_path] ?? null, grupo: 'Firmado en papel (escaneado)',
+          nombre: escaneado.archivo_firmado_path.split('/').pop() ?? escaneado.nombre,
+        }]} />
       )}
     </div>
   )

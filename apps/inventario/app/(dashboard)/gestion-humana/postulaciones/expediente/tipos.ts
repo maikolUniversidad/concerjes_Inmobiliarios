@@ -15,6 +15,8 @@ export interface DatosExp {
   observaciones: any[]
   evaluaciones: any[]
   intentos: any[]
+  /** Pruebas que aplican al candidato con su intento (vac_pruebas_de_candidato). */
+  pruebas: any[]
   contratos: any[]
   generados: any[]
   historial: any[]

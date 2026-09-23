@@ -1,40 +1,33 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  X, Loader2, IdCard, CheckCircle2, ArrowRightLeft, Ban, RotateCcw, User, FolderOpen, ClipboardCheck, Stethoscope,
-  FileSignature, History, Camera,
-} from 'lucide-react'
-import { toast } from 'sonner'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { X, Loader2, IdCard, CheckCircle2, ArrowRightLeft, Ban, RotateCcw, Camera, Check, History } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { esCorte, faseMeta, semaforoDias, siguienteFase } from '@/lib/ats/fases'
-import { BotonesFoto } from '@/components/foto/BotonesFoto'
+import { ETAPAS, estadoEtapa, etapaDeEstado, requisitosEtapa, type EtapaKey } from '@/lib/ats/etapas'
 import { ModalMover } from '../ModalMover'
 import { ModalDescartar } from '../ModalDescartar'
-import { subirDocumentoStaff } from '../acciones'
 import { Badge, Boton, Modal } from '../ui'
 import type { Catalogos, FilaBandeja } from '../tipos'
 import type { DatosExp } from './tipos'
-import { TabPersonal } from './TabPersonal'
-import { TabDocumentos } from './TabDocumentos'
-import { TabEvaluaciones } from './TabEvaluaciones'
+import { resumenExpediente } from './resumen'
+import { EncabezadoEtapa } from './EncabezadoEtapa'
+import { TabPostulacion } from './TabPostulacion'
+import { TabEvaluacion, TabSeguridad } from './TabEvaluaciones'
 import { TabExamenes } from './TabExamenes'
+import { TabDocumentos } from './TabDocumentos'
 import { TabContratacion } from './TabContratacion'
+import { FotoTrabajador } from './FotoTrabajador'
 import { TabHistorial } from './TabHistorial'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-type TabKey = 'personal' | 'documentos' | 'evaluaciones' | 'examenes' | 'contratacion' | 'historial'
-
-const TABS: { key: TabKey; label: string; icono: React.ReactNode }[] = [
-  { key: 'personal', label: 'Personal', icono: <User className="h-4 w-4" /> },
-  { key: 'documentos', label: 'Documentos', icono: <FolderOpen className="h-4 w-4" /> },
-  { key: 'evaluaciones', label: 'Pruebas y evaluaciones', icono: <ClipboardCheck className="h-4 w-4" /> },
-  { key: 'examenes', label: 'Exámenes médicos', icono: <Stethoscope className="h-4 w-4" /> },
-  { key: 'contratacion', label: 'Contratación', icono: <FileSignature className="h-4 w-4" /> },
-  { key: 'historial', label: 'Historial', icono: <History className="h-4 w-4" /> },
-]
-
+/**
+ * Expediente del candidato organizado igual que las bandejas de Postulaciones:
+ * Postulación → Psicológica → Seguridad AAA → Exámenes → Contratación (+ Historial).
+ * Abre en la etapa en que va el candidato (Postulación abre en «Registro y
+ * validación») y cada etapa muestra qué falta para pasar a la siguiente.
+ */
 export function Expediente({
   candidatoId, fila, catalogos, puedeGestionar, onClose, onCambio,
 }: {
@@ -48,13 +41,13 @@ export function Expediente({
   const [sb] = useState<any>(() => createClient())
   const [d, setD] = useState<DatosExp | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [tab, setTab] = useState<TabKey>('personal')
+  const [tab, setTab] = useState<EtapaKey>(() => etapaDeEstado(fila?.estado))
   const [modal, setModal] = useState<null | { tipo: 'mover' | 'descartar'; destino?: string; motivo?: string }>(null)
   const [fotoAbierta, setFotoAbierta] = useState(false)
 
   const cargar = useCallback(async () => {
     const id = candidatoId
-    const [cR, dirR, bensR, estR, expR, refR, docsR, consR, evsR, obsR, evalR, intR, kR, genR, yoR] = await Promise.all([
+    const [cR, dirR, bensR, estR, expR, refR, docsR, consR, evsR, obsR, evalR, intR, kR, genR, pruR, yoR] = await Promise.all([
       sb.from('candidatos').select('*').eq('id', id).maybeSingle(),
       sb.from('candidato_direcciones').select('*').eq('candidato_id', id).is('vigente_hasta', null).order('vigente_desde', { ascending: false }).limit(1).maybeSingle(),
       sb.from('beneficiarios').select('*').eq('candidato_id', id),
@@ -71,6 +64,7 @@ export function Expediente({
       sb.from('documentos_generados')
         .select('id, plantilla_id, codigo_plantilla, nombre, estado, metodo_firma, firmado_at, generado_at, generado_por_nombre, archivo_firmado_path, visible_candidato, permite_firma_electronica, anulado_motivo, version_id, contrato_id')
         .eq('candidato_id', id).order('generado_at', { ascending: false }),
+      sb.rpc('vac_pruebas_de_candidato', { p_candidato: id }),
       sb.auth.getUser(),
     ])
     if (cR.error || !cR.data) { setError(cR.error?.message ?? 'No se encontró el candidato.'); return }
@@ -98,8 +92,8 @@ export function Expediente({
     setD({
       c, dir, bens: bensR.data ?? [], estudios: estR.data ?? [], experiencias: expR.data ?? [], referencias: refR.data ?? [],
       docs: docsR.data ?? [], consentimientos: consR.data ?? [], eventos: evsR.data ?? [], observaciones: obsR.data ?? [],
-      evaluaciones: evalR.data ?? [], intentos: intR.data ?? [], contratos: kR.data ?? [], generados: genR.data ?? [],
-      historial: histR.data ?? [],
+      evaluaciones: evalR.data ?? [], intentos: intR.data ?? [], pruebas: pruR.data ?? [], contratos: kR.data ?? [],
+      generados: genR.data ?? [], historial: histR.data ?? [],
       nombres: {
         munNacimiento: mun.get(c.municipio_nacimiento) ?? '', depNacimiento: dep.get(c.departamento_nacimiento) ?? '',
         munTrabajo: mun.get(c.municipio_trabajo) ?? '', depTrabajo: dep.get(c.departamento_trabajo) ?? '',
@@ -116,6 +110,16 @@ export function Expediente({
 
   useEffect(() => { void cargar() }, [cargar])
 
+  // Si el candidato cambia de fase (aprobar, mover, reactivar), el expediente
+  // pasa solo a la etapa nueva. Si se abrió sin fila, se ubica al cargar.
+  const estadoPrevio = useRef<string | null>(null)
+  useEffect(() => {
+    const e = d?.c.estado
+    if (!e) return
+    if (estadoPrevio.current ? estadoPrevio.current !== e : !fila) setTab(etapaDeEstado(e))
+    estadoPrevio.current = e
+  }, [d?.c.estado, fila])
+
   // La fila de la bandeja es la que usan los modales; si el expediente cambió de
   // fase, se toma el estado fresco.
   const filaActual: FilaBandeja | null = useMemo(() => {
@@ -131,20 +135,6 @@ export function Expediente({
   const recargar = useCallback(async () => { await cargar() }, [cargar])
   const cambio = useCallback(() => { void cargar(); onCambio() }, [cargar, onCambio])
 
-  // Foto tomada o subida por RRHH (p. ej. con la cámara de la oficina): queda
-  // validada y pasa a ser la foto de perfil que sale en los formatos.
-  async function guardarFoto(file: File) {
-    const tipo = catalogos.tipos.find((t) => t.codigo === 'FOTO_CARNET')
-    if (!tipo) { toast.error('No está configurado el tipo de documento de la foto (FOTO_CARNET).'); return }
-    const r = await subirDocumentoStaff(sb, candidatoId, tipo, file, 'Foto de perfil tomada por RRHH', { validado: true })
-    if (r.error || !r.path) { toast.error(r.error ?? 'No se pudo guardar la foto.'); return }
-    const { error } = await sb.from('candidatos').update({ foto_perfil_path: r.path, foto_perfil_at: new Date().toISOString() }).eq('id', candidatoId)
-    if (error) { toast.error(error.message); return }
-    toast.success('Foto de perfil guardada.')
-    setFotoAbierta(false)
-    await cargar()
-  }
-
   const estado = d?.c.estado ?? fila?.estado ?? ''
   const meta = faseMeta(estado)
   const siguiente = siguienteFase(estado)
@@ -152,13 +142,14 @@ export function Expediente({
   const dias = d ? Math.floor((Date.now() - new Date(d.c.fase_desde).getTime()) / 86400000) : (fila?.dias_en_fase ?? 0)
   const sem = semaforoDias(dias)
   const cargo = catalogos.cargos.find((x) => x.id === d?.c.cargo_postulacion_id)?.nombre ?? fila?.cargo ?? 'Sin cargo'
+  const resumen = useMemo(() => (d ? resumenExpediente(d, catalogos) : null), [d, catalogos])
 
   const props = d ? { d, sb, catalogos, puedeGestionar, recargar, onCambio: cambio } : null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/40" onClick={onClose} />
-      <div className="relative flex h-full w-full max-w-6xl flex-col overflow-hidden bg-gray-50 shadow-2xl sm:h-[95vh] sm:rounded-2xl">
+      <div className="relative flex h-full w-full max-w-7xl flex-col overflow-hidden bg-gray-50 shadow-2xl sm:h-[95vh] sm:rounded-2xl">
         {/* Encabezado */}
         <div className="shrink-0 border-b border-gray-100 bg-white px-4 py-3 sm:px-5">
           <div className="flex items-start justify-between gap-3">
@@ -205,32 +196,52 @@ export function Expediente({
             </div>
           )}
 
+          {/* Etapas: las mismas bandejas de Postulaciones, en el mismo orden */}
           <div className="-mb-3 mt-3 flex gap-1 overflow-x-auto">
-            {TABS.map((t) => (
-              <button key={t.key} onClick={() => setTab(t.key)}
-                className={'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold ' +
-                  (tab === t.key ? 'border-brand-green text-brand-green' : 'border-transparent text-gray-500 hover:text-gray-800')}>
-                {t.icono}{t.label}
-              </button>
-            ))}
+            {ETAPAS.map((e) => {
+              const est = estadoEtapa(e.key, estado)
+              const pendientes = resumen && est === 'actual' ? requisitosEtapa(e.key, resumen).filter((r) => !r.ok).length : 0
+              return (
+                <button key={e.key} onClick={() => setTab(e.key)} title={e.subtitulo}
+                  className={'flex shrink-0 items-center gap-1.5 border-b-2 px-3 py-2 text-sm font-semibold ' +
+                    (tab === e.key ? 'border-brand-green text-brand-green' : 'border-transparent text-gray-500 hover:text-gray-800')}>
+                  {e.n ? (
+                    <span className={'flex h-5 w-5 items-center justify-center rounded-full text-[10px] font-bold ' +
+                      (est === 'hecha' ? 'bg-brand-green text-white' : est === 'actual' ? 'bg-brand-green/15 text-brand-green ring-2 ring-brand-green' : 'bg-gray-100 text-gray-500')}>
+                      {est === 'hecha' ? <Check className="h-3 w-3" /> : e.n}
+                    </span>
+                  ) : <History className="h-4 w-4" />}
+                  {e.label}
+                  {pendientes > 0 && <span className="rounded-full bg-amber-100 px-1.5 text-[10px] text-amber-800" title="Pendientes de esta etapa">{pendientes}</span>}
+                </button>
+              )
+            })}
           </div>
         </div>
 
-        {/* Contenido */}
+        {/* Contenido de la etapa */}
         <div className="flex-1 overflow-y-auto p-3 sm:p-5">
           {error ? (
             <p className="rounded-xl bg-red-50 p-4 text-sm text-red-700">{error}</p>
-          ) : !props ? (
+          ) : !props || !resumen ? (
             <div className="flex justify-center py-20"><Loader2 className="h-7 w-7 animate-spin text-brand-green" /></div>
           ) : (
-            <>
-              {tab === 'personal' && <TabPersonal {...props} />}
-              {tab === 'documentos' && <TabDocumentos {...props} />}
-              {tab === 'evaluaciones' && <TabEvaluaciones {...props} />}
+            <div className="space-y-4">
+              <EncabezadoEtapa etapa={tab} estado={estadoEtapa(tab, estado)} requisitos={requisitosEtapa(tab, resumen)}
+                siguienteLabel={siguiente ? faseMeta(siguiente).label : null} />
+              {tab === 'postulacion' && <TabPostulacion {...props} />}
+              {tab === 'evaluacion' && <TabEvaluacion {...props} />}
+              {tab === 'seguridad' && <TabSeguridad {...props} />}
               {tab === 'examenes' && <TabExamenes {...props} onNoApto={() => setModal({ tipo: 'descartar', motivo: 'EXAMENES_MEDICOS' })} />}
-              {tab === 'contratacion' && <TabContratacion {...props} />}
+              {tab === 'contratacion' && (
+                <>
+                  <FotoTrabajador {...props} />
+                  <TabDocumentos {...props} olas={[2, 3]} />
+                  <TabContratacion {...props} />
+                </>
+              )}
               {tab === 'historial' && <TabHistorial {...props} />}
-            </>
+            </div>
           )}
         </div>
       </div>
@@ -243,26 +254,9 @@ export function Expediente({
         <ModalDescartar filas={[filaActual]} motivos={catalogos.motivos} motivoInicial={modal.motivo} onClose={() => setModal(null)}
           onHecho={() => { setModal(null); cambio() }} />
       )}
-      {fotoAbierta && d && (
-        <Modal titulo="Foto de perfil" subtitulo={`${d.c.nombres ?? ''} ${d.c.apellidos ?? ''}`} onClose={() => setFotoAbierta(false)} ancho="max-w-md">
-          <div className="flex flex-col items-center gap-4">
-            {d.fotoUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={d.fotoUrl} alt="Foto de perfil" className="h-64 w-48 rounded-xl border border-gray-200 object-cover" />
-            ) : (
-              <div className="flex h-64 w-48 items-center justify-center rounded-xl bg-gray-100 text-sm text-gray-400">Sin foto</div>
-            )}
-            <p className="text-center text-xs text-gray-500">
-              Sale en la hoja de vida, la actualización de datos y los resultados de las pruebas. Los formatos que se generen
-              después la llevan incluida.
-            </p>
-            {puedeGestionar && (
-              <div className="w-full">
-                <BotonesFoto onFoto={guardarFoto} textoTomar={d.fotoUrl ? 'Tomar otra con la cámara' : 'Tomar con la cámara'}
-                  textoSubir={d.fotoUrl ? 'Cambiar por un archivo' : 'Subir foto'} />
-              </div>
-            )}
-          </div>
+      {fotoAbierta && props && (
+        <Modal titulo="Foto de perfil" subtitulo={`${d!.c.nombres ?? ''} ${d!.c.apellidos ?? ''}`} onClose={() => setFotoAbierta(false)} ancho="max-w-xl">
+          <FotoTrabajador {...props} enModal />
         </Modal>
       )}
     </div>

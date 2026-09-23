@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils'
 const base =
   'w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-base text-gray-900 outline-none transition-colors focus:border-brand-green focus:ring-2 focus:ring-brand-green/20 disabled:bg-gray-100'
 
+/** Estilo de los campos del formulario (para componentes compartidos como SelectConOtro). */
+export const campoCls = base
+
 export function Label({ children, req }: { children: React.ReactNode; req?: boolean }) {
   return (
     <label className="mb-1.5 block font-body text-sm font-semibold text-gray-700">

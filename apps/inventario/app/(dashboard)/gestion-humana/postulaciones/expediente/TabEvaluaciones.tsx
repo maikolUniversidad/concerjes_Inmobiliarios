@@ -4,8 +4,11 @@ import { useState } from 'react'
 import { ClipboardCheck, ShieldCheck, MessageSquare, Phone, Loader2, Plus, Trash2, Brain, Search, ChevronDown, Eye, Printer } from 'lucide-react'
 import { toast } from 'sonner'
 import { htmlResultadoPrueba } from '@/lib/ats/resultado-prueba'
+import { MOTIVOS_RETIRO, NIVELES_ACADEMICOS, OCUPACIONES, PARENTESCOS_CONVIVENCIA, TIEMPOS_LABORADOS, rangoTiempo } from '@/lib/ats/opciones'
 import { imprimirHtml, limpiarHtml, resolverMarcadores } from '@/lib/documentos/html'
+import { edadDesde } from '@/lib/documentos/plantilla'
 import { VisorDocumento } from '@/components/documentos/VisorDocumento'
+import { SelectConOtro } from '@/components/ui/SelectConOtro'
 import { Seccion, Boton, Badge, Campo, Modal, inputCls, fechaCorta, fechaHora } from '../ui'
 import type { PropsTab } from './tipos'
 
@@ -20,6 +23,21 @@ const ANTEC: Record<string, { label: string; color: string }> = {
 
 interface Conviviente { nombre: string; parentesco: string; edad: string; nivel_academico: string; ocupacion: string }
 interface Trayecto { empresa: string; tiempo: string; fecha_retiro: string; razon_retiro: string; funciones: string }
+
+// El formulario del candidato usa «Cónyuge»; la entrevista, la lista más completa.
+const PARENTESCO_DESDE_REGISTRO: Record<string, string> = { 'Cónyuge': 'Cónyuge o compañero(a)' }
+
+/** Con quién vive: se precarga con el grupo familiar que registró el candidato. */
+function convivientesIniciales(bens: any[]): Conviviente[] {
+  return bens.map((b) => {
+    const edad = b.fecha_nacimiento ? edadDesde(b.fecha_nacimiento) : null
+    return {
+      nombre: `${b.nombres ?? ''} ${b.apellidos ?? ''}`.trim(),
+      parentesco: PARENTESCO_DESDE_REGISTRO[b.parentesco] ?? b.parentesco ?? '',
+      edad: edad !== null && edad !== undefined ? String(edad) : '', nivel_academico: '', ocupacion: '',
+    }
+  })
+}
 
 const CAMPOS_TEXTO: [string, string][] = [
   ['personas_a_cargo', '¿Cuántas personas tiene a su cargo y quiénes son?'],
@@ -36,19 +54,36 @@ const CAMPOS_TEXTO: [string, string][] = [
   ['personal_dificil', 'Si ha tenido personal a su cargo, ¿qué fue lo más difícil?'],
 ]
 
-export function TabEvaluaciones({ d, sb, catalogos, puedeGestionar, recargar, onCambio }: PropsTab) {
+// Cada etapa del expediente toma sus piezas de aquí (mismo orden que las bandejas).
+
+/** Etapa 2 · Psicológica: entrevista y verificación de referencias. */
+export function TabEvaluacion({ d, sb, puedeGestionar, recargar }: PropsTab) {
   return (
     <div className="space-y-4">
-      <Pruebas d={d} sb={sb} catalogos={catalogos} />
       <Entrevista d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} />
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SeguridadAAA d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} />
-        <Antecedentes d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} onCambio={onCambio} />
-      </div>
       <Referencias d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} />
-      <Observaciones d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} />
     </div>
   )
+}
+
+/** Etapa 3 · Seguridad AAA: estudio de seguridad y antecedentes. */
+export function TabSeguridad({ d, sb, puedeGestionar, recargar, onCambio }: PropsTab) {
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <SeguridadAAA d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} />
+      <Antecedentes d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} onCambio={onCambio} />
+    </div>
+  )
+}
+
+/** Resultados de las pruebas (etapa 1 · Postulación). */
+export function PruebasSeleccion({ d, sb, catalogos }: PropsTab) {
+  return <Pruebas d={d} sb={sb} catalogos={catalogos} />
+}
+
+/** Observaciones del equipo (van con el historial). */
+export function ObservacionesCandidato({ d, sb, puedeGestionar, recargar }: PropsTab) {
+  return <Observaciones d={d} sb={sb} puedeGestionar={puedeGestionar} recargar={recargar} />
 }
 
 // ── Pruebas de selección ──────────────────────────────────────────────────────
@@ -182,11 +217,11 @@ function Entrevista({ d, sb, puedeGestionar, recargar }: { d: PropsTab['d']; sb:
   const [resultado, setResultado] = useState<string>(previa?.resultado ?? 'PENDIENTE')
   const [concepto, setConcepto] = useState<string>(previa?.concepto ?? '')
   const [txt, setTxt] = useState<Record<string, string>>(() => Object.fromEntries(CAMPOS_TEXTO.map(([k]) => [k, datos0[k] ?? ''])))
-  const [conv, setConv] = useState<Conviviente[]>(datos0.convivientes ?? d.bens.map((b) => ({
-    nombre: `${b.nombres ?? ''} ${b.apellidos ?? ''}`.trim(), parentesco: b.parentesco ?? '', edad: '', nivel_academico: '', ocupacion: '',
-  })))
+  const [conv, setConv] = useState<Conviviente[]>(datos0.convivientes ?? convivientesIniciales(d.bens))
+  const [viveSolo, setViveSolo] = useState<boolean>(!!datos0.vive_solo)
   const [tray, setTray] = useState<Trayecto[]>(datos0.trayectoria ?? d.experiencias.slice(0, 3).map((x) => ({
-    empresa: x.empresa ?? '', tiempo: '', fecha_retiro: x.fecha_retiro ?? '', razon_retiro: x.motivo_retiro ?? '', funciones: x.funciones ?? '',
+    empresa: x.empresa ?? '', tiempo: rangoTiempo(x.fecha_ingreso, x.fecha_retiro), fecha_retiro: x.fecha_retiro ?? '',
+    razon_retiro: x.motivo_retiro ?? '', funciones: x.funciones ?? '',
   })))
   const [obs, setObs] = useState<string>(datos0.observaciones ?? '')
   const [guardando, setGuardando] = useState(false)
@@ -196,7 +231,10 @@ function Entrevista({ d, sb, puedeGestionar, recargar }: { d: PropsTab['d']; sb:
     const fila = {
       candidato_id: d.c.id, tipo: 'ENTREVISTA', resultado, concepto: concepto || null, fecha,
       evaluador: d.yo.id, evaluador_nombre: evaluador || null,
-      datos: { ...txt, convivientes: conv.filter((x) => x.nombre.trim()), trayectoria: tray.filter((x) => x.empresa.trim()), observaciones: obs },
+      datos: {
+        ...txt, vive_solo: viveSolo, convivientes: viveSolo ? [] : conv.filter((x) => x.nombre.trim()),
+        trayectoria: tray.filter((x) => x.empresa.trim()), observaciones: obs,
+      },
     }
     const r = previa
       ? await sb.from('candidato_evaluaciones').update(fila).eq('id', previa.id)
@@ -233,20 +271,33 @@ function Entrevista({ d, sb, puedeGestionar, recargar }: { d: PropsTab['d']; sb:
           </div>
 
           <div>
-            <p className="mb-1 text-xs font-semibold text-gray-600">¿Con quién vive?</p>
-            <div className="space-y-1.5">
-              {conv.map((x, i) => (
-                <div key={i} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[2fr_1fr_60px_1fr_1fr_32px]">
-                  <input placeholder="Nombre" value={x.nombre} onChange={(e) => setConv(conv.map((y, j) => j === i ? { ...y, nombre: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Parentesco" value={x.parentesco} onChange={(e) => setConv(conv.map((y, j) => j === i ? { ...y, parentesco: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Edad" value={x.edad} onChange={(e) => setConv(conv.map((y, j) => j === i ? { ...y, edad: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Nivel académico" value={x.nivel_academico} onChange={(e) => setConv(conv.map((y, j) => j === i ? { ...y, nivel_academico: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Ocupación" value={x.ocupacion} onChange={(e) => setConv(conv.map((y, j) => j === i ? { ...y, ocupacion: e.target.value } : y))} className={inputCls} />
-                  <button type="button" onClick={() => setConv(conv.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600" aria-label="Quitar"><Trash2 className="h-4 w-4" /></button>
-                </div>
-              ))}
-              {conv.length < 6 && <button type="button" onClick={() => setConv([...conv, { nombre: '', parentesco: '', edad: '', nivel_academico: '', ocupacion: '' }])} className="text-xs font-semibold text-brand-green">+ Agregar persona</button>}
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
+              <p className="text-xs font-semibold text-gray-600">¿Con quién vive?</p>
+              <label className="flex items-center gap-1.5 text-xs text-gray-600">
+                <input type="checkbox" checked={viveSolo} onChange={(e) => setViveSolo(e.target.checked)} className="h-3.5 w-3.5 accent-[#2E7D32]" /> Vive solo(a)
+              </label>
             </div>
+            {!viveSolo && (
+              <div className="space-y-1.5">
+                <div className="hidden grid-cols-[2fr_1.3fr_70px_1.3fr_1.3fr_32px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:grid">
+                  <span>Nombre</span><span>Parentesco</span><span>Edad</span><span>Nivel académico</span><span>Ocupación</span><span />
+                </div>
+                {conv.map((x, i) => {
+                  const cambiar = (patch: Partial<Conviviente>) => setConv(conv.map((y, j) => (j === i ? { ...y, ...patch } : y)))
+                  return (
+                    <div key={i} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[2fr_1.3fr_70px_1.3fr_1.3fr_32px]">
+                      <input placeholder="Nombre" value={x.nombre} onChange={(e) => cambiar({ nombre: e.target.value })} className={inputCls} />
+                      <SelectConOtro value={x.parentesco} onChange={(v) => cambiar({ parentesco: v })} opciones={PARENTESCOS_CONVIVENCIA} placeholder="Parentesco" className={inputCls} />
+                      <input type="number" min={0} max={110} placeholder="Edad" value={x.edad} onChange={(e) => cambiar({ edad: e.target.value })} className={inputCls} />
+                      <SelectConOtro value={x.nivel_academico} onChange={(v) => cambiar({ nivel_academico: v })} opciones={NIVELES_ACADEMICOS} placeholder="Nivel académico" className={inputCls} />
+                      <SelectConOtro value={x.ocupacion} onChange={(v) => cambiar({ ocupacion: v })} opciones={OCUPACIONES} placeholder="Ocupación" etiquetaOtro="Otra…" className={inputCls} />
+                      <button type="button" onClick={() => setConv(conv.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600" aria-label="Quitar"><Trash2 className="h-4 w-4" /></button>
+                    </div>
+                  )
+                })}
+                {conv.length < 8 && <button type="button" onClick={() => setConv([...conv, { nombre: '', parentesco: '', edad: '', nivel_academico: '', ocupacion: '' }])} className="text-xs font-semibold text-brand-green">+ Agregar persona</button>}
+              </div>
+            )}
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
@@ -258,16 +309,22 @@ function Entrevista({ d, sb, puedeGestionar, recargar }: { d: PropsTab['d']; sb:
           <div>
             <p className="mb-1 text-xs font-semibold text-gray-600">Trayectoria laboral (iniciando con la última empresa)</p>
             <div className="space-y-1.5">
-              {tray.map((x, i) => (
-                <div key={i} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1.5fr_1fr_1fr_1.5fr_2fr_32px]">
-                  <input placeholder="Empresa" value={x.empresa} onChange={(e) => setTray(tray.map((y, j) => j === i ? { ...y, empresa: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Tiempo laborado" value={x.tiempo} onChange={(e) => setTray(tray.map((y, j) => j === i ? { ...y, tiempo: e.target.value } : y))} className={inputCls} />
-                  <input type="date" value={x.fecha_retiro} onChange={(e) => setTray(tray.map((y, j) => j === i ? { ...y, fecha_retiro: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Razón de retiro" value={x.razon_retiro} onChange={(e) => setTray(tray.map((y, j) => j === i ? { ...y, razon_retiro: e.target.value } : y))} className={inputCls} />
-                  <input placeholder="Funciones" value={x.funciones} onChange={(e) => setTray(tray.map((y, j) => j === i ? { ...y, funciones: e.target.value } : y))} className={inputCls} />
-                  <button type="button" onClick={() => setTray(tray.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600" aria-label="Quitar"><Trash2 className="h-4 w-4" /></button>
-                </div>
-              ))}
+              <div className="hidden grid-cols-[1.5fr_1.2fr_1fr_1.5fr_2fr_32px] gap-1.5 text-[10px] font-semibold uppercase tracking-wide text-gray-400 sm:grid">
+                <span>Empresa</span><span>Tiempo laborado</span><span>Fecha de retiro</span><span>Razón de retiro</span><span>Funciones</span><span />
+              </div>
+              {tray.map((x, i) => {
+                const cambiar = (patch: Partial<Trayecto>) => setTray(tray.map((y, j) => (j === i ? { ...y, ...patch } : y)))
+                return (
+                  <div key={i} className="grid grid-cols-2 gap-1.5 sm:grid-cols-[1.5fr_1.2fr_1fr_1.5fr_2fr_32px]">
+                    <input placeholder="Empresa" value={x.empresa} onChange={(e) => cambiar({ empresa: e.target.value })} className={inputCls} />
+                    <SelectConOtro value={x.tiempo} onChange={(v) => cambiar({ tiempo: v })} opciones={TIEMPOS_LABORADOS} placeholder="Tiempo laborado" className={inputCls} />
+                    <input type="date" value={x.fecha_retiro} onChange={(e) => cambiar({ fecha_retiro: e.target.value })} className={inputCls} />
+                    <SelectConOtro value={x.razon_retiro} onChange={(v) => cambiar({ razon_retiro: v })} opciones={MOTIVOS_RETIRO} placeholder="Razón de retiro" className={inputCls} />
+                    <input placeholder="Funciones" value={x.funciones} onChange={(e) => cambiar({ funciones: e.target.value })} className={inputCls} />
+                    <button type="button" onClick={() => setTray(tray.filter((_, j) => j !== i))} className="text-red-400 hover:text-red-600" aria-label="Quitar"><Trash2 className="h-4 w-4" /></button>
+                  </div>
+                )
+              })}
               {tray.length < 3 && <button type="button" onClick={() => setTray([...tray, { empresa: '', tiempo: '', fecha_retiro: '', razon_retiro: '', funciones: '' }])} className="text-xs font-semibold text-brand-green">+ Agregar empresa</button>}
             </div>
           </div>
