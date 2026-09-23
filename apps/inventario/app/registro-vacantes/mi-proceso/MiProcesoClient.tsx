@@ -1,19 +1,23 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import {
   Loader2, LogIn, Check, PenLine, FileCheck2, Upload, ClipboardCheck, ArrowRight, MapPin, X, AlertTriangle, Eye, Building2, LogOut, Camera,
+  ChevronRight, ScanLine,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { getSupabase } from '@/lib/supabase/anon'
 import { FASES_PUBLICAS, faseMeta, esCorte } from '@/lib/ats/fases'
 import { htmlParaMostrar } from '@/lib/documentos/html'
 import { VisorDocumento } from '@/components/documentos/VisorDocumento'
-import { PadFirma } from '@/components/firma/PadFirma'
+import { EscanerDocumento } from '@/components/escaner/EscanerDocumento'
+import { modoEscaneo } from '@/lib/escaner/salida'
 import { BotonesFoto } from '@/components/foto/BotonesFoto'
 import { subirDocumento, tipoAplica, fetchCargoFlags, marcarFotoPerfil, eliminarDocumento, type DocumentoSubido } from '@/lib/registro/documentos'
 import type { TipoDocumental } from '@/lib/registro/tipos'
+import { FirmaSecuencial, type DocPorFirmar } from './FirmaSecuencial'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -30,7 +34,8 @@ export function MiProcesoClient() {
   const [mios, setMios] = useState<any[]>([])
   const [empresa, setEmpresa] = useState<any>(null)
   const [fotoUrl, setFotoUrl] = useState<string | null>(null)
-  const [firmando, setFirmando] = useState<any | null>(null)
+  // Firma uno tras otro: la lista se congela al abrir para que no cambie mientras firma.
+  const [firmaSeq, setFirmaSeq] = useState<{ docs: DocPorFirmar[]; inicial: number } | null>(null)
   const [viendo, setViendo] = useState<{ titulo: string; cuerpo: string } | null>(null)
   const [cambiandoFoto, setCambiandoFoto] = useState(false)
 
@@ -68,12 +73,10 @@ export function MiProcesoClient() {
 
   useEffect(() => { void cargar() }, [cargar])
 
-  async function abrir(doc: any, paraFirmar: boolean) {
-    const { data, error } = await sb.from('documentos_generados').select('id, nombre, html_render, html_firmado, firma_evidencia, sha256, estado, permite_firma_electronica').eq('id', doc.id).single()
+  async function ver(doc: any) {
+    const { data, error } = await sb.from('documentos_generados').select('id, nombre, html_render, html_firmado, firma_evidencia, sha256, estado').eq('id', doc.id).single()
     if (error || !data) { toast.error('No se pudo abrir el documento.'); return }
-    const cuerpo = htmlParaMostrar(data, { fotoUrl })
-    if (paraFirmar) setFirmando({ ...data, cuerpo })
-    else setViendo({ titulo: data.nombre, cuerpo })
+    setViendo({ titulo: data.nombre, cuerpo: htmlParaMostrar(data, { fotoUrl }) })
   }
 
   async function salir() {
@@ -116,6 +119,9 @@ export function MiProcesoClient() {
   const corte = esCorte(c.estado)
   const pruebasPend = pruebas.filter((p) => p.obligatoria && (!p.intento_estado || p.intento_estado === 'EN_CURSO'))
   const porFirmar = docs.filter((d) => d.estado === 'PENDIENTE_FIRMA')
+  // Los que firma aquí (los demás se firman en físico en la oficina).
+  const electronicos: DocPorFirmar[] = porFirmar.filter((d) => d.permite_firma_electronica).map((d) => ({ id: d.id, nombre: d.nombre }))
+  const abrirFirma = (inicial: number) => setFirmaSeq({ docs: electronicos, inicial })
   const firmados = docs.filter((d) => d.estado === 'FIRMADO' || d.estado === 'GENERADO')
   const cuenta = (tipoId: string) => mios.filter((m) => m.tipo_documental_id === tipoId && m.estado !== 'RECHAZADO').length
   // Rechazados que aún no se han reemplazado por un archivo nuevo del mismo tipo.
@@ -198,22 +204,42 @@ export function MiProcesoClient() {
 
       {/* Documentos para firmar */}
       {porFirmar.length > 0 && (
-        <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-amber-200">
+        <div className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-amber-200 sm:p-5">
           <p className="flex items-center gap-2 font-heading font-bold text-gray-900"><PenLine className="h-5 w-5 text-amber-600" /> Documentos para firmar ({porFirmar.length})</p>
-          <p className="mt-1 text-sm text-gray-500">Ya vienen llenos con tus datos. Léelos y fírmalos con el dedo.</p>
-          <ul className="mt-3 space-y-2">
-            {porFirmar.map((d) => (
-              <li key={d.id} className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 px-3 py-2.5">
-                <span className="text-sm font-medium text-gray-800">{d.nombre}</span>
-                {d.permite_firma_electronica ? (
-                  <button onClick={() => abrir(d, true)} className="inline-flex shrink-0 items-center gap-1 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-green-dark">
-                    <PenLine className="h-3.5 w-3.5" /> Leer y firmar
-                  </button>
-                ) : (
-                  <span className="flex shrink-0 items-center gap-1 text-xs text-gray-500"><Building2 className="h-3.5 w-3.5" /> Se firma en la oficina</span>
-                )}
-              </li>
-            ))}
+          <p className="mt-1 text-sm text-gray-500">
+            {electronicos.length > 1
+              ? 'Ya vienen llenos con tus datos. Los vas leyendo y firmando con el dedo uno tras otro: dibujas tu firma una sola vez.'
+              : 'Ya vienen llenos con tus datos. Léelos y fírmalos con el dedo.'}
+          </p>
+          {electronicos.length > 0 && (
+            <button type="button" onClick={() => abrirFirma(0)}
+              className="mt-3 flex w-full items-center justify-center gap-2 rounded-xl bg-brand-green px-5 py-3 font-semibold text-white hover:bg-brand-green-dark sm:w-auto">
+              <PenLine className="h-5 w-5" /> {electronicos.length === 1 ? 'Leer y firmar' : `Firmar mis documentos (${electronicos.length})`} <ArrowRight className="h-4 w-4" />
+            </button>
+          )}
+          <ul className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-xl border border-gray-100">
+            {porFirmar.map((d) => {
+              const k = electronicos.findIndex((e) => e.id === d.id)
+              return (
+                <li key={d.id}>
+                  {k >= 0 ? (
+                    <button type="button" onClick={() => abrirFirma(k)} className="flex w-full items-center gap-3 px-3 py-3 text-left hover:bg-gray-50 active:bg-gray-100">
+                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-amber-100 text-xs font-bold text-amber-700">{k + 1}</span>
+                      <span className="min-w-0 flex-1 text-sm font-medium text-gray-800">{d.nombre}</span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-gray-400" />
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-3 px-3 py-3">
+                      <Building2 className="h-5 w-5 shrink-0 text-gray-400" />
+                      <span className="min-w-0 flex-1 text-sm text-gray-700">
+                        {d.nombre}
+                        <span className="block text-xs text-gray-500">Se firma en físico en la oficina</span>
+                      </span>
+                    </div>
+                  )}
+                </li>
+              )
+            })}
           </ul>
         </div>
       )}
@@ -252,7 +278,7 @@ export function MiProcesoClient() {
             {firmados.map((d) => (
               <li key={d.id} className="flex items-center justify-between gap-2 rounded-xl bg-gray-50 px-3 py-2">
                 <span className="text-sm text-gray-700">{d.nombre}{d.estado === 'FIRMADO' && <span className="ml-1 text-xs text-green-700">· firmado</span>}</span>
-                <button onClick={() => abrir(d, false)} className="inline-flex items-center gap-1 text-xs font-semibold text-brand-green"><Eye className="h-3.5 w-3.5" /> Ver</button>
+                <button onClick={() => ver(d)} className="inline-flex shrink-0 items-center gap-1 py-1 text-xs font-semibold text-brand-green"><Eye className="h-3.5 w-3.5" /> Ver</button>
               </li>
             ))}
           </ul>
@@ -264,59 +290,22 @@ export function MiProcesoClient() {
         <p className="mt-1">Recibirás notificaciones por correo cuando haya novedades en tu proceso.{empresa?.correo_seleccion ? ` Si tienes preguntas escribe a ${empresa.correo_seleccion}.` : ''}</p>
       </div>
 
-      {viendo && (
+      {/* En el body: el contenedor de la página separa sus hijos con margen y correría la pantalla completa. */}
+      {viendo && createPortal(
         <div className="fixed inset-0 z-50 flex flex-col bg-white">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
+          <div className="flex items-center justify-between gap-2 border-b border-gray-100 px-4 py-3">
             <p className="truncate font-heading font-bold text-gray-900">{viendo.titulo}</p>
-            <button onClick={() => setViendo(null)} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><X className="h-5 w-5" /></button>
+            <button onClick={() => setViendo(null)} className="shrink-0 rounded-lg p-1 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><X className="h-5 w-5" /></button>
           </div>
-          <div className="flex-1 overflow-y-auto p-3"><VisorDocumento cuerpo={viendo.cuerpo} titulo={viendo.titulo} alturaMax="none" /></div>
-        </div>
+          <div className="flex-1 overflow-y-auto overscroll-contain bg-gray-50 p-1.5 sm:p-3"><div className="mx-auto max-w-4xl"><VisorDocumento cuerpo={viendo.cuerpo} titulo={viendo.titulo} alturaMax="none" vistaInicial="lectura" /></div></div>
+        </div>,
+        document.body,
       )}
 
-      {firmando && (
-        <Firmar doc={firmando} onCerrar={() => setFirmando(null)} onFirmado={async () => { setFirmando(null); toast.success('¡Documento firmado!'); await cargar() }} />
+      {firmaSeq && (
+        <FirmaSecuencial docs={firmaSeq.docs} inicial={firmaSeq.inicial} fotoUrl={fotoUrl}
+          onCerrar={() => { setFirmaSeq(null); void cargar() }} />
       )}
-    </div>
-  )
-}
-
-function Firmar({ doc, onCerrar, onFirmado }: { doc: any; onCerrar: () => void; onFirmado: () => void }) {
-  const sb = useMemo(() => getSupabase(), [])
-  const [leido, setLeido] = useState(false)
-  const [firma, setFirma] = useState<string | null>(null)
-  const [enviando, setEnviando] = useState(false)
-
-  async function firmar() {
-    if (!firma) { toast.error('Dibuja tu firma.'); return }
-    setEnviando(true)
-    const { error } = await sb.rpc('vac_firmar_documento', { p_doc: doc.id, p_firma_data_url: firma, p_user_agent: navigator.userAgent })
-    setEnviando(false)
-    if (error) { toast.error(error.message); return }
-    onFirmado()
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex flex-col bg-white">
-      <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-        <p className="truncate font-heading font-bold text-gray-900">{doc.nombre}</p>
-        <button onClick={onCerrar} className="rounded-lg p-1 text-gray-500 hover:bg-gray-100" aria-label="Cerrar"><X className="h-5 w-5" /></button>
-      </div>
-      <div className="flex-1 overflow-y-auto p-3">
-        <VisorDocumento cuerpo={doc.cuerpo} titulo={doc.nombre} alturaMax="none" mostrarImprimir={false} />
-      </div>
-      <div className="space-y-3 border-t border-gray-100 bg-gray-50 p-4">
-        <label className="flex items-start gap-2 text-sm text-gray-700">
-          <input type="checkbox" checked={leido} onChange={(e) => setLeido(e.target.checked)} className="mt-0.5 h-5 w-5 accent-[#2E7D32]" />
-          Leí el documento, los datos son correctos y estoy de acuerdo con su contenido.
-        </label>
-        {leido && <PadFirma onCambio={setFirma} alto={160} />}
-        <p className="text-[11px] text-gray-500">Tu firma queda con la fecha, la hora y el equipo desde donde firmas (firma electrónica, Ley 527 de 1999).</p>
-        <button type="button" onClick={firmar} disabled={!leido || !firma || enviando}
-          className="flex w-full items-center justify-center gap-2 rounded-xl bg-brand-green py-3 font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">
-          {enviando ? <Loader2 className="h-5 w-5 animate-spin" /> : <PenLine className="h-5 w-5" />} Firmar documento
-        </button>
-      </div>
     </div>
   )
 }
@@ -324,26 +313,58 @@ function Firmar({ doc, onCerrar, onFirmado }: { doc: any; onCerrar: () => void; 
 function SubirTipo({ tipo, candidatoId, cantidad, onSubido }: { tipo: TipoDocumental; candidatoId: string; cantidad: number; onSubido: () => void }) {
   const ref = useRef<HTMLInputElement>(null)
   const [subiendo, setSubiendo] = useState(false)
+  const [escaneando, setEscaneando] = useState(false)
+  const modo = modoEscaneo(tipo, cantidad)
+
+  // Sube uno o varios archivos (las caras de la cédula escaneada van por separado).
+  async function subir(archivos: File[], desdeEscaner: boolean) {
+    setSubiendo(true)
+    let guardados = 0
+    try {
+      for (const f of archivos) {
+        const r = await subirDocumento(candidatoId, tipo, f, cantidad + 1 + guardados)
+        if (r.error) {
+          // Si no se guardó nada, el escáner sigue abierto con sus páginas para reintentar.
+          if (guardados === 0 && desdeEscaner) throw new Error(r.error)
+          toast.error(r.error)
+          break
+        }
+        guardados++
+      }
+    } finally {
+      setSubiendo(false)
+    }
+    if (guardados) {
+      toast.success(guardados > 1 ? `${guardados} archivos cargados.` : 'Documento cargado.')
+      onSubido()
+    }
+  }
+
   return (
-    <li className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 px-3 py-2.5">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-gray-800">{tipo.nombre} {tipo.obligatorio && <span className="text-red-500">*</span>}</p>
-        {tipo.descripcion && <p className="text-xs text-gray-500">{tipo.descripcion}</p>}
+    <li className="rounded-xl border border-gray-100 px-3 py-2.5">
+      <p className="text-sm font-medium text-gray-800">{tipo.nombre} {tipo.obligatorio && <span className="text-red-500">*</span>}</p>
+      {tipo.descripcion && <p className="text-xs text-gray-500">{tipo.descripcion}</p>}
+      <div className="mt-2 flex gap-2">
+        <button type="button" onClick={() => setEscaneando(true)} disabled={subiendo}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-brand-green/10 py-2.5 text-xs font-semibold text-brand-green disabled:opacity-50">
+          <ScanLine className="h-4 w-4" /> Escanear
+        </button>
+        <button type="button" onClick={() => ref.current?.click()} disabled={subiendo}
+          className="flex flex-1 items-center justify-center gap-1.5 rounded-lg border border-dashed border-brand-green/50 py-2.5 text-xs font-semibold text-brand-green disabled:opacity-50">
+          {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Subir archivo
+        </button>
       </div>
-      <button type="button" onClick={() => ref.current?.click()} disabled={subiendo}
-        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-brand-green/50 px-3 py-1.5 text-xs font-semibold text-brand-green disabled:opacity-50">
-        {subiendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Subir
-      </button>
-      <input ref={ref} type="file" hidden accept="image/*,application/pdf,.heic,.doc,.docx" onChange={async (e) => {
+      <input ref={ref} type="file" hidden accept="image/*,application/pdf,.heic,.doc,.docx" onChange={(e) => {
         const f = e.target.files?.[0]; e.target.value = ''
-        if (!f) return
-        setSubiendo(true)
-        const r = await subirDocumento(candidatoId, tipo, f, cantidad + 1)
-        setSubiendo(false)
-        if (r.error) { toast.error(r.error); return }
-        toast.success('Documento cargado.')
-        onSubido()
+        if (f) void subir([f], false)
       }} />
+      {escaneando && (
+        <EscanerDocumento titulo={tipo.nombre} salida={modo.salida} maxPaginas={modo.maxPaginas}
+          subtitulo={tipo.codigo === 'CEDULA' && cantidad === 0 ? 'Escanea el frente y luego el reverso' : undefined}
+          nombreArchivo={tipo.codigo.toLowerCase()}
+          onCerrar={() => setEscaneando(false)}
+          onListo={async (archivos) => { await subir(archivos, true); setEscaneando(false) }} />
+      )}
     </li>
   )
 }

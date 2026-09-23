@@ -206,7 +206,8 @@ continuar con justificación (queda en la bitácora como `EXCEPCION_DOCUMENTAL`)
   y conocimientos (6 preguntas, 10 minutos, firma con nombre y cédula). La clave
   nunca llega al navegador: califica `vac_finalizar_prueba`.
 - `/registro-vacantes/mi-proceso`: fases, pruebas pendientes, documentos para
-  firmar con el dedo, documentos por subir y documentos firmados.
+  firmar con el dedo (uno tras otro), documentos por subir (escanear o subir) y
+  documentos firmados.
 
 ### Expediente por etapas (2026-09-23)
 - Las pestañas del expediente son **las mismas bandejas** de Postulaciones, en el mismo orden
@@ -245,6 +246,39 @@ continuar con justificación (queda en la bitácora como `EXCEPCION_DOCUMENTAL`)
   subidos se copian tal cual; las fotos se reducen a ~1800 px; los formatos se pasan a páginas
   carta con los márgenes de la impresión, cortando en huecos en blanco entre renglones o filas (se
   mide sobre la imagen ya dibujada para no partir letras). Word y HEIC van como una página de aviso.
+
+### Escáner de documentos con el celular (2026-09-23)
+- `components/escaner/EscanerDocumento.tsx` + `lib/escaner/procesamiento.ts` (sin librerías de visión:
+  procesamiento de píxeles propio, probado en `tests/inventario/escaner.test.ts`).
+- Cámara trasera en vivo que **detecta la hoja** (umbral de Otsu sobre el canal mínimo → región más
+  grande → envolvente convexa → cuadrilátero de mayor área) y la resalta; **captura sola** cuando la
+  hoja se queda quieta (se puede apagar «AUTO») y tiene linterna. Después se **ajustan las esquinas**
+  con el dedo, se **endereza** la perspectiva (homografía) al tamaño de hoja más cercano
+  (carta/A4/oficio) y se **limpia** como escáner: fondo blanco parejo aunque haya sombra, texto
+  negro, tinta azul de la firma azul. Filtros: Documento · Blanco y negro · Grises · Original.
+- Varias páginas: reordenar, girar, borrar. **Cómo se guarda** (`lib/escaner/salida.ts`): la cédula
+  (pide frente y reverso) va como una foto por cara; todo lo demás, **un solo PDF** con sus páginas
+  (así un certificado de dos hojas cuenta como un archivo). Si el celular no deja abrir la cámara,
+  ofrece la cámara nativa o la galería, y la foto pasa por la misma detección.
+- Dónde está: **firmados en papel** de Contratación (por documento, o «Escanear firmados uno por uno»
+  que recorre los pendientes con Omitir/Terminar), cada tipo de documento del expediente, el paso de
+  documentos del formulario y «Documentos por subir» de Mi proceso. Si falla la subida, el escáner
+  sigue abierto con las páginas para reintentar.
+
+### Firma uno tras otro en Mi proceso (2026-09-23)
+- «Firmar mis documentos (N)» abre los formatos que se firman electrónicamente **uno por uno**
+  (`app/registro-vacantes/mi-proceso/FirmaSecuencial.tsx`): el documento ocupa la pantalla, arriba el
+  avance (Documento 2 de 5, barra por documento) y abajo solo «Leí este documento…», la firma y
+  **Firmar y seguir**. La firma se dibuja **una vez** (hoja inferior) y se reutiliza; se puede
+  cambiar. Cada documento se confirma por separado y `vac_firmar_documento` guarda su propia
+  evidencia (fecha, IP, navegador, hash).
+- «Después» deja uno para el final; al terminar hay un resumen con lo firmado y «Firmar los que dejé
+  para después». Tocar un documento de la lista abre el recorrido en ese documento. Los que se firman
+  en papel aparecen como «Se firma en físico en la oficina».
+- El visor (`components/documentos/VisorDocumento.tsx`) se adapta al celular: en pantallas angostas
+  el texto se acomoda al ancho con letra normal («lectura») o se ve la **hoja completa** reducida; en
+  computador, la carta a tamaño real. Las reglas para pantallas angostas (`@media screen` en
+  `CSS_DOCUMENTO`) no afectan la impresión ni el paquete PDF.
 
 ### Foto de perfil (tipo carné)
 - La toma el candidato en el paso de documentos o en "Mi proceso" (botón de la

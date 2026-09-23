@@ -1,7 +1,9 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Upload, Check, Trash2, FileText, Camera, ArrowRight, AlertCircle, UserRound } from 'lucide-react'
+import { Loader2, Upload, Check, Trash2, ArrowRight, AlertCircle, UserRound, ScanLine } from 'lucide-react'
+import { EscanerDocumento } from '@/components/escaner/EscanerDocumento'
+import { modoEscaneo } from '@/lib/escaner/salida'
 import { toast } from 'sonner'
 import type { WizardCtx } from '../RegistroWizard'
 import { fetchTiposDocumentales } from '@/lib/registro/datos'
@@ -201,8 +203,8 @@ function FotoCard({ tipo, candidatoId, docs, onSubido, onEliminar }: PropsTarjet
 
 function TipoCard({ tipo, candidatoId, docs, urls, onAbrir, onSubido, onEliminar }: PropsTarjeta) {
   const [subiendo, setSubiendo] = useState(false)
+  const [escaneando, setEscaneando] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
-  const fotoRef = useRef<HTMLInputElement>(null)
   const completo = docs.length >= tipo.min_archivos
   const lleno = docs.length >= tipo.max_archivos
   const faltante = tipo.obligatorio && !completo
@@ -210,14 +212,40 @@ function TipoCard({ tipo, candidatoId, docs, urls, onAbrir, onSubido, onEliminar
   const etiquetaSlot = (i: number) =>
     tipo.codigo === 'CEDULA' ? (i === 0 ? ' (frente)' : ' (reverso)') : ''
 
-  async function subirArchivo(file: File) {
+  async function subirArchivo(file: File, orden = docs.length + 1): Promise<boolean> {
     setSubiendo(true)
-    const r = await subirDocumento(candidatoId, tipo, file, docs.length + 1)
+    const r = await subirDocumento(candidatoId, tipo, file, orden)
     setSubiendo(false)
-    if (r.error) { toast.error(r.error); return }
-    if (!r.doc) return
+    if (r.error) { toast.error(r.error); return false }
+    if (!r.doc) return false
     onSubido(r.doc)
     toast.success('Documento cargado.')
+    return true
+  }
+
+  const modo = modoEscaneo(tipo, docs.length)
+
+  // La cédula queda como una foto por cara; lo demás, un PDF con sus páginas.
+  async function guardarEscaneo(archivos: File[]) {
+    setSubiendo(true)
+    let guardados = 0
+    try {
+      for (const f of archivos) {
+        const r = await subirDocumento(candidatoId, tipo, f, docs.length + 1 + guardados)
+        if (r.error || !r.doc) {
+          // Si no se guardó nada, el escáner sigue abierto con sus páginas para reintentar.
+          if (guardados === 0) throw new Error(r.error ?? 'No se pudo guardar el escaneo.')
+          toast.error(r.error ?? 'No se pudo guardar una de las páginas.')
+          break
+        }
+        onSubido(r.doc)
+        guardados++
+      }
+    } finally {
+      setSubiendo(false)
+    }
+    toast.success(guardados > 1 ? `${guardados} archivos cargados.` : 'Documento cargado.')
+    setEscaneando(false)
   }
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -272,11 +300,11 @@ function TipoCard({ tipo, candidatoId, docs, urls, onAbrir, onSubido, onEliminar
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => fotoRef.current?.click()}
+            onClick={() => setEscaneando(true)}
             disabled={subiendo}
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-green/10 py-2.5 text-sm font-semibold text-brand-green disabled:opacity-50"
           >
-            {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Camera className="h-4 w-4" /> Tomar foto{etiquetaSlot(docs.length)}</>}
+            {subiendo ? <Loader2 className="h-4 w-4 animate-spin" /> : <><ScanLine className="h-4 w-4" /> Escanear{etiquetaSlot(docs.length)}</>}
           </button>
           <button
             type="button"
@@ -288,9 +316,19 @@ function TipoCard({ tipo, candidatoId, docs, urls, onAbrir, onSubido, onEliminar
           </button>
         </div>
       )}
-      {/* Dos entradas: con `capture` el celular abre directo la cámara; sin él deja escoger un archivo o PDF. */}
-      <input ref={fotoRef} type="file" accept="image/*" capture="environment" hidden onChange={onFile} />
       <input ref={inputRef} type="file" accept="image/*,application/pdf,.heic,.doc,.docx" hidden onChange={onFile} />
+
+      {escaneando && (
+        <EscanerDocumento
+          titulo={tipo.nombre}
+          subtitulo={tipo.codigo === 'CEDULA' && docs.length === 0 ? 'Escanea el frente y luego el reverso' : undefined}
+          salida={modo.salida}
+          nombreArchivo={tipo.codigo.toLowerCase()}
+          maxPaginas={modo.maxPaginas}
+          onListo={guardarEscaneo}
+          onCerrar={() => setEscaneando(false)}
+        />
+      )}
     </div>
   )
 }

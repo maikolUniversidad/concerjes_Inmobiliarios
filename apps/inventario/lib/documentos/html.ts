@@ -125,6 +125,21 @@ th { background: #eef3f1; text-align: left; font-weight: bold; }
 .compacta .huella { height: 92px; }
 .compacta .pie { margin-top: 6px; }
 @media print { .documento { padding: 0; } .no-imprimir { display: none !important; } }
+/* Lectura en el celular: el formato se acomoda al ancho de la pantalla. No
+   aplica al imprimir ni al armar el paquete PDF (se arma a ~710 px). */
+@media screen and (max-width: 560px) {
+  .documento { padding: 12px; }
+  p { text-align: left; }
+  td, th { overflow-wrap: anywhere; }
+  .etiqueta { white-space: normal; }
+  .encabezado .logo { width: 84px; }
+  .encabezado .logo img { max-width: 76px; }
+  .encabezado .version { width: 84px; font-size: 7.5pt; }
+  .encabezado .titulo { font-size: 10pt; }
+  .firmas td { display: block; width: 100%; padding-right: 0; }
+  .linea-firma { min-width: 0; width: 100%; max-width: 260px; }
+  .firma-img { max-width: 100%; }
+}
 `
 
 /** Documento HTML completo (para el visor y para imprimir / guardar como PDF). */

@@ -1,7 +1,9 @@
 'use client'
 
 import { useMemo, useRef, useState } from 'react'
-import { Eye, Check, Ban, Sparkles, Upload, Loader2, RefreshCw, AlertTriangle, FileText, CheckCircle2 } from 'lucide-react'
+import { Eye, Check, Ban, Sparkles, Upload, Loader2, RefreshCw, AlertTriangle, FileText, CheckCircle2, ScanLine } from 'lucide-react'
+import { EscanerDocumento } from '@/components/escaner/EscanerDocumento'
+import { modoEscaneo } from '@/lib/escaner/salida'
 import { toast } from 'sonner'
 import { logActivity } from '@/lib/activity'
 import { tipoAplicaCargo } from '@/lib/ats/fases'
@@ -162,8 +164,10 @@ function TipoFila({
 }) {
   const ref = useRef<HTMLInputElement>(null)
   const [subiendo, setSubiendo] = useState(false)
+  const [escaneando, setEscaneando] = useState(false)
   const vigentes = docs.filter((x) => x.estado !== 'RECHAZADO').length
   const completo = vigentes >= Math.max(1, tipo.min_archivos)
+  const modo = modoEscaneo(tipo, vigentes)
   return (
     <div className={'rounded-lg border p-2.5 ' + (tipo.obligatorio && !completo ? 'border-red-200 bg-red-50/30' : 'border-gray-100')}>
       <div className="flex flex-wrap items-start justify-between gap-2">
@@ -178,6 +182,11 @@ function TipoFila({
           {completo ? <Badge className="bg-green-100 text-green-700">{vigentes} archivo(s)</Badge> : tipo.obligatorio ? <Badge className="bg-red-100 text-red-700">Falta</Badge> : <Badge className="bg-gray-100 text-gray-500">Opcional</Badge>}
           {puedeGestionar && (
             <>
+              <button type="button" onClick={() => setEscaneando(true)} disabled={subiendo}
+                className="inline-flex items-center gap-1 rounded-md bg-brand-green px-2 py-1 text-xs font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50"
+                title="Escanear el documento con la cámara">
+                <ScanLine className="h-3.5 w-3.5" /> Escanear
+              </button>
               <button type="button" onClick={() => ref.current?.click()} disabled={subiendo}
                 className="inline-flex items-center gap-1 rounded-md border border-brand-green/40 px-2 py-1 text-xs font-semibold text-brand-green hover:bg-brand-green/5 disabled:opacity-50">
                 {subiendo ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Cargar
@@ -246,6 +255,17 @@ function TipoFila({
             )
           })}
         </ul>
+      )}
+
+      {escaneando && (
+        <EscanerDocumento titulo={tipo.nombre} nombreArchivo={tipo.codigo.toLowerCase()}
+          salida={modo.salida} maxPaginas={modo.maxPaginas}
+          onCerrar={() => setEscaneando(false)}
+          onListo={async (archivos) => {
+            setSubiendo(true)
+            for (const f of archivos) await onSubir(f)
+            setSubiendo(false); setEscaneando(false)
+          }} />
       )}
     </div>
   )

@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react'
 import {
-  FileSignature, Loader2, Save, Eye, Ban, Upload, FileCheck2, Wand2, ChevronDown, AlertTriangle, UserCheck, FileSpreadsheet, Plus, Trash2, Printer,
+  FileSignature, Loader2, Save, Eye, Ban, Upload, FileCheck2, Wand2, ChevronDown, AlertTriangle, UserCheck, FileSpreadsheet, Plus, Trash2, Printer, ScanLine,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { VisorDocumento } from '@/components/documentos/VisorDocumento'
+import { EscanerDocumento } from '@/components/escaner/EscanerDocumento'
 import { MiniaturaArchivo } from '@/components/documentos/MiniaturaArchivo'
 import { VisorArchivo } from '@/components/documentos/VisorArchivo'
 import { useUrlsFirmadas } from '@/components/documentos/useUrlsFirmadas'
@@ -154,21 +155,41 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
     await recargar(); onCambio()
   }
 
-  async function firmadoEnPapel(g: any, file: File) {
+  async function firmadoEnPapel(g: any, file: File): Promise<boolean> {
     setGuardando(g.id)
     const ext = (file.name.split('.').pop() || 'pdf').toLowerCase().slice(0, 5)
     const path = `${c.id}/FIRMADOS/${g.id}.${ext}`
     const upl = await sb.storage.from('registro-vacantes').upload(path, file, { contentType: file.type || undefined, upsert: true })
-    if (upl.error) { setGuardando(null); toast.error(upl.error.message); return }
+    if (upl.error) { setGuardando(null); toast.error(upl.error.message); return false }
     const { error } = await sb.from('documentos_generados').update({
       estado: 'FIRMADO', metodo_firma: 'MANUSCRITA', archivo_firmado_path: path, archivo_firmado_at: new Date().toISOString(),
       firmado_at: new Date().toISOString(), firmado_por_staff: d.yo.id,
     }).eq('id', g.id)
     if (!error) await sb.from('candidato_eventos').insert({ candidato_id: c.id, tipo: 'FIRMA', motivo: `${g.nombre} (firmado en papel)`, detalle: { documento_id: g.id, metodo: 'MANUSCRITA' }, actor: d.yo.id, actor_nombre: d.yo.nombre })
     setGuardando(null)
-    if (error) { toast.error(error.message); return }
-    toast.success('Documento firmado en papel registrado.')
+    if (error) { toast.error(error.message); return false }
+    toast.success(`«${g.nombre}» firmado en papel registrado.`)
     await recargar(); onCambio()
+    return true
+  }
+
+  // Escaneo con la cámara: de un documento, o de todos los pendientes uno por uno.
+  const [escaneando, setEscaneando] = useState<any | null>(null)
+  const [secuencia, setSecuencia] = useState<{ ids: string[]; i: number } | null>(null)
+  const actualSecuencia = secuencia ? generadosActivos.find((g) => g.id === secuencia.ids[secuencia.i]) ?? null : null
+  function siguienteEnSecuencia() {
+    setSecuencia((s) => {
+      if (!s) return s
+      if (s.i + 1 >= s.ids.length) { toast.success('Listo: se revisaron todos los documentos pendientes.'); return null }
+      return { ...s, i: s.i + 1 }
+    })
+  }
+  async function guardarEscaneo(g: any, archivos: File[]) {
+    const ok = await firmadoEnPapel(g, archivos[0])
+    // El escáner sigue abierto con sus páginas para reintentar.
+    if (!ok) throw new Error('Las páginas siguen aquí: intente guardar de nuevo.')
+    setEscaneando(null)
+    if (secuencia && secuencia.ids[secuencia.i] === g.id) siguienteEnSecuencia()
   }
 
   async function entregarNomina() {
@@ -383,7 +404,15 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
 
         {/* Generados */}
         <div className="mt-4">
-          <p className="mb-1.5 text-xs font-bold uppercase tracking-wide text-gray-500">Generados ({generadosActivos.length}) · por firmar {porFirmar.length}</p>
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs font-bold uppercase tracking-wide text-gray-500">Generados ({generadosActivos.length}) · por firmar {porFirmar.length}</p>
+            {puedeGestionar && porFirmar.length > 0 && (
+              <button type="button" onClick={() => setSecuencia({ ids: porFirmar.map((g) => g.id), i: 0 })}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-green-dark">
+                <ScanLine className="h-4 w-4" /> Escanear firmados uno por uno ({porFirmar.length})
+              </button>
+            )}
+          </div>
           {generadosActivos.length === 0 ? <p className="text-sm text-gray-400">Todavía no se ha generado ningún documento.</p> : (
             <ul className="divide-y divide-gray-100 rounded-lg border border-gray-100">
               {generadosActivos.map((g) => {
@@ -408,10 +437,17 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
                       <button onClick={() => ver(g, true)} className="inline-flex items-center gap-1 rounded bg-gray-100 px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"><Printer className="h-3.5 w-3.5" /> Imprimir</button>
                       {g.archivo_firmado_path && <button onClick={() => setEscaneado(g)} className="inline-flex items-center gap-1 rounded bg-green-50 px-2 py-1 text-xs font-medium text-green-700 hover:bg-green-100"><FileCheck2 className="h-3.5 w-3.5" /> Escaneado</button>}
                       {puedeGestionar && g.estado === 'PENDIENTE_FIRMA' && (
-                        <label className="inline-flex cursor-pointer items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100">
-                          {guardando === g.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Upload className="h-3.5 w-3.5" />} Firmado en papel
-                          <input type="file" hidden accept="application/pdf,image/*" onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void firmadoEnPapel(g, f) }} />
-                        </label>
+                        <>
+                          <button type="button" onClick={() => setEscaneando(g)} disabled={guardando === g.id}
+                            className="inline-flex items-center gap-1 rounded bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+                            title="Escanear con la cámara el documento firmado en papel">
+                            {guardando === g.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <ScanLine className="h-3.5 w-3.5" />} Escanear firmado
+                          </button>
+                          <label className="inline-flex cursor-pointer items-center gap-1 rounded bg-blue-50 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100" title="Subir el escaneado (PDF o imagen)">
+                            <Upload className="h-3.5 w-3.5" /> Subir
+                            <input type="file" hidden accept="application/pdf,image/*" onChange={(ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f) void firmadoEnPapel(g, f) }} />
+                          </label>
+                        </>
                       )}
                       {puedeGestionar && <button onClick={() => anular(g)} className="inline-flex items-center gap-1 rounded bg-red-50 px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-100"><Ban className="h-3.5 w-3.5" /> Anular</button>}
                     </div>
@@ -448,6 +484,45 @@ export function TabContratacion({ d, sb, catalogos, puedeGestionar, recargar, on
         <Modal titulo={visor.titulo} onClose={() => setVisor(null)} ancho="max-w-4xl">
           <VisorDocumento cuerpo={visor.cuerpo} titulo={visor.titulo} />
         </Modal>
+      )}
+      {/* Uno por uno: cada documento pendiente, en orden */}
+      {secuencia && actualSecuencia && !escaneando && (
+        <Modal titulo="Escanear documentos firmados" subtitulo={`Documento ${secuencia.i + 1} de ${secuencia.ids.length}`} onClose={() => setSecuencia(null)} ancho="max-w-md">
+          <div className="space-y-4">
+            <div className="h-1.5 overflow-hidden rounded-full bg-gray-100">
+              <div className="h-full bg-brand-green transition-all" style={{ width: `${(secuencia.i / secuencia.ids.length) * 100}%` }} />
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+              <p className="text-base font-semibold text-gray-900">{actualSecuencia.nombre}</p>
+              <p className="mt-0.5 text-xs text-gray-500">
+                {actualSecuencia.estado === 'PENDIENTE_FIRMA' ? 'Pendiente de firma: escanee todas sus páginas ya firmadas.' : 'Este ya quedó registrado.'}
+              </p>
+            </div>
+            <div className="grid gap-2">
+              <Boton onClick={() => setEscaneando(actualSecuencia)} disabled={actualSecuencia.estado !== 'PENDIENTE_FIRMA'}>
+                <ScanLine className="h-4 w-4" /> Escanear con la cámara
+              </Boton>
+              <label className="inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-50">
+                {guardando === actualSecuencia.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Subir un PDF o imagen
+                <input type="file" hidden accept="application/pdf,image/*"
+                  onChange={async (ev) => { const f = ev.target.files?.[0]; ev.target.value = ''; if (f && await firmadoEnPapel(actualSecuencia, f)) siguienteEnSecuencia() }} />
+              </label>
+              <div className="flex justify-between">
+                <button type="button" onClick={siguienteEnSecuencia} className="text-sm font-semibold text-gray-500 hover:text-gray-700">Omitir →</button>
+                <button type="button" onClick={() => setSecuencia(null)} className="text-sm font-semibold text-gray-500 hover:text-gray-700">Terminar</button>
+              </div>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {escaneando && (
+        <EscanerDocumento
+          titulo={`Firmado: ${escaneando.nombre}`}
+          subtitulo={secuencia ? `Documento ${secuencia.i + 1} de ${secuencia.ids.length}` : undefined}
+          nombreArchivo={`firmado-${String(escaneando.codigo_plantilla ?? 'documento').toLowerCase()}`}
+          onListo={(archivos) => guardarEscaneo(escaneando, archivos)}
+          onCerrar={() => setEscaneando(null)}
+        />
       )}
       {escaneado && (
         <VisorArchivo onCerrar={() => setEscaneado(null)} archivos={[{
