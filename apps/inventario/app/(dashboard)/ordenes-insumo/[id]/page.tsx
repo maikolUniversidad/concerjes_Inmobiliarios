@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
-import { StickyNote } from 'lucide-react'
+import Link from 'next/link'
+import { StickyNote, GitBranch } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { OrdenDetalleClient } from './OrdenDetalleClient'
@@ -29,11 +30,12 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       fecha_entrega_pactada, urgente,
       aprobado_solicitante_at, aprobado_coordinador_at, recibido_at, recibido_obs,
       alistamiento_iniciado_at, alistado_at, despachado_at, video_path, video_mime, video_duracion_s,
-      tipo_despacho, transportadora_nombre, transportadora_guia, sede_id,
+      tipo_despacho, transportadora_nombre, transportadora_guia, sede_id, orden_origen_id,
+      origen:orden_origen_id ( id, numero ),
       conductor:usuarios!ordenes_insumo_conductor_id_fkey ( nombre ),
       sede:sedes ( nombre, direccion, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, cantidad_devuelta, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_disp ) ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, cantidad_devuelta, cantidad_a_pendiente, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_disp ) ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)
@@ -50,6 +52,11 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     `)
     .eq('orden_id', id)
     .order('created_at', { ascending: false })
+
+  // Órdenes pendientes que se generaron desde esta (lo que no salió en su despacho).
+  const { data: hijasData } = await supabase.from('ordenes_insumo')
+    .select('id, numero, estado').eq('orden_origen_id', id).order('created_at')
+  const hijas = (hijasData ?? []) as unknown as { id: string; numero: string; estado: string }[]
 
   const { data: eventosData } = await supabase.from('orden_insumo_eventos')
     .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
@@ -108,7 +115,10 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       presentacion: i.producto?.presentacion ?? null,
       solicitada: Number(i.cantidad_solicitada ?? 0),
       alistada: Number(i.cantidad_alistada ?? 0),
+      alistado: !!i.alistado,
     })),
+    origenNumero: o.origen?.numero ?? null,
+    pendientesNumeros: hijas.map((h) => h.numero),
   }
 
   return (
@@ -124,6 +134,28 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         esSolicitante={Boolean(user && o.creado_por === user.id)}
         puedeRecibir={perm.puede('recibir_ordenes_insumo')}
       />
+      {/* Trazabilidad entre la orden y su(s) pendiente(s). */}
+      {(o.origen || hijas.length > 0) && (
+        <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-sm space-y-1.5">
+          <p className="font-heading font-semibold text-sm text-orange-900 flex items-center gap-2">
+            <GitBranch className="w-4 h-4" /> {o.origen ? 'Orden pendiente' : 'Quedó pendiente'}
+          </p>
+          {o.origen && (
+            <p className="font-body text-sm text-orange-900/90">
+              Viene de la orden{' '}
+              <Link href={`/ordenes-insumo/${o.origen.id}`} className="font-semibold underline">{o.origen.numero}</Link>
+              : son los productos que no salieron en su despacho.
+            </p>
+          )}
+          {hijas.map((h) => (
+            <p key={h.id} className="font-body text-sm text-orange-900/90">
+              Lo que no salió en el despacho sigue en{' '}
+              <Link href={`/ordenes-insumo/${h.id}`} className="font-semibold underline">{h.numero}</Link>
+              {' '}({h.estado.replace(/_/g, ' ').toLowerCase()}).
+            </p>
+          ))}
+        </div>
+      )}
       {/* Novedad del pedido: la nota que se escribe al crear la orden. Se muestra
           siempre (también en borrador) para que no se pierda en el proceso. */}
       {o.observacion && (
@@ -158,6 +190,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
         items={(o.items ?? []) as any}
         puedeEditar={puedeEditarSolicitud}
         esAprobada={aprobada}
+        enAlistamiento={['EN_ALISTAMIENTO', 'ALISTADO'].includes(estado)}
       />
 
       {/* Etapa de ALISTAMIENTO/DESPACHO: solo una vez aprobada por ambas partes. */}

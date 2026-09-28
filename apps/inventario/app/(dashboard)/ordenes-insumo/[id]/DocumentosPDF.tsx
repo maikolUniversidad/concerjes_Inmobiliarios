@@ -26,7 +26,13 @@ export interface DatosDoc {
     presentacion: string | null
     solicitada: number
     alistada: number
+    /** Chuleado en el alistamiento: solo lo chuleado va en la remisión. */
+    alistado?: boolean
   }[]
+  /** Si es una orden pendiente: número de la orden de la que viene. */
+  origenNumero?: string | null
+  /** Órdenes pendientes generadas desde esta (lo que no salió). */
+  pendientesNumeros?: string[]
 }
 
 interface PdfHistorialItem {
@@ -206,9 +212,11 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     const esRemision = tipo === 'REMISION'
     const cantLabel = esRemision ? 'DESPACHADO' : 'SOLICITADO'
     const cantOf = (i: DatosDoc['items'][number]) => (esRemision ? i.alistada : i.solicitada)
-    // La remisión de despacho SOLO lleva lo alistado (cantidad > 0). La orden de
-    // insumo lista todos los solicitados.
-    const itemsDoc = esRemision ? datos.items.filter((i) => Number(i.alistada) > 0) : datos.items
+    // La remisión de despacho SOLO lleva lo chuleado con cantidad. Lo demás queda
+    // en la orden pendiente. La orden de insumo lista todos los solicitados.
+    const itemsDoc = esRemision
+      ? datos.items.filter((i) => i.alistado !== false && Number(i.alistada) > 0)
+      : datos.items
     const total = itemsDoc.reduce((a, i) => a + cantOf(i), 0)
     const dir = (direccion || '').trim() || datos.direccion || null
 
@@ -233,6 +241,13 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
           h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Sede destino'), h(Text, { style: s.val }, datos.sede)),
           h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Dirección'), h(Text, { style: s.val }, dir ?? '—')),
           h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Fecha de despacho'), h(Text, { style: s.val }, fechaCorta(fechaDespacho))),
+          // De dónde viene / a dónde pasó lo que no salió: que se sepa en el papel.
+          datos.origenNumero
+            ? h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Pendiente de'), h(Text, { style: [s.val, { color: '#c2410c' }] }, `Orden ${datos.origenNumero}`))
+            : null,
+          esRemision && (datos.pendientesNumeros?.length ?? 0) > 0
+            ? h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Queda pendiente en'), h(Text, { style: [s.val, { color: '#c2410c' }] }, (datos.pendientesNumeros ?? []).join(', ')))
+            : null,
         ),
         h(View, { style: s.th },
           esRemision ? h(Text, { style: s.cDev }, 'DEVUELTO') : null,

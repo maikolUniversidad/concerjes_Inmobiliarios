@@ -12,6 +12,7 @@ interface ItemIn {
   id: string
   cantidad_solicitada: number
   cantidad_alistada: number
+  cantidad_a_pendiente?: number | null
   producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: { cantidad_disp: number } | { cantidad_disp: number }[] | null } | null
 }
 
@@ -20,6 +21,10 @@ const stockDisp = (it: ItemIn): number => {
   if (!s) return 0
   return Array.isArray(s) ? Number(s[0]?.cantidad_disp ?? 0) : Number(s.cantidad_disp ?? 0)
 }
+
+/** Lo que falta por enviar: ni salió ni se pasó a una orden pendiente. */
+const faltante = (it: ItemIn) =>
+  Number(it.cantidad_solicitada) - Number(it.cantidad_alistada) - Number(it.cantidad_a_pendiente ?? 0)
 
 /**
  * Envío restante: para una orden ya despachada que salió incompleta, permite
@@ -32,16 +37,16 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
   const [pending, start] = useTransition()
 
   const pendientes = useMemo(
-    () => items.filter(it => Number(it.cantidad_solicitada) - Number(it.cantidad_alistada) > 0),
+    () => items.filter(it => faltante(it) > 0),
     [items],
   )
   const [cant, setCant] = useState<Record<string, number>>(() =>
-    Object.fromEntries(pendientes.map(it => [it.id, Number(it.cantidad_solicitada) - Number(it.cantidad_alistada)])),
+    Object.fromEntries(pendientes.map(it => [it.id, faltante(it)])),
   )
 
   if (pendientes.length === 0) return null
 
-  const totalPend = pendientes.reduce((a, it) => a + (Number(it.cantidad_solicitada) - Number(it.cantidad_alistada)), 0)
+  const totalPend = pendientes.reduce((a, it) => a + (faltante(it)), 0)
 
   function registrar() {
     const envios = pendientes
@@ -71,7 +76,7 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
     { id: 'enviado', header: 'Enviado', valor: (it) => Number(it.cantidad_alistada), align: 'right', prioridad: 2, className: 'text-gray-600', tarjeta: 'meta' },
     {
       id: 'pendiente', header: 'Pendiente', align: 'right', tarjeta: 'badge',
-      valor: (it) => Number(it.cantidad_solicitada) - Number(it.cantidad_alistada),
+      valor: (it) => faltante(it),
       className: 'font-heading font-bold text-amber-700',
     },
     {
@@ -88,7 +93,7 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
       id: 'enviar', header: 'Enviar ahora', align: 'center', ancho: 'w-28', interactiva: true, tarjeta: 'meta',
       valor: (it) => Number(cant[it.id]) || 0,
       celda: (it) => {
-        const pend = Number(it.cantidad_solicitada) - Number(it.cantidad_alistada)
+        const pend = faltante(it)
         const valor = Number(cant[it.id]) || 0
         const sinStock = valor > stockDisp(it)
         return (

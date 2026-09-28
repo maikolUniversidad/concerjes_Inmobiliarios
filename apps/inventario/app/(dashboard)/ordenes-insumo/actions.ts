@@ -235,6 +235,25 @@ export async function devolverABorrador(ordenId: string, mensaje?: string): Prom
  */
 const EDITABLES = ['BORRADOR', 'CAMBIOS_SOLICITADOS', 'EN_REVISION', 'APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO']
 const ESTADOS_APROBADOS = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO']
+/** Con la bodega ya alistando, cambiar el pedido exige confirmación explícita. */
+const EN_ALISTAMIENTO = ['EN_ALISTAMIENTO', 'ALISTADO']
+const MSG_CONFIRMAR = 'La orden ya está en alistamiento: confirma el cambio.'
+
+/**
+ * Tras un cambio confirmado en plena bodega: si la orden estaba ALISTADO y ahora
+ * hay ítems sin chulear, vuelve a EN_ALISTAMIENTO para que se revisen.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function recalcularAlistamiento(sb: any, ordenId: string) {
+  const { data: o } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!o || !EN_ALISTAMIENTO.includes(o.estado)) return
+  const { data: items } = await sb.from('orden_insumo_items').select('alistado').eq('orden_id', ordenId)
+  const todos = (items ?? []).length > 0 && (items as { alistado: boolean }[]).every((i) => i.alistado)
+  const nuevo = todos ? 'ALISTADO' : 'EN_ALISTAMIENTO'
+  if (nuevo !== o.estado) {
+    await sb.from('ordenes_insumo').update({ estado: nuevo, alistado_at: todos ? new Date().toISOString() : null }).eq('id', ordenId)
+  }
+}
 
 /**
  * Cualquier cambio en la orden invalida las aprobaciones: las dos partes deben
@@ -267,7 +286,7 @@ async function retirarAprobacionesSiRevision(sb: any, ordenId: string, estado: s
 
 /** Ajusta la cantidad de un ítem (pre o post aprobación). */
 export async function actualizarItemSolicitado(
-  ordenId: string, itemId: string, cantidad: number,
+  ordenId: string, itemId: string, cantidad: number, confirmado = false,
 ): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -280,6 +299,7 @@ export async function actualizarItemSolicitado(
   const { data: orden } = await sb.from('ordenes_insumo').select('estado, numero').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
   if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya fue despachada o cerrada; no se puede modificar.' }
+  if (EN_ALISTAMIENTO.includes(orden.estado) && !confirmado) return { error: MSG_CONFIRMAR }
 
   const cant = Math.max(0, Number(cantidad) || 0)
   const { data: antes } = await sb.from('orden_insumo_items')
@@ -290,8 +310,12 @@ export async function actualizarItemSolicitado(
   const { error } = await sb.from('orden_insumo_items')
     .update({
       cantidad_solicitada: cant,
-      // En orden aprobada no pisamos la cantidad alistada (bodega puede haberla ajustado).
+      // En orden aprobada no pisamos la cantidad alistada (bodega puede haberla ajustado)…
       ...(esAprobada ? {} : { cantidad_alistada: cant }),
+      // …salvo en pleno alistamiento: el ítem vuelve a pendiente con la nueva
+      // cantidad para que la bodega lo revise y lo chulee de nuevo.
+      ...(EN_ALISTAMIENTO.includes(orden.estado)
+        ? { cantidad_alistada: cant, alistado: false, alistado_por: null, alistado_at: null } : {}),
       modificado_por: user.id, modificado_nombre: quien, modificado_at: new Date().toISOString(),
     })
     .eq('id', itemId)
@@ -306,11 +330,14 @@ export async function actualizarItemSolicitado(
       p_detalle: { item_id: itemId, antes: antes.cantidad_solicitada, despues: cant },
     })
     await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
+    await recalcularAlistamiento(sb, ordenId)
 
     if (esAprobada) {
       await emitirNotificacion(sb, {
         codigo: 'SISTEMA',
-        titulo: `Novedad en orden aprobada ${orden.numero}`,
+        titulo: EN_ALISTAMIENTO.includes(orden.estado)
+        ? `Cambio en orden EN ALISTAMIENTO ${orden.numero}`
+        : `Novedad en orden aprobada ${orden.numero}`,
         descripcion: `${quien} ajustó «${prod}»: ${antes.cantidad_solicitada} → ${cant}`,
         entidad: 'ordenes_insumo', entidadId: ordenId,
         enlace: `/ordenes-insumo/${ordenId}`,
@@ -324,7 +351,7 @@ export async function actualizarItemSolicitado(
 
 /** Agrega un producto a la orden (pre o post aprobación). */
 export async function agregarItemSolicitado(
-  ordenId: string, productoId: string, cantidad: number, esAdicional: boolean,
+  ordenId: string, productoId: string, cantidad: number, esAdicional: boolean, confirmado = false,
 ): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
@@ -340,6 +367,7 @@ export async function agregarItemSolicitado(
   const { data: orden } = await sb.from('ordenes_insumo').select('estado, numero').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
   if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya fue despachada o cerrada; no se puede modificar.' }
+  if (EN_ALISTAMIENTO.includes(orden.estado) && !confirmado) return { error: MSG_CONFIRMAR }
 
   const { data: existe } = await sb.from('orden_insumo_items')
     .select('id').eq('orden_id', ordenId).eq('producto_id', productoId).maybeSingle()
@@ -364,11 +392,14 @@ export async function agregarItemSolicitado(
     p_detalle: { producto_id: productoId, cantidad: cant, es_adicional: true },
   })
   await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
+  await recalcularAlistamiento(sb, ordenId)
 
   if (esAprobada) {
     await emitirNotificacion(sb, {
       codigo: 'SISTEMA',
-      titulo: `Novedad en orden aprobada ${orden.numero}`,
+      titulo: EN_ALISTAMIENTO.includes(orden.estado)
+        ? `Cambio en orden EN ALISTAMIENTO ${orden.numero}`
+        : `Novedad en orden aprobada ${orden.numero}`,
       descripcion: `${quien} agregó «${prod?.nombre_estandar ?? 'producto'}» (${cant}) a la orden.`,
       entidad: 'ordenes_insumo', entidadId: ordenId,
       enlace: `/ordenes-insumo/${ordenId}`,
@@ -380,7 +411,7 @@ export async function agregarItemSolicitado(
 }
 
 /** Quita un producto de la orden (pre o post aprobación). */
-export async function quitarItemSolicitado(ordenId: string, itemId: string): Promise<ActionResult> {
+export async function quitarItemSolicitado(ordenId: string, itemId: string, confirmado = false): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Debes iniciar sesión.' }
   const perm = await getPermisosUsuario()
@@ -392,6 +423,7 @@ export async function quitarItemSolicitado(ordenId: string, itemId: string): Pro
   const { data: orden } = await sb.from('ordenes_insumo').select('estado, numero').eq('id', ordenId).single()
   if (!orden) return { error: 'Orden no encontrada.' }
   if (!EDITABLES.includes(orden.estado)) return { error: 'La orden ya fue despachada o cerrada; no se puede modificar.' }
+  if (EN_ALISTAMIENTO.includes(orden.estado) && !confirmado) return { error: MSG_CONFIRMAR }
 
   const { data: item } = await sb.from('orden_insumo_items')
     .select('producto:productos ( nombre_estandar )').eq('id', itemId).single()
@@ -408,12 +440,15 @@ export async function quitarItemSolicitado(ordenId: string, itemId: string): Pro
     p_detalle: { item_id: itemId },
   })
   await retirarAprobacionesSiRevision(sb, ordenId, orden.estado)
+  await recalcularAlistamiento(sb, ordenId)
 
   if (esAprobada) {
     const quien = await nombreUsuario(sb, user.id)
     await emitirNotificacion(sb, {
       codigo: 'SISTEMA',
-      titulo: `Novedad en orden aprobada ${orden.numero}`,
+      titulo: EN_ALISTAMIENTO.includes(orden.estado)
+        ? `Cambio en orden EN ALISTAMIENTO ${orden.numero}`
+        : `Novedad en orden aprobada ${orden.numero}`,
       descripcion: `${quien} quitó «${nomProd}» de la orden.`,
       entidad: 'ordenes_insumo', entidadId: ordenId,
       enlace: `/ordenes-insumo/${ordenId}`,
@@ -740,6 +775,29 @@ export async function despacharOrden(
       .eq('id', it.id)
   }
 
+  // Lo que NO salió pasa a una orden de despacho pendiente, independiente y con
+  // su propia remisión: los ítems sin chulear (completos) y el faltante de los
+  // alistados con menos de lo solicitado.
+  const despachados = new Set(aDespachar.map((it) => it.id))
+  const pendientes = lista
+    .map((it) => {
+      const salio = despachados.has(it.id) ? cantDe(it) : 0
+      return { it, falta: Math.max(0, Number(it.cantidad_solicitada) - salio) }
+    })
+    .filter((p) => p.falta > 0)
+  // Lo no chuleado no salió: su "alistada" (que arranca igual a lo solicitado)
+  // vuelve a 0 para que no aparezca en la remisión ni se pueda devolver.
+  for (const it of lista) {
+    if (despachados.has(it.id) || Number(it.cantidad_alistada) === 0) continue
+    await sb.from('orden_insumo_items').update({ cantidad_alistada: 0 }).eq('id', it.id)
+  }
+  let pendiente: { id: string; numero: string } | null = null
+  if (pendientes.length > 0) {
+    const r = await crearOrdenPendiente(sb, user.id, ordenId, pendientes.map((p) => ({ item: p.it, cantidad: p.falta })))
+    if (r.error) return { error: `Se registró la salida, pero no se pudo crear la orden pendiente: ${r.error}` }
+    pendiente = r.orden ?? null
+  }
+
   const esPropio = tipo === 'CONDUCTOR_PROPIO'
   const { error: updErr } = await sb.from('ordenes_insumo').update({
     estado: 'DESPACHADO' as const, despachado_por: user.id, despachado_at: new Date().toISOString(),
@@ -765,6 +823,9 @@ export async function despacharOrden(
     const guia = despacho?.transportadoraGuia?.trim()
     detalleDespacho = `Despachada con transportadora ${despacho?.transportadoraNombre?.trim()}${guia ? ` · guía ${guia}` : ''}.`
   }
+  if (pendiente) {
+    detalleDespacho += ` Lo que no salió (${pendientes.length} producto(s)) quedó en la orden pendiente ${pendiente.numero}.`
+  }
   await sb.rpc('oi_evento', {
     p_orden: ordenId, p_tipo: 'DESPACHO', p_mensaje: detalleDespacho,
     p_nue: 'DESPACHADO',
@@ -772,12 +833,91 @@ export async function despacharOrden(
       tipo_despacho: tipo, conductor_id: esPropio ? despacho?.conductorId : null,
       transportadora: esPropio ? null : despacho?.transportadoraNombre?.trim(),
       guia: esPropio ? null : despacho?.transportadoraGuia?.trim() || null,
+      orden_pendiente: pendiente,
     },
   })
 
   revalidatePath(`/ordenes-insumo/${ordenId}`)
-  revalidatePath('/ordenes-insumo')
-  return { ok: true, error: fallos > 0 ? `Despachada con ${fallos} ítem(s) sin descontar stock.` : undefined }
+  revalidatePath('/ordenes-insumo'); revalidatePath('/alistamiento')
+  return {
+    ok: true, id: pendiente?.id,
+    error: fallos > 0 ? `Despachada con ${fallos} ítem(s) sin descontar stock.` : undefined,
+  }
+}
+
+/**
+ * Crea la orden de despacho PENDIENTE con lo que no salió en el despacho de la
+ * orden de origen. Es una orden independiente (su número, su alistamiento, su
+ * remisión) que nace APROBADA —el pedido ya se aprobó en la de origen— y queda
+ * enlazada a ella por `orden_origen_id`.
+ */
+async function crearOrdenPendiente(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  sb: any, userId: string, origenId: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  lineas: { item: any; cantidad: number }[],
+): Promise<{ error?: string; orden?: { id: string; numero: string } }> {
+  const { data: origen } = await sb.from('ordenes_insumo')
+    .select('numero, sede_id, bodega_id, periodo, urgente, fecha_entrega_pactada, contrato_id')
+    .eq('id', origenId).single()
+  if (!origen) return { error: 'orden de origen no encontrada' }
+
+  const now = new Date()
+  const ahora = now.toISOString()
+  const prefijo = `OI-${ahora.slice(0, 7).replace('-', '')}-`
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let orden: any = null
+  let consecutivo = await siguienteConsecutivoOI(sb, prefijo)
+  for (let intento = 0; intento < 15 && !orden; intento++) {
+    const numero = `${prefijo}${String(consecutivo).padStart(3, '0')}`
+    const res = await sb.from('ordenes_insumo').insert({
+      numero, sede_id: origen.sede_id, bodega_id: origen.bodega_id,
+      periodo: ahora.slice(0, 8) + '01', estado: 'APROBADA', creado_por: userId,
+      contrato_id: origen.contrato_id ?? null,
+      urgente: !!origen.urgente, fecha_entrega_pactada: origen.fecha_entrega_pactada ?? null,
+      observacion: `Pendiente de la orden ${origen.numero}: lo que no salió en su despacho.`,
+      orden_origen_id: origenId,
+      aprobado_por: userId, aprobado_at: ahora,
+      aprobado_solicitante_por: userId, aprobado_solicitante_at: ahora,
+      aprobado_coordinador_por: userId, aprobado_coordinador_at: ahora,
+    }).select('id, numero').single()
+    if (!res.error) { orden = res.data; break }
+    if (esColisionNumero(res.error)) { consecutivo++; continue }
+    return { error: res.error.message }
+  }
+  if (!orden) return { error: 'no se pudo asignar un número de orden libre' }
+
+  const { error: itErr } = await sb.from('orden_insumo_items').insert(lineas.map(({ item, cantidad }) => ({
+    orden_id: orden.id, producto_id: item.producto_id,
+    cantidad_solicitada: cantidad, cantidad_alistada: cantidad,
+    cantidad_maxima_ref: item.cantidad_maxima_ref ?? null, es_adicional: !!item.es_adicional,
+  })))
+  if (itErr) return { error: itErr.message }
+
+  // Marca en la orden de origen qué se trasladó (Envío restante ya no lo ofrece).
+  for (const { item, cantidad } of lineas) {
+    await sb.from('orden_insumo_items').update({ cantidad_a_pendiente: cantidad }).eq('id', item.id)
+  }
+
+  const { data: resp } = await sb.from('orden_insumo_responsables').select('usuario_id').eq('orden_id', origenId)
+  const responsables = Array.from(new Set([userId, ...((resp ?? []) as { usuario_id: string }[]).map((r) => r.usuario_id)]))
+  await sb.from('orden_insumo_responsables').insert(responsables.map((usuario_id) => ({ orden_id: orden.id, usuario_id })))
+
+  const unidades = lineas.reduce((a, l) => a + l.cantidad, 0)
+  await sb.rpc('oi_evento', {
+    p_orden: orden.id, p_tipo: 'CREACION',
+    p_mensaje: `Orden pendiente generada desde ${origen.numero}: ${lineas.length} producto(s), ${unidades} unidad(es) que no salieron en ese despacho. Disponible en Alistamiento.`,
+    p_nue: 'APROBADA',
+    p_detalle: { orden_origen_id: origenId, orden_origen: origen.numero },
+  })
+  await emitirNotificacion(sb, {
+    codigo: 'SISTEMA',
+    titulo: `Orden pendiente ${orden.numero}`,
+    descripcion: `Lo que no salió en el despacho de ${origen.numero} quedó en ${orden.numero} (${lineas.length} producto(s)).`,
+    entidad: 'ordenes_insumo', entidadId: orden.id,
+    enlace: `/ordenes-insumo/${orden.id}`,
+  })
+  return { orden }
 }
 
 /**
@@ -1024,7 +1164,7 @@ export async function registrarEnvioRestante(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const items = await traerTodo<any>((desde, hasta) => sb.from('orden_insumo_items')
-    .select('id, producto_id, cantidad_solicitada, cantidad_alistada, producto:productos ( nombre_estandar )')
+    .select('id, producto_id, cantidad_solicitada, cantidad_alistada, cantidad_a_pendiente, producto:productos ( nombre_estandar )')
     .eq('orden_id', ordenId).order('id').range(desde, hasta))
   const mapItems = new Map(items.map((it) => [it.id, it]))
 
@@ -1034,7 +1174,7 @@ export async function registrarEnvioRestante(
   for (const e of envios) {
     const it = mapItems.get(e.itemId)
     if (!it) continue
-    const pendiente = Math.max(0, Number(it.cantidad_solicitada) - Number(it.cantidad_alistada))
+    const pendiente = Math.max(0, Number(it.cantidad_solicitada) - Number(it.cantidad_alistada) - Number(it.cantidad_a_pendiente ?? 0))
     const add = Math.max(0, Math.min(pendiente, Number(e.cantidad) || 0))
     if (add <= 0) continue
     const { error: movErr } = await sb.rpc('registrar_movimiento', {

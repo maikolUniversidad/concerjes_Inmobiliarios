@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import { Package, Plus, Trash2, Search, Loader2, User2, AlertTriangle } from 'lucide-react'
+import { Package, Plus, Trash2, Search, Loader2, User2, AlertTriangle, PackageSearch } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { traerTodo } from '@/lib/supabase/paginado'
@@ -32,11 +32,21 @@ function fmtCorto(iso?: string | null) {
  * Productos de la solicitud. Siempre visible. En estados post-aprobación los
  * cambios quedan como novedad en la trazabilidad y generan notificación.
  */
-export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, esAprobada = false }: {
+/** Cambio que espera el visto bueno del usuario (pedido ya en alistamiento). */
+interface CambioPendiente {
+  titulo: string
+  detalle: string
+  ejecutar: () => void
+  cancelar?: () => void
+}
+
+export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, esAprobada = false, enAlistamiento = false }: {
   ordenId: string
   items: Item[]
   puedeEditar: boolean
   esAprobada?: boolean
+  /** La bodega ya está alistando: todo cambio pide confirmación. */
+  enAlistamiento?: boolean
 }) {
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -49,6 +59,13 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
   const [buscar, setBuscar] = useState('')
   const [pending, start] = useTransition()
   const [busy, setBusy] = useState<string | null>(null)
+  const [cambio, setCambio] = useState<CambioPendiente | null>(null)
+
+  /** En alistamiento, pasa el cambio por el pop-up; si no, lo aplica directo. */
+  function conConfirmacion(c: CambioPendiente) {
+    if (enAlistamiento) setCambio(c)
+    else c.ejecutar()
+  }
   // Stock proyectado (real − comprometido en otras órdenes en cola).
   const [stock, setStock] = useState<Map<string, { real: number; disponible: number }>>(new Map())
 
@@ -100,36 +117,58 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
 
   function guardarCantidad(it: Item) {
     const nueva = Math.max(0, Number(cantidades[it.id]) || 0)
-    if (nueva === Number(it.cantidad_solicitada)) return
-    start(async () => {
-      const r = await actualizarItemSolicitado(ordenId, it.id, nueva)
-      if (r.error) { toast.error(r.error); return }
-      toast.success('Cantidad actualizada')
-      router.refresh()
+    const antes = Number(it.cantidad_solicitada)
+    if (nueva === antes) return
+    const nombre = it.producto?.nombre_estandar ?? 'producto'
+    conConfirmacion({
+      titulo: 'Cambiar la cantidad',
+      detalle: `«${nombre}»: ${antes} → ${nueva}.`,
+      ejecutar: () => start(async () => {
+        const r = await actualizarItemSolicitado(ordenId, it.id, nueva, enAlistamiento)
+        if (r.error) { toast.error(r.error); return }
+        toast.success('Cantidad actualizada')
+        router.refresh()
+      }),
+      // Si se arrepiente, el campo vuelve a la cantidad que tenía.
+      cancelar: () => setCantidades((prev) => ({ ...prev, [it.id]: antes })),
     })
   }
 
   function agregar(p: ProdOpt) {
-    setBusy(p.id)
-    start(async () => {
-      const r = await agregarItemSolicitado(ordenId, p.id, 1, true)
-      setBusy(null)
-      if (r.error) { toast.error(r.error); return }
-      toast.success(`«${p.nombre}» agregado`)
-      setBuscar('')
-      router.refresh()
+    conConfirmacion({
+      titulo: 'Agregar un producto',
+      detalle: `Se agrega «${p.nombre}» (1 unidad) a la orden.`,
+      ejecutar: () => {
+        setBusy(p.id)
+        start(async () => {
+          const r = await agregarItemSolicitado(ordenId, p.id, 1, true, enAlistamiento)
+          setBusy(null)
+          if (r.error) { toast.error(r.error); return }
+          toast.success(`«${p.nombre}» agregado`)
+          setBuscar('')
+          router.refresh()
+        })
+      },
     })
   }
 
   function quitar(it: Item) {
-    if (!window.confirm(`¿Quitar «${it.producto?.nombre_estandar ?? 'producto'}» de la orden?`)) return
-    setBusy(it.id)
-    start(async () => {
-      const r = await quitarItemSolicitado(ordenId, it.id)
-      setBusy(null)
-      if (r.error) { toast.error(r.error); return }
-      toast.success('Producto quitado')
-      router.refresh()
+    const nombre = it.producto?.nombre_estandar ?? 'producto'
+    // Fuera de alistamiento basta la confirmación de siempre.
+    if (!enAlistamiento && !window.confirm(`¿Quitar «${nombre}» de la orden?`)) return
+    conConfirmacion({
+      titulo: 'Quitar un producto',
+      detalle: `Se quita «${nombre}» de la orden.`,
+      ejecutar: () => {
+        setBusy(it.id)
+        start(async () => {
+          const r = await quitarItemSolicitado(ordenId, it.id, enAlistamiento)
+          setBusy(null)
+          if (r.error) { toast.error(r.error); return }
+          toast.success('Producto quitado')
+          router.refresh()
+        })
+      },
     })
   }
 
@@ -213,7 +252,15 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
         </p>
         <span className="font-body text-xs text-gray-400">{items.length} ítem(s)</span>
       </div>
-      {esAprobada && puedeEditar && (
+      {enAlistamiento && puedeEditar ? (
+        <div className="flex items-start gap-2 px-4 py-2.5 bg-orange-50 border-b border-orange-100">
+          <PackageSearch className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+          <p className="font-body text-xs text-orange-900">
+            <span className="font-semibold">La bodega ya está alistando este pedido.</span> Cada cambio te pedirá confirmación:
+            el producto vuelve a pendiente para que lo revisen de nuevo y se avisa a los coordinadores.
+          </p>
+        </div>
+      ) : esAprobada && puedeEditar && (
         <div className="flex items-start gap-2 px-4 py-2.5 bg-amber-50 border-b border-amber-100">
           <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
           <p className="font-body text-xs text-amber-800">
@@ -274,6 +321,40 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
           <p className="font-body text-[11px] text-gray-400">
             Los productos que agregues aquí quedan marcados como <span className="font-semibold text-amber-700">Adicional</span> (fuera de la parametrización, sin tope).
           </p>
+        </div>
+      )}
+
+      {cambio && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" role="dialog" aria-modal="true"
+          onClick={() => { cambio.cancelar?.(); setCambio(null) }}>
+          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-start gap-3">
+              <span className="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-orange-600" />
+              </span>
+              <div className="min-w-0">
+                <p className="font-heading font-semibold text-base text-gray-900">{cambio.titulo}: ¿seguro?</p>
+                <p className="font-body text-sm text-gray-700 mt-1">{cambio.detalle}</p>
+              </div>
+            </div>
+            <div className="rounded-lg bg-orange-50 border border-orange-100 px-3 py-2.5 font-body text-xs text-orange-900 space-y-1">
+              <p className="font-semibold">Este pedido ya está en alistamiento. El cambio modifica el proceso:</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                <li>La bodega tiene que volver a revisar y chulear el producto.</li>
+                <li>Se notifica a los coordinadores y queda registrado en la trazabilidad.</li>
+              </ul>
+            </div>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => { cambio.cancelar?.(); setCambio(null) }}
+                className="px-4 py-2 rounded-xl border border-gray-200 font-body text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                Cancelar
+              </button>
+              <button onClick={() => { const c = cambio; setCambio(null); c.ejecutar() }} autoFocus
+                className="px-4 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 font-body text-sm font-semibold text-white">
+                Sí, hacer el cambio
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

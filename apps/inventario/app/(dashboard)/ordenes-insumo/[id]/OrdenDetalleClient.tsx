@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
   ArrowLeft, MapPin, Package, Truck, Loader2, Check,
-  Ban, Video, CheckCircle2, User2, Building2,
+  Ban, Video, CheckCircle2, User2, Building2, GitBranch,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -83,6 +83,12 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
   const alistados = items.filter((i) => i.alistado).length
   const pct = items.length > 0 ? Math.round((alistados / items.length) * 100) : 0
   const hayAlistados = items.some((i) => i.alistado && Number(i.cantidad_alistada) > 0)
+  // Lo que no saldrá en este despacho (sin chulear o alistado con menos de lo
+  // solicitado): al despachar pasa a una orden pendiente independiente.
+  const quedanPendientes = items.filter((i) => {
+    const sale = i.alistado ? Number(i.cantidad_alistada) : 0
+    return Number(i.cantidad_solicitada) - sale > 0
+  })
 
   // Video del despacho (bucket privado → URL firmada)
   useEffect(() => {
@@ -162,7 +168,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     setDespachando(false)
     if (res.error && !res.ok) { toast.error(res.error); return }
     if (res.error) toast.warning(res.error)
-    toast.success('Orden despachada.')
+    toast.success(res.id ? 'Orden despachada. Lo que no salió quedó en una orden pendiente.' : 'Orden despachada.')
     router.refresh()
   }
 
@@ -393,6 +399,17 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
               )}
             </div>
 
+            {hayAlistados && quedanPendientes.length > 0 && (
+              <div className="flex items-start gap-2 rounded-lg bg-orange-50 border border-orange-200 px-3 py-2">
+                <GitBranch className="w-4 h-4 text-orange-600 mt-0.5 shrink-0" />
+                <p className="font-body text-xs text-orange-900">
+                  <span className="font-semibold">{quedanPendientes.length} producto(s) no saldrán</span> en este despacho
+                  (sin chulear o con menos de lo solicitado). Al despachar se genera con ellos una
+                  <span className="font-semibold"> orden de despacho pendiente</span>, independiente y con su propia remisión,
+                  que indica de qué orden viene.
+                </p>
+              </div>
+            )}
             <button
               onClick={() => setShowVideo(true)}
               disabled={!puedeAlistar || despachando || !despachoValido || !hayAlistados}
