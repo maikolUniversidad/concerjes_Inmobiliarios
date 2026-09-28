@@ -12,6 +12,7 @@ import {
 import { createClient } from '@/lib/supabase/client'
 import { useRequierePermiso } from '@/components/permisos/PermisosProvider'
 import { TablaEstandar, registrarCopia, type ColumnaTabla } from '@/components/ui/tabla'
+import { ordenarAlfabetico } from '@/lib/reportes/orden'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,7 +94,9 @@ function SmallAvatar({ url, nombre }: { url: string | null; nombre: string | nul
 
 function buildCsv(logs: LogEntry[]): string {
   const headers = ['Fecha', 'Usuario', 'Email', 'Módulo', 'Acción', 'Descripción', 'Entidad', 'Entidad ID']
-  const rows = logs.map((l) => [
+  // Alfabético por usuario; dentro de cada usuario, como viene (más reciente primero).
+  const ordenados = ordenarAlfabetico(logs, (l) => l.usuarios?.nombre ?? l.usuario_nombre ?? l.usuario_email ?? '')
+  const rows = ordenados.map((l) => [
     formatDateTime(l.created_at),
     l.usuarios?.nombre ?? l.usuario_nombre ?? '',
     l.usuario_email ?? '',
@@ -109,7 +112,8 @@ function buildCsv(logs: LogEntry[]): string {
 }
 
 function downloadCsv(csv: string) {
-  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  // BOM: sin él Excel abre el CSV en ANSI y rompe las tildes.
+  const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url

@@ -1,4 +1,5 @@
 import type { OrdenRow } from './OrdenesInsumoClient'
+import { compararPorItem, pedidoVsInventario } from '@/lib/stock-reservas'
 
 // Generador del Excel de órdenes de insumo. Multi-hoja, con encabezados
 // estilizados, autofiltro (filtrable en Excel) y anchos de columna.
@@ -12,12 +13,15 @@ export interface ItemExport {
   es_adicional: boolean
   solicitado: number
   alistado: number
+  /** stock.cantidad_real / cantidad_disp del producto (null si no hay fila). */
+  real?: number | null
+  disp?: number | null
 }
 
 const ESTADO_LABEL: Record<string, string> = {
   BORRADOR: 'Borrador', EN_REVISION: 'En revisión', CAMBIOS_SOLICITADOS: 'Cambios solicitados',
   APROBADA: 'Aprobada', PENDIENTE: 'Pendiente', EN_ALISTAMIENTO: 'En alistamiento',
-  ALISTADO: 'Alistado', DESPACHADO: 'Enviado', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado',
+  ALISTADO: 'Alistado', DESPACHADO: 'Despachado', EN_RUTA: 'En ruta', ENTREGADO: 'Entregado',
   RECIBIDO: 'Recibido', ANULADA: 'Anulada',
 }
 const etiquetaEstado = (e: string) => ESTADO_LABEL[e] ?? e
@@ -109,10 +113,22 @@ export async function exportarOrdenesExcel(
     { header: 'Tipo', key: 'tipo', width: 16 },
     { header: 'Solicitado', key: 'solicitado', width: 12 },
     { header: 'Alistado', key: 'alistado', width: 11 },
+    { header: 'Stock real', key: 'real', width: 12 },
+    { header: 'Reservado (pedidos aprobados)', key: 'reservado', width: 16 },
+    { header: 'Disponible para la orden', key: 'dispOrden', width: 16 },
+    { header: 'Diferencia (disp. − solicitado)', key: 'diferencia', width: 18 },
   ]
-  for (const it of items) {
+  // Orden: por orden (como en pantalla) y dentro de cada una por ítem y luego alfabético.
+  const posOrden = new Map(ordenes.map((o, i) => [o.id, i]))
+  const itemsOrdenados = [...items].sort((a, b) =>
+    (posOrden.get(a.orden_id) ?? 0) - (posOrden.get(b.orden_id) ?? 0)
+    || compararPorItem({ codigo: a.codigo, nombre: a.nombre }, { codigo: b.codigo, nombre: b.nombre }))
+  for (const it of itemsOrdenados) {
     const o = ordenPorId.get(it.orden_id)
-    wsItems.addRow({
+    const inv = o && it.real !== null && it.real !== undefined
+      ? pedidoVsInventario({ estado: o.estado, pedido: it.solicitado, real: Number(it.real), disp: Number(it.disp ?? it.real) })
+      : null
+    const fila = wsItems.addRow({
       numero: o?.numero ?? '',
       estado: o ? etiquetaEstado(o.estado) : '',
       sede: o?.sede ?? '',
@@ -122,7 +138,14 @@ export async function exportarOrdenesExcel(
       tipo: it.es_adicional ? 'Adicional' : 'Parametrizado',
       solicitado: it.solicitado,
       alistado: it.alistado,
+      real: inv?.real ?? '',
+      reservado: inv?.reservadoTotal ?? '',
+      dispOrden: inv && !inv.salio ? inv.disponibleParaOrden : inv?.salio ? 'Ya salió' : '',
+      diferencia: inv?.diferencia ?? '',
     })
+    if (inv?.diferencia !== null && inv?.diferencia !== undefined && inv.diferencia < 0) {
+      fila.getCell('diferencia').font = { bold: true, color: { argb: 'FFC62828' } }
+    }
   }
   estilizarEncabezado(wsItems)
 

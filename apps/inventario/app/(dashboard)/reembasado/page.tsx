@@ -24,7 +24,7 @@ export default async function ReembasadoPage() {
       .select('id, nombre_estandar, presentacion, ref').eq('activo', true)
       .order('nombre_estandar').order('id').range(desde, hasta)),
     traerTodo<never>((desde, hasta) => sb.from('stock')
-      .select('producto_id, cantidad_disp').order('producto_id').range(desde, hasta)),
+      .select('producto_id, cantidad_real').order('producto_id').range(desde, hasta)),
   ])
 
   return (

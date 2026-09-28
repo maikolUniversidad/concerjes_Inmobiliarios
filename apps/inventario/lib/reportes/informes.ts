@@ -6,6 +6,9 @@
 // (identificación, stock, mínimos, precios, proveedor, ubicación e inventario
 // físico), para que el Excel se pueda usar sin cruzar información a mano.
 
+import { traerTodo } from '@/lib/supabase/paginado'
+import { ordenarFilasPlanas, ordenarPorItem } from './orden'
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,6 +42,12 @@ export interface HojaInforme {
   nota?: string
   /** Pinta la fila en rojo suave (p. ej. agotados). */
   resaltar?: (f: Fila) => boolean
+  /**
+   * Por defecto ('item') toda hoja sale por ítem y nombre del producto, o en
+   * orden alfabético por su nombre principal si no es de productos. 'conservar'
+   * respeta el orden en que vienen las filas.
+   */
+  orden?: 'item' | 'conservar'
 }
 
 export interface ResultadoInforme {
@@ -182,21 +191,20 @@ function mapearProducto(r: Fila): Prod {
   }
 }
 
+/** Catálogo completo, ya ordenado por ítem (código) y nombre. */
 async function cargarProductos(supabase: DB, soloActivos = true): Promise<Prod[]> {
-  const acc: Prod[] = []
-  for (let desde = 0; desde < MAX_FILAS; desde += PAGINA) {
+  const filas = await traerTodo<Fila>((desde, hasta) => {
     let q = supabase.from('productos').select(SELECT_PRODUCTO)
     if (soloActivos) q = q.eq('activo', true)
-    const { data, error } = await q
-      .order('tipo_insumo', { ascending: true })
+    return q
+      .order('codigo', { ascending: true, nullsFirst: false })
       .order('nombre_estandar', { ascending: true })
-      .range(desde, desde + PAGINA - 1)
-    if (error) throw new Error(`No se pudieron leer los productos: ${error.message}`)
-    const lote = (data ?? []) as Fila[]
-    acc.push(...lote.map(mapearProducto))
-    if (lote.length < PAGINA) break
-  }
-  return acc
+      .order('id')
+      .range(desde, hasta)
+  }, { maximo: MAX_FILAS, etiqueta: 'No se pudieron leer los productos' })
+  // PostgreSQL ordena el texto con su collation (mayúsculas/tildes distintas):
+  // se reordena en cliente con la regla única de los reportes.
+  return ordenarPorItem(filas.map(mapearProducto), p => p.codigo, p => p.nombre)
 }
 
 // ─── Demanda de las sedes (órdenes de insumo sin despachar) ───────────────────
@@ -225,6 +233,7 @@ async function cargarPedidosPendientes(supabase: DB): Promise<ItemPedido[]> {
       )
       .in('orden.estado', ESTADOS_OI_PENDIENTES)
       .order('producto_id')
+      .order('id') // clave única: sin ella la paginación repite o pierde filas
       .range(desde, desde + PAGINA - 1)
     if (error) throw new Error(`No se pudieron leer las órdenes de insumo: ${error.message}`)
     const lote = (data ?? []) as Fila[]
@@ -279,6 +288,7 @@ async function cargarOCAbiertas(supabase: DB): Promise<ItemOC[]> {
       )
       .in('oc.estado', ESTADOS_OC_ABIERTAS)
       .order('producto_id')
+      .order('id') // clave única: sin ella la paginación repite o pierde filas
       .range(desde, desde + PAGINA - 1)
     if (error) throw new Error(`No se pudieron leer las órdenes de compra: ${error.message}`)
     const lote = (data ?? []) as Fila[]
@@ -510,9 +520,8 @@ function hojaAgrupada(nombre: string, etiqueta: string, prods: Prod[], llave: (p
       { header: 'Valor del stock', key: 'valor', width: 18, formato: 'cop', total: true },
       { header: 'Bajo el mínimo', key: 'criticos', width: 15, formato: 'entero', total: true },
     ],
-    filas: [...m.entries()]
-      .sort((a, b) => b[1].valor - a[1].valor)
-      .map(([grupo, v]) => ({ grupo, ...v })),
+    filas: [...m.entries()].map(([grupo, v]) => ({ grupo, ...v })),
+    nota: 'Ordenado alfabéticamente.',
   }
 }
 
@@ -559,7 +568,7 @@ export const INFORMES: DefinicionInforme[] = [
               }),
             ),
             resaltar: f => f.estado_stock !== 'OK',
-            nota: 'Ordenado por tipo de insumo y nombre. Usa los filtros de la fila 1 para acotar.',
+            nota: 'Ordenado por ítem y nombre. Usa los filtros de la fila 1 para acotar.',
           },
           hojaAgrupada('Por tipo de insumo', 'Tipo de insumo', prods, p => p.tipo),
           hojaAgrupada('Por rotación', 'Categoría de rotación', prods, p => p.cat),
@@ -583,7 +592,6 @@ export const INFORMES: DefinicionInforme[] = [
       const bajos = prods
         .filter(p => p.minDef > 0 && p.real <= p.minDef)
         .map(p => ({ p, faltante: Math.max(0, p.minDef - p.real) }))
-        .sort((a, b) => b.faltante * b.p.precio - a.faltante * a.p.precio)
       const agotados = prods.filter(p => p.real <= 0)
       const costo = bajos.reduce((a, b) => a + b.faltante * b.p.precio, 0)
 
@@ -621,7 +629,7 @@ export const INFORMES: DefinicionInforme[] = [
               }),
             ),
             resaltar: f => num(f.actual) <= 0,
-            nota: 'Ordenado por costo de reposición (lo más caro de reponer primero).',
+            nota: 'Ordenado por ítem y nombre. Filtra u ordena por "Costo de reposición" para ver lo más caro de reponer.',
           },
           {
             nombre: 'Agotados',
@@ -661,7 +669,6 @@ export const INFORMES: DefinicionInforme[] = [
           return { p, comprometido, camino, comprar }
         })
         .filter(r => r.comprar > 0)
-        .sort((a, b) => b.comprar * b.p.precio - a.comprar * a.p.precio)
 
       const valor = filas.reduce((a, r) => a + r.comprar * r.p.precio, 0)
       const colsCompra: ColumnaInforme[] = [
@@ -695,7 +702,7 @@ export const INFORMES: DefinicionInforme[] = [
               fila(p, { comprar, valor: comprar * p.precio, actual: p.real, minimo: p.minDef, comprometido, camino }),
             ),
             resaltar: f => num(f.actual) <= 0,
-            nota: 'Ordenado por valor estimado de compra. Es la lista lista para cotizar.',
+            nota: 'Ordenado por ítem y nombre. Es la lista lista para cotizar.',
           },
           {
             nombre: 'Por proveedor',
@@ -716,7 +723,7 @@ export const INFORMES: DefinicionInforme[] = [
                 e.valor += comprar * p.precio
                 m.set(k, e)
               }
-              return [...m.values()].sort((a, b) => b.valor - a.valor)
+              return [...m.values()]
             })(),
           },
         ],
@@ -767,7 +774,6 @@ export const INFORMES: DefinicionInforme[] = [
           }
         })
         .filter(r => r.p && r.solicitado > 0)
-        .sort((a, b) => b.faltaComprar * (b.p?.precio ?? 0) - a.faltaComprar * (a.p?.precio ?? 0))
 
       const colsPedido: ColumnaInforme[] = [
         { header: 'Pedido sin despachar', key: 'solicitado', width: 20, formato: 'decimal', total: true },
@@ -939,7 +945,6 @@ export const INFORMES: DefinicionInforme[] = [
             ]),
             filas: [...consol.entries()]
               .filter(([id]) => porProd.has(id))
-              .sort((a, b) => b[1].valor - a[1].valor)
               .map(([id, v]) =>
                 fila(porProd.get(id) as Prod, {
                   pendiente: v.pendiente, valor_pend: v.valor, pedido: v.pedido,
@@ -980,9 +985,7 @@ export const INFORMES: DefinicionInforme[] = [
           {
             nombre: 'No hallados',
             columnas: columnas([{ header: 'Valor en libros', key: 'valor_libros', width: 17, formato: 'cop', total: true }]),
-            filas: noHallados
-              .sort((a, b) => b.real * b.precio - a.real * a.precio)
-              .map(p => fila(p, { valor_libros: p.real * p.precio })),
+            filas: noHallados.map(p => fila(p, { valor_libros: p.real * p.precio })),
           },
           {
             nombre: 'Sin cruzar',
@@ -1025,8 +1028,15 @@ export const INFORMES: DefinicionInforme[] = [
           hojaAgrupada('Por proveedor', 'Proveedor', prods, p => p.proveedor),
           {
             nombre: 'Top 100 por valor',
-            columnas: columnas([{ header: 'Participación', key: 'participacion', width: 14 }]),
-            filas: top.map(p => fila(p, { participacion: valor > 0 ? `${(((p.real * p.precio) / valor) * 100).toFixed(2)}%` : '' })),
+            columnas: columnas([
+              { header: 'Puesto por valor', key: 'puesto', width: 15, formato: 'entero' },
+              { header: 'Participación', key: 'participacion', width: 14 },
+            ]),
+            filas: top.map((p, i) => fila(p, {
+              puesto: i + 1,
+              participacion: valor > 0 ? `${(((p.real * p.precio) / valor) * 100).toFixed(2)}%` : '',
+            })),
+            nota: 'Los 100 productos de mayor valor, listados por ítem y nombre. La columna "Puesto por valor" conserva el ranking (1 = el de mayor valor).',
           },
         ],
       }
@@ -1121,7 +1131,7 @@ export const INFORMES: DefinicionInforme[] = [
               responsable: m.responsable,
               ...filaProducto(m),
             })),
-            nota: 'Un renglón por movimiento, del más reciente al más antiguo. Usa los filtros de la fila 1 para acotar por sede, producto o tipo.',
+            nota: 'Un renglón por movimiento, ordenado por ítem y nombre del producto; dentro de cada producto, del más reciente al más antiguo. Usa los filtros de la fila 1 para acotar por sede, producto o tipo.',
           },
           {
             nombre: 'Por sede',
@@ -1136,13 +1146,12 @@ export const INFORMES: DefinicionInforme[] = [
               { header: 'Último movimiento', key: 'ultima', width: 18 },
             ],
             filas: [...porSede.values()]
-              .sort((a, b) => b.enviadas - a.enviadas)
               .map(e => ({
                 sede: e.sede, ciudad: e.ciudad, contrato: e.contrato,
                 movimientos: e.movimientos, enviadas: e.enviadas, devueltas: e.devueltas,
                 productos: e.productos.size, ultima: fechaHora(e.ultima),
               })),
-            nota: 'A dónde se envió: totales por sede de destino, ordenados por unidades enviadas.',
+            nota: 'A dónde se envió: totales por sede de destino, en orden alfabético.',
           },
           {
             nombre: 'Por producto',
@@ -1155,14 +1164,13 @@ export const INFORMES: DefinicionInforme[] = [
               { header: 'Última sede', key: 'ultima_sede', width: 34 },
             ]),
             filas: [...porProducto.values()]
-              .sort((a, b) => b.enviadas - a.enviadas)
               .map(e => ({
                 movimientos: e.movimientos, enviadas: e.enviadas, devueltas: e.devueltas,
                 sedes: e.sedes.size, ultima: fechaHora(e.ultima),
                 ultima_sede: e.ultimaSede || SIN_SEDE,
                 ...filaProducto(e.muestra),
               })),
-            nota: 'Ordenado por unidades enviadas. Lleva la ficha completa del producto para no cruzar hojas.',
+            nota: 'Ordenado por ítem y nombre. Lleva la ficha completa del producto para no cruzar hojas.',
           },
         ],
       }
@@ -1273,10 +1281,14 @@ export async function descargarInforme(
       c.border = { bottom: { style: 'thin', color: { argb: VERDE_OSCURO } } }
     })
 
-    if (hoja.filas.length === 0) {
+    // Regla única de los reportes: por ítem y nombre (o alfabético si la hoja
+    // no es de productos). Estable: a igual ítem se conserva el orden previo.
+    const filasHoja = hoja.orden === 'conservar' ? hoja.filas : ordenarFilasPlanas(hoja.filas).filas
+
+    if (filasHoja.length === 0) {
       hs.addRow({ [hoja.columnas[0].key]: '(sin registros)' })
     } else {
-      for (const f of hoja.filas) {
+      for (const f of filasHoja) {
         const row = hs.addRow(f)
         if (hoja.resaltar?.(f)) {
           row.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: ROJO_SUAVE } } })

@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs'
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario } from '@/lib/permisos-server'
 import { COLUMNAS_WO, filaWO, type DatosWO } from '@/lib/ats/wo'
+import { ordenarAlfabetico } from '@/lib/reportes/orden'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -65,7 +66,10 @@ export async function POST(req: NextRequest) {
   ws.addRow([...COLUMNAS_WO])
   ws.getRow(1).font = { bold: true }
 
-  for (const c of cands ?? []) {
+  // Orden alfabético por apellidos y nombres (la regla de los reportes).
+  const ordenados = ordenarAlfabetico((cands ?? []) as any[],
+    (c) => c.primer_apellido, (c) => c.segundo_apellido, (c) => c.primer_nombre, (c) => c.segundo_nombre)
+  for (const c of ordenados) {
     const k = contratoDe(c.id)
     const dir = (dirs ?? []).find((d: any) => d.candidato_id === c.id)
     const mnom = (munNom as any[]).find((m) => m.municipio_codigo === c.municipio_trabajo)

@@ -11,6 +11,8 @@ import { traerTodoPorIds } from '@/lib/supabase/paginado'
 import { calcularUrgencia, fmtFecha } from './urgencia'
 import { exportarOrdenesExcel, type ItemExport } from './exportarExcel'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { useEnVivo } from '@/lib/supabase/useEnVivo'
+import { reservaStock, yaSalio } from '@/lib/stock-reservas'
 
 export interface OrdenRow {
   id: string
@@ -32,6 +34,8 @@ export interface OrdenRow {
   comentarios: number
   ultimo_comentario: string | null
   comentario_autor: string | null
+  /** Ítems de productos cuyo disponible real quedó negativo (se pidió más de lo que hay). */
+  sin_stock: number
 }
 
 /** Una orden "tiene comentarios" si trae novedad del pedido o comentarios en la trazabilidad. */
@@ -47,7 +51,7 @@ export const ESTADO_META: Record<EstadoOrdenInsumo, { label: string; cls: string
   PENDIENTE:       { label: 'Pendiente',       cls: 'bg-amber-100 text-amber-700' },
   EN_ALISTAMIENTO: { label: 'En alistamiento', cls: 'bg-blue-100 text-blue-700' },
   ALISTADO:        { label: 'Alistado',        cls: 'bg-indigo-100 text-indigo-700' },
-  DESPACHADO:      { label: 'Enviado',         cls: 'bg-green-100 text-green-700' },
+  DESPACHADO:      { label: 'Despachado',      cls: 'bg-green-100 text-green-700' },
   EN_RUTA:         { label: 'En ruta',         cls: 'bg-sky-100 text-sky-700' },
   ENTREGADO:       { label: 'Entregado',       cls: 'bg-teal-100 text-teal-700' },
   RECIBIDO:        { label: 'Recibido',        cls: 'bg-emerald-100 text-emerald-800' },
@@ -78,7 +82,7 @@ const FILTROS_ESTADO: { value: EstadoOrdenInsumo | 'todos'; label: string }[] = 
   { value: 'PENDIENTE',        label: 'Pendiente'        },
   { value: 'EN_ALISTAMIENTO',  label: 'En alistamiento'  },
   { value: 'ALISTADO',         label: 'Alistado'         },
-  { value: 'DESPACHADO',       label: 'Enviado'          },
+  { value: 'DESPACHADO',       label: 'Despachado'       },
   { value: 'EN_RUTA',          label: 'En ruta'          },
   { value: 'ENTREGADO',        label: 'Entregado'        },
   { value: 'RECIBIDO',         label: 'Recibido'         },
@@ -198,6 +202,8 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
   ordenes: OrdenRow[]; puedeCrear: boolean; estadoInicial?: string
 }) {
   const router = useRouter()
+  // En vivo: cambios de estado, despachos y stock refrescan la lista y el panel de sobre-pedidos.
+  useEnVivo(['ordenes_insumo', 'orden_insumo_items', 'stock'])
   const estadoValido = estadoInicial && estadoInicial in ESTADO_META
     ? (estadoInicial as EstadoOrdenInsumo) : 'todos'
   // Primera vista: lo urgente por entregar, ordenado por fecha.
@@ -273,7 +279,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       const filas = await traerTodoPorIds<any>(ids, (lote, desde, hasta) =>
         sb
           .from('orden_insumo_items')
-          .select('orden_id, cantidad_solicitada, cantidad_alistada, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion )')
+          .select('orden_id, cantidad_solicitada, cantidad_alistada, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion, stock ( cantidad_real, cantidad_disp ) )')
           .in('orden_id', lote)
           .order('id', { ascending: true })
           .range(desde, hasta),
@@ -290,6 +296,8 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
             es_adicional: !!r.es_adicional,
             solicitado: Number(r.cantidad_solicitada ?? 0),
             alistado: Number(r.cantidad_alistada ?? 0),
+            real: r.producto?.stock ? Number(r.producto.stock.cantidad_real) : null,
+            disp: r.producto?.stock ? Number(r.producto.stock.cantidad_disp) : null,
           })
         }
       }
@@ -343,6 +351,27 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
             </span>
           : <span className="text-gray-200">—</span>
       },
+    },
+    {
+      // Qué hace la orden con el inventario: reserva (aprobada, sin despachar),
+      // ya salió (despachada: el stock real ya bajó) o nada (borrador/anulada).
+      id: 'inventario', header: 'Inventario', align: 'center', tarjeta: 'badge',
+      valor: o => yaSalio(o.estado)
+        ? `Salió ${fmt(o.despachado_at)}`
+        : reservaStock(o.estado)
+          ? (o.sin_stock > 0 ? `Reserva · ${o.sin_stock} sin stock` : 'Reserva')
+          : 'Sin reserva',
+      celda: o => yaSalio(o.estado) ? (
+        <span className="inline-flex flex-col items-center leading-tight" title="Despachada: la mercancía ya salió de bodega y no reserva stock">
+          <span className="font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-green-100 text-green-700 whitespace-nowrap">Ya salió</span>
+          <span className="font-body text-[10px] text-gray-400 whitespace-nowrap">{fmt(o.despachado_at)}</span>
+        </span>
+      ) : reservaStock(o.estado) ? (
+        <span className="inline-flex flex-col items-center leading-tight" title="Aprobada sin despachar: lo pedido está reservado y se descuenta del disponible">
+          <span className="font-body text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 whitespace-nowrap">Reserva stock</span>
+          {o.sin_stock > 0 && <span className="font-body text-[10px] font-semibold text-red-600 whitespace-nowrap">{o.sin_stock} ítem(s) sin stock</span>}
+        </span>
+      ) : <span className="font-body text-[11px] text-gray-300">—</span>,
     },
     { id: 'items', header: 'Ítems', valor: o => o.total_items, align: 'right', prioridad: 2, tarjeta: 'meta' },
     {

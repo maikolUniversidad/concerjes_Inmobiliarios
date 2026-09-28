@@ -35,7 +35,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       conductor:usuarios!ordenes_insumo_conductor_id_fkey ( nombre ),
       sede:sedes ( nombre, direccion, grupo:grupos_contrato ( nombre ) ),
       bodega:bodegas ( nombre ),
-      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, cantidad_devuelta, cantidad_a_pendiente, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_disp ) ) ),
+      items:orden_insumo_items ( id, producto_id, cantidad_solicitada, cantidad_maxima_ref, cantidad_alistada, cantidad_devuelta, cantidad_a_pendiente, alistado, alistado_at, es_adicional, modificado_nombre, modificado_at, producto:productos ( nombre_estandar, presentacion, imagen_url, codigo, stock ( cantidad_real, cantidad_disp ) ) ),
       responsables:orden_insumo_responsables ( usuario_id, usuario:usuarios ( id, nombre ) )
     `)
     .eq('id', id)
@@ -186,6 +186,8 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
           quedan como novedad en la trazabilidad y generan notificación. */}
       <SolicitudItems
         ordenId={id}
+        estado={estado}
+        despachadoAt={o.despachado_at ?? null}
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         items={(o.items ?? []) as any}
         puedeEditar={puedeEditarSolicitud}

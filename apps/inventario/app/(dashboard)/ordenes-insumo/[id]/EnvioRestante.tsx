@@ -13,13 +13,14 @@ interface ItemIn {
   cantidad_solicitada: number
   cantidad_alistada: number
   cantidad_a_pendiente?: number | null
-  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: { cantidad_disp: number } | { cantidad_disp: number }[] | null } | null
+  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: { cantidad_real: number } | { cantidad_real: number }[] | null } | null
 }
 
+/** Stock FÍSICO en bodega (lo que se puede enviar ya). */
 const stockDisp = (it: ItemIn): number => {
   const s = it.producto?.stock
   if (!s) return 0
-  return Array.isArray(s) ? Number(s[0]?.cantidad_disp ?? 0) : Number(s.cantidad_disp ?? 0)
+  return Array.isArray(s) ? Number(s[0]?.cantidad_real ?? 0) : Number(s.cantidad_real ?? 0)
 }
 
 /** Lo que falta por enviar: ni salió ni se pasó a una orden pendiente. */
@@ -80,7 +81,7 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
       className: 'font-heading font-bold text-amber-700',
     },
     {
-      id: 'stock', header: 'Stock', valor: (it) => stockDisp(it), align: 'right', prioridad: 2, tarjeta: 'meta',
+      id: 'stock', header: 'Stock real', valor: (it) => stockDisp(it), align: 'right', prioridad: 2, tarjeta: 'meta',
       celda: (it) => {
         const disp = stockDisp(it)
         return <span className={disp <= 0 ? 'text-red-500' : 'text-gray-500'}>{disp}</span>

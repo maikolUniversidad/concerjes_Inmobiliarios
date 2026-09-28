@@ -3,14 +3,17 @@ import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion } from '@/lib/types/database'
+import { ordenarPorItem } from '@/lib/stock-reservas'
 import { StockClient, type StockRow } from './StockClient'
 
 export const metadata: Metadata = { title: 'Stock' }
-export const revalidate = 15
+// Dinámica: la tabla se refresca en vivo (Realtime → router.refresh()).
+export const dynamic = 'force-dynamic'
 
 interface Row {
   id: string
   ref: number | null
+  codigo: number | null
   nombre_estandar: string
   presentacion: string | null
   cat_rotacion: CategoriaRotacion
@@ -31,7 +34,7 @@ export default async function StockPage() {
   try {
     data = await traerTodo<Row>((desde, hasta) => supabase
       .from('productos')
-      .select('id, ref, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cce_tipo, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ), stock_cce ( cantidad_real, cantidad_disp )')
+      .select('id, ref, codigo, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cce_tipo, stock ( cantidad_real, cantidad_disp, cantidad_entr, cantidad_sal ), stock_cce ( cantidad_real, cantidad_disp )')
       .eq('activo', true)
       .order('ref', { ascending: false }).order('id')
       .range(desde, hasta) as never)
@@ -49,14 +52,17 @@ export default async function StockPage() {
     )
   }
 
-  const rows: StockRow[] = data.map(p => ({
+  // disp = real − reservado (lo fija la BD), así que reservado = real − disp.
+  const rows: StockRow[] = ordenarPorItem(data, (p) => ({ codigo: p.codigo, nombre: p.nombre_estandar })).map(p => ({
     id: p.id,
     ref: p.ref,
+    codigo: p.codigo,
     nombre: p.nombre_estandar,
     presentacion: p.presentacion,
     cat: p.cat_rotacion,
-    real: p.stock?.cantidad_real ?? 0,
-    disp: p.stock?.cantidad_disp ?? 0,
+    real: Number(p.stock?.cantidad_real ?? 0),
+    disp: p.stock ? Number(p.stock.cantidad_disp) : 0,
+    reservado: p.stock ? Number(p.stock.cantidad_real) - Number(p.stock.cantidad_disp) : 0,
     entrante: p.stock?.cantidad_entr ?? 0,
     saliente: p.stock?.cantidad_sal ?? 0,
     minimo: p.stock_minimo_def ?? 0,
@@ -70,7 +76,7 @@ export default async function StockPage() {
       <div>
         <h1 className="font-heading font-bold text-2xl text-gray-900">Stock en Tiempo Real</h1>
         <p className="font-body text-sm text-gray-500 mt-0.5">
-          Inventario actual · cantidad real, disponible, entrante y saliente
+          Inventario actual en vivo · stock real en bodega, lo reservado por pedidos aprobados (aún sin despachar) y el disponible real
         </p>
       </div>
       <StockClient rows={rows} />

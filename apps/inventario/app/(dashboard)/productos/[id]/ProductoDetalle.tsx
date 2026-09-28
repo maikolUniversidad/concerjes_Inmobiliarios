@@ -9,6 +9,7 @@ import { DeleteButton } from '@/components/ui/DeleteButton'
 import { eliminarProducto } from '../actions'
 import { formatCOP } from '@/lib/utils'
 import { usePermisos } from '@/components/permisos/PermisosProvider'
+import { useEnVivo } from '@/lib/supabase/useEnVivo'
 
 interface Movimiento {
   tipo: string
@@ -112,6 +113,8 @@ function MovIcon({ tipo }: { tipo: string }) {
 export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo: initialCceTipo, stockCce: initialStockCce }: Props) {
   const { puede } = usePermisos()
   const puedeEditar = puede('editar_productos')
+  // En vivo: el stock y lo reservado cambian al aprobar/despachar órdenes.
+  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
   const [imagenUrl, setImagenUrl] = useState(initial.imagen_url)
   const [cceOpen, setCceOpen] = useState(false)
   const [cceTipo, setCceTipoState] = useState<CceTipo>(initialCceTipo)
@@ -178,8 +181,9 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
         <div className="bg-white border border-gray-100 rounded-2xl p-4 shadow-sm space-y-3">
           <h3 className="font-heading font-semibold text-sm text-gray-700">Stock actual</h3>
           {[
-            { label: 'Cantidad real',      value: real,                      color: 'text-gray-900' },
-            { label: 'Disponible',         value: stock?.cantidad_disp ?? 0, color: 'text-green-700' },
+            { label: 'Stock real (bodega)', value: real,                     color: 'text-gray-900' },
+            { label: 'Reservado (pedidos aprobados)', value: stock ? Number(stock.cantidad_real) - Number(stock.cantidad_disp) : 0, color: 'text-amber-700' },
+            { label: 'Disponible real',    value: stock?.cantidad_disp ?? 0, color: Number(stock?.cantidad_disp ?? 0) < 0 ? 'text-red-600' : 'text-green-700' },
             { label: 'Entrante',           value: stock?.cantidad_entr ?? 0, color: 'text-blue-700' },
             { label: 'Saliente',           value: stock?.cantidad_sal  ?? 0, color: 'text-orange-700' },
             { label: 'Stock mínimo',       value: minimo,                    color: 'text-gray-500' },
@@ -549,7 +553,7 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
                         <p className="font-heading font-bold text-xl text-teal-900">{initial.stock?.cantidad_real ?? 0}</p>
                       </div>
                       <div>
-                        <p className="font-body text-[10px] text-teal-500">Disponible (compartida)</p>
+                        <p className="font-body text-[10px] text-teal-500">Disponible real (descontando pedidos aprobados)</p>
                         <p className="font-heading font-bold text-xl text-teal-900">{initial.stock?.cantidad_disp ?? 0}</p>
                       </div>
                     </div>

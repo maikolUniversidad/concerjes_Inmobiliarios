@@ -11,6 +11,7 @@ import { FiltroSemana } from '@/components/filtros/FiltroSemana'
 import { OrdenesInsumoClient, type OrdenRow } from './OrdenesInsumoClient'
 import { PlantillaDownload, type SedeItem } from './PlantillaDownload'
 import { SobrePedidos, type ProductoSobrePedido } from './SobrePedidos'
+import { ordenarPorItem } from '@/lib/stock-reservas'
 
 export const metadata: Metadata = { title: 'Órdenes de Insumo' }
 export const dynamic = 'force-dynamic'
@@ -40,7 +41,7 @@ export default async function OrdenesInsumoPage({
         id, numero, estado, periodo, created_at, despachado_at, observacion,
         fecha_entrega_pactada, urgente, creado_por,
         sede:sedes ( nombre ),
-        items:orden_insumo_items ( id, alistado ),
+        items:orden_insumo_items ( id, alistado, producto:productos ( stock ( cantidad_disp ) ) ),
         responsables:orden_insumo_responsables ( usuario_id )
       `)
       .order('created_at', { ascending: false })
@@ -122,6 +123,9 @@ export default async function OrdenesInsumoPage({
     despachado_at: o.despachado_at,
     total_items: o.items?.length ?? 0,
     alistados: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
+    // Ítems cuyo producto quedó con disponible real negativo (sobre-pedido).
+    sin_stock: (o.items ?? []).filter((i: { producto?: { stock?: { cantidad_disp: number } | null } | null }) =>
+      Number(i.producto?.stock?.cantidad_disp ?? 0) < 0).length,
     responsables: o.responsables?.length ?? 0,
     fecha_entrega_pactada: o.fecha_entrega_pactada ?? null,
     urgente: !!o.urgente,
@@ -155,17 +159,23 @@ export default async function OrdenesInsumoPage({
   //  2) el detalle se pagina (traerTodoPorIds), porque PostgREST corta en 1.000
   //     filas por respuesta y con ~130 productos en déficit el detalle pasa de
   //     las 2.800 filas: sin paginar, el Excel salía con órdenes faltantes.
-  const MAX_PRODUCTOS = 300
-
-  const { data: deficitRows } = await supabase
+  // Todos los productos en déficit (paginado), ordenados por ítem y luego
+  // alfabético: el código del ítem se lee de `productos` (la vista no lo trae).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const deficitRows = await traerTodo<any>((desde, hasta) => supabase
     .from('v_stock_proyectado')
     .select('producto_id, nombre_estandar, presentacion, stock_real, comprometido, disponible')
     .lt('disponible', 0)
-    .order('disponible', { ascending: true })
-    .limit(MAX_PRODUCTOS)
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deficit = (deficitRows ?? []) as any[]
+    .order('producto_id')
+    .range(desde, hasta))
+  const codigoPorProducto = new Map<string, number | null>()
+  if (deficitRows.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const cods = await traerTodoPorIds<any>(deficitRows.map((r) => r.producto_id), (lote, desde, hasta) =>
+      supabase.from('productos').select('id, codigo').in('id', lote).order('id').range(desde, hasta))
+    for (const c of cods) codigoPorProducto.set(c.id, c.codigo ?? null)
+  }
+  const deficit = ordenarPorItem(deficitRows, (r) => ({ codigo: codigoPorProducto.get(r.producto_id) ?? null, nombre: r.nombre_estandar }))
   const deficitIds = deficit.map((r) => r.producto_id)
   let sobrePedidos: ProductoSobrePedido[] = []
 
@@ -195,8 +205,10 @@ export default async function OrdenesInsumoPage({
       const ordenes = (demMap.get(r.producto_id) ?? []).map((d: { orden_id: string; orden_numero: string; estado: string; sede_nombre: string | null; cantidad_solicitada: number }) => ({
         orden_id: d.orden_id, numero: d.orden_numero, estado: d.estado, sede: d.sede_nombre, cantidad: Number(d.cantidad_solicitada),
       }))
+      ordenes.sort((a, b) => a.numero.localeCompare(b.numero, 'es', { numeric: true }))
       return {
         producto_id: r.producto_id,
+        codigo: codigoPorProducto.get(r.producto_id) ?? null,
         nombre: r.nombre_estandar ?? 'Producto',
         presentacion: r.presentacion ?? null,
         stock_real: Number(r.stock_real),

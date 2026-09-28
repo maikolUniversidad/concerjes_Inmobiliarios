@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Package, Plus, Trash2, Search, Loader2, User2, AlertTriangle, PackageSearch } from 'lucide-react'
 import { toast } from 'sonner'
@@ -9,6 +9,8 @@ import { traerTodo } from '@/lib/supabase/paginado'
 import { actualizarItemSolicitado, agregarItemSolicitado, quitarItemSolicitado } from '../actions'
 import { ProductoThumb } from './ProductoThumb'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { useEnVivo } from '@/lib/supabase/useEnVivo'
+import { ordenarPorItem, pedidoVsInventario, reservaStock, yaSalio } from '@/lib/stock-reservas'
 
 interface Item {
   id: string
@@ -17,7 +19,17 @@ interface Item {
   es_adicional?: boolean
   modificado_nombre?: string | null
   modificado_at?: string | null
-  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null } | null
+  producto: {
+    nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; codigo?: number | null
+    stock?: { cantidad_real: number; cantidad_disp: number } | { cantidad_real: number; cantidad_disp: number }[] | null
+  } | null
+}
+
+/** Fila de stock embebida (PostgREST la trae como objeto; se tolera arreglo). */
+function stockDe(it: Item): { real: number; disp: number } | null {
+  const s = it.producto?.stock
+  const f = Array.isArray(s) ? s[0] : s
+  return f ? { real: Number(f.cantidad_real ?? 0), disp: Number(f.cantidad_disp ?? 0) } : null
 }
 interface ProdOpt { id: string; nombre: string; presentacion: string | null }
 
@@ -40,8 +52,11 @@ interface CambioPendiente {
   cancelar?: () => void
 }
 
-export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, esAprobada = false, enAlistamiento = false }: {
+export function SolicitudItems({ ordenId, estado, despachadoAt = null, items: itemsIniciales, puedeEditar, esAprobada = false, enAlistamiento = false }: {
   ordenId: string
+  /** Estado de la orden: define si su pedido reserva stock o ya salió. */
+  estado: string
+  despachadoAt?: string | null
   items: Item[]
   puedeEditar: boolean
   esAprobada?: boolean
@@ -51,7 +66,9 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sb] = useState<any>(() => createClient())
-  const [items, setItems] = useState<Item[]>(itemsIniciales ?? [])
+  // Orden estándar: por ítem (código) y luego alfabético.
+  const ordenar = (xs: Item[]) => ordenarPorItem(xs, (i) => ({ codigo: i.producto?.codigo ?? null, nombre: i.producto?.nombre_estandar ?? '' }))
+  const [items, setItems] = useState<Item[]>(() => ordenar(itemsIniciales ?? []))
   const [cantidades, setCantidades] = useState<Record<string, number>>(
     () => Object.fromEntries((itemsIniciales ?? []).map((i) => [i.id, Number(i.cantidad_solicitada)])),
   )
@@ -66,29 +83,37 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
     if (enAlistamiento) setCambio(c)
     else c.ejecutar()
   }
-  // Stock proyectado (real − comprometido en otras órdenes en cola).
-  const [stock, setStock] = useState<Map<string, { real: number; disponible: number }>>(new Map())
+  // En vivo: si otra orden reserva/libera stock, se despacha o se mueve
+  // inventario, la página se refresca y estas cifras se actualizan solas.
+  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
 
+  // Al refrescar, solo se pisa la cantidad de los ítems que cambiaron en el
+  // servidor: lo que el usuario está escribiendo y aún no guarda se conserva.
+  const servidor = useRef<Record<string, number>>(
+    Object.fromEntries((itemsIniciales ?? []).map((i) => [i.id, Number(i.cantidad_solicitada)])),
+  )
   useEffect(() => {
-    let vivo = true
-    // Paginado: PostgREST corta en 1.000 filas (`.limit()` no levanta el tope).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    traerTodo<any>((desde, hasta) =>
-      sb.from('v_stock_proyectado').select('producto_id, stock_real, disponible')
-        .order('producto_id').range(desde, hasta),
-    ).then((filas) => {
-      if (!vivo) return
-      const m = new Map<string, { real: number; disponible: number }>()
-      for (const r of filas) m.set(r.producto_id, { real: Number(r.stock_real), disponible: Number(r.disponible) })
-      setStock(m)
+    const nuevos = itemsIniciales ?? []
+    setItems(ordenar(nuevos))
+    setCantidades((prev) => {
+      const sig: Record<string, number> = {}
+      for (const i of nuevos) {
+        const srv = Number(i.cantidad_solicitada)
+        sig[i.id] = i.id in prev && servidor.current[i.id] === srv ? prev[i.id] : srv
+      }
+      return sig
     })
-    return () => { vivo = false }
-  }, [sb])
-
-  useEffect(() => {
-    setItems(itemsIniciales ?? [])
-    setCantidades(Object.fromEntries((itemsIniciales ?? []).map((i) => [i.id, Number(i.cantidad_solicitada)])))
+    servidor.current = Object.fromEntries(nuevos.map((i) => [i.id, Number(i.cantidad_solicitada)]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [itemsIniciales])
+
+  const salio = yaSalio(estado)
+  const reserva = reservaStock(estado)
+  const inv = (it: Item) => {
+    const st = stockDe(it)
+    return st ? pedidoVsInventario({ estado, pedido: Number(it.cantidad_solicitada), real: st.real, disp: st.disp }) : null
+  }
+  const faltantes = items.filter((it) => { const v = inv(it); return v?.diferencia !== null && v?.diferencia !== undefined && v.diferencia < 0 }).length
 
   // Catálogo para agregar productos (solo si se puede editar).
   useEffect(() => {
@@ -174,6 +199,11 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
 
   const columnas: ColumnaTabla<Item>[] = [
     {
+      id: 'codigo', header: 'Ítem', ancho: 'w-14', prioridad: 2, tarjeta: 'meta',
+      valor: (it) => it.producto?.codigo ?? '',
+      className: 'font-mono text-xs text-gray-500',
+    },
+    {
       id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
       ancho: 'min-w-[240px]', tarjeta: 'titulo',
       celda: (it) => (
@@ -195,26 +225,7 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
         : <span className="font-body text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-teal-100 text-teal-700">Parametrizado</span>,
     },
     {
-      id: 'inventario', header: 'Inventario', align: 'center', ancho: 'w-28', prioridad: 2, tarjeta: 'meta',
-      valor: (it) => stock.get(it.producto_id)?.disponible ?? '',
-      copiaTexto: (it) => {
-        const st = stock.get(it.producto_id)
-        return st ? `Stock ${st.real} / Disp ${st.disponible}` : ''
-      },
-      celda: (it) => {
-        const st = stock.get(it.producto_id)
-        if (!st) return <span className="font-body text-xs text-gray-300">—</span>
-        const neg = st.disponible < 0
-        return (
-          <div className="leading-tight">
-            <p className="font-body text-xs text-gray-500">Stock: <span className="font-semibold text-gray-700">{st.real}</span></p>
-            <p className={`font-body text-xs font-semibold ${neg ? 'text-red-600' : 'text-emerald-600'}`}>Disp: {st.disponible}</p>
-          </div>
-        )
-      },
-    },
-    {
-      id: 'cantidad', header: 'Cantidad', align: 'center', ancho: 'w-28', interactiva: puedeEditar, tarjeta: 'meta',
+      id: 'cantidad', header: 'Pedido', align: 'center', ancho: 'w-28', interactiva: puedeEditar, tarjeta: 'meta',
       valor: (it) => Number(it.cantidad_solicitada),
       celda: (it) => puedeEditar ? (
         <input type="number" min={0} step="1"
@@ -226,6 +237,47 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
       ) : (
         <span className="font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</span>
       ),
+    },
+    {
+      id: 'real', header: 'Stock real', align: 'right', ancho: 'w-20', prioridad: 2, tarjeta: 'meta',
+      valor: (it) => stockDe(it)?.real ?? '',
+      className: 'text-gray-700',
+    },
+    {
+      id: 'reservadoOtras', header: 'Reservado otras órdenes', align: 'right', ancho: 'w-24', prioridad: 2, tarjeta: 'meta',
+      valor: (it) => inv(it)?.reservadoOtras ?? '',
+      celda: (it) => {
+        const v = inv(it)
+        if (!v) return <span className="text-xs text-gray-300">—</span>
+        return v.reservadoOtras > 0
+          ? <span className="font-body text-sm text-amber-700">{v.reservadoOtras}</span>
+          : <span className="text-xs text-gray-300">0</span>
+      },
+    },
+    {
+      id: 'dispOrden', header: 'Disponible para esta orden', align: 'right', ancho: 'w-24', tarjeta: 'meta',
+      valor: (it) => (salio ? 'Ya salió' : inv(it)?.disponibleParaOrden ?? ''),
+      celda: (it) => {
+        if (salio) return <span className="font-body text-xs text-green-700">Ya salió</span>
+        const v = inv(it)
+        if (!v) return <span className="text-xs text-gray-300">—</span>
+        return <span className={`font-body text-sm font-semibold ${v.disponibleParaOrden < 0 ? 'text-red-600' : 'text-gray-800'}`}>{v.disponibleParaOrden}</span>
+      },
+    },
+    {
+      id: 'diferencia', header: 'Diferencia', align: 'right', ancho: 'w-24', tarjeta: 'badge',
+      valor: (it) => inv(it)?.diferencia ?? '',
+      copiaTexto: (it) => { const d = inv(it)?.diferencia; return d === null || d === undefined ? '' : String(d) },
+      celda: (it) => {
+        const d = inv(it)?.diferencia
+        if (d === null || d === undefined) return <span className="text-xs text-gray-300">—</span>
+        return (
+          <span title={d < 0 ? `Faltan ${-d} para cumplir este pedido` : `Quedan ${d} después de este pedido`}
+            className={`inline-block font-heading font-bold text-sm px-2 py-0.5 rounded-md ${d < 0 ? 'bg-red-100 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+            {d > 0 ? `+${d}` : d}
+          </span>
+        )
+      },
     },
     {
       id: 'modificado', header: 'Modificado por', ancho: 'w-44', prioridad: 3, tarjeta: 'meta',
@@ -251,6 +303,32 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
           <Package className="w-4 h-4 text-brand-green" /> Productos de la solicitud
         </p>
         <span className="font-body text-xs text-gray-400">{items.length} ítem(s)</span>
+      </div>
+      <div className={`flex items-start gap-2 px-4 py-2 border-b font-body text-xs ${
+        salio ? 'bg-green-50 border-green-100 text-green-800'
+        : reserva ? 'bg-amber-50/60 border-amber-100 text-amber-900'
+        : 'bg-gray-50 border-gray-100 text-gray-600'}`}>
+        {salio ? (
+          <p>
+            <span className="font-semibold">Despachada{despachadoAt ? ` el ${fmtCorto(despachadoAt)}` : ''}:</span> la mercancía ya salió de bodega.
+            El stock real ya se descontó y este pedido no reserva inventario.
+          </p>
+        ) : reserva ? (
+          <p>
+            <span className="font-semibold">Este pedido está reservando inventario</span> (aprobado, sin despachar).
+            <span className="font-semibold"> Disponible para esta orden</span> = stock real − lo reservado por otras órdenes;
+            <span className="font-semibold"> Diferencia</span> = disponible − pedido.
+            {faltantes > 0 && <span className="font-semibold text-red-700"> {faltantes} ítem(s) sin stock suficiente.</span>}
+          </p>
+        ) : estado === 'ANULADA' ? (
+          <p>Orden anulada: no reserva inventario.</p>
+        ) : (
+          <p>
+            <span className="font-semibold">Borrador:</span> aún no reserva inventario. La diferencia muestra cómo quedaría el stock si se aprueba
+            con lo ya reservado por otras órdenes.
+            {faltantes > 0 && <span className="font-semibold text-red-700"> {faltantes} ítem(s) sin stock suficiente.</span>}
+          </p>
+        )}
       </div>
       {enAlistamiento && puedeEditar ? (
         <div className="flex items-start gap-2 px-4 py-2.5 bg-orange-50 border-b border-orange-100">
@@ -281,7 +359,10 @@ export function SolicitudItems({ ordenId, items: itemsIniciales, puedeEditar, es
           busqueda="Buscar producto de la solicitud…"
           filasPorPagina={0}
           anchoAcciones="w-12"
-          filaClassName={(it) => (it.es_adicional ? 'bg-amber-50/30' : '')}
+          filaClassName={(it) => {
+            const d = inv(it)?.diferencia
+            return d !== null && d !== undefined && d < 0 ? 'bg-red-50/40' : it.es_adicional ? 'bg-amber-50/30' : ''
+          }}
           acciones={puedeEditar ? (it) => (
             <button onClick={() => quitar(it)} disabled={busy === it.id || pending}
               className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-40">

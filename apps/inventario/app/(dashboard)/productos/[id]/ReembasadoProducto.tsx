@@ -29,11 +29,11 @@ export function ReembasadoProducto({ productoId }: { productoId: string }) {
           items:reembasado_items ( id, cantidad, producto_destino_id,
             destino:producto_destino_id ( id, nombre_estandar, presentacion, ref ) )
         `).eq('producto_origen_id', productoId).eq('activo', true),
-        sb.from('stock').select('cantidad_disp').eq('producto_id', productoId).maybeSingle(),
+        sb.from('stock').select('cantidad_real').eq('producto_id', productoId).maybeSingle(),
       ])
       if (!vivo) return
       setRecetas((recs ?? []) as Receta[])
-      setDispOrigen(Number(st?.cantidad_disp ?? 0))
+      setDispOrigen(Number(st?.cantidad_real ?? 0))
       setCargando(false)
     })()
     return () => { vivo = false }

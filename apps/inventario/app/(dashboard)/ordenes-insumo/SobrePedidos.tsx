@@ -6,7 +6,7 @@ import { AlertTriangle, ChevronDown, ChevronRight, PackageX, ExternalLink, Downl
 
 export interface OrdenDemanda { orden_id: string; numero: string; estado: string; sede: string | null; cantidad: number }
 export interface ProductoSobrePedido {
-  producto_id: string; nombre: string; presentacion: string | null
+  producto_id: string; codigo: number | null; nombre: string; presentacion: string | null
   stock_real: number; comprometido: number; disponible: number
   ordenes: OrdenDemanda[]
 }
@@ -27,11 +27,12 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
   // Hoja 1: resumen por producto
   const wsResumen = wb.addWorksheet('Resumen')
   wsResumen.columns = [
+    { header: 'Ítem',                        key: 'codigo',       width: 8 },
     { header: 'Producto',                    key: 'nombre',       width: 42 },
     { header: 'Presentación',                key: 'presentacion', width: 20 },
     { header: 'Stock real',                  key: 'stock_real',   width: 14 },
-    { header: 'Total pedido (órdenes en cola)', key: 'comprometido', width: 26 },
-    { header: 'Faltante (stock − pedido)',   key: 'disponible',   width: 24 },
+    { header: 'Reservado (pedidos aprobados)', key: 'comprometido', width: 26 },
+    { header: 'Disponible real (stock − reservado)', key: 'disponible', width: 26 },
     { header: '# Órdenes',                   key: 'num_ordenes',  width: 12 },
   ]
   const hResumen = wsResumen.getRow(1)
@@ -41,6 +42,7 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
 
   for (const p of items) {
     const row = wsResumen.addRow({
+      codigo: p.codigo ?? '',
       nombre: p.nombre,
       presentacion: p.presentacion ?? '',
       stock_real: p.stock_real,
@@ -51,11 +53,12 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
     const deficitCell = row.getCell('disponible')
     deficitCell.font = { bold: true, color: { argb: ROJO } }
   }
-  wsResumen.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 6 } }
+  wsResumen.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } }
 
   // Hoja 2: detalle por orden
   const wsDetalle = wb.addWorksheet('Detalle por orden')
   wsDetalle.columns = [
+    { header: 'Ítem',           key: 'codigo',      width: 8 },
     { header: 'Producto',       key: 'nombre',      width: 42 },
     { header: 'Presentación',   key: 'presentacion',width: 20 },
     { header: 'Orden',          key: 'numero',      width: 18 },
@@ -64,9 +67,9 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
     { header: 'Cantidad pedida',key: 'cantidad',    width: 16 },
     // Estas tres van repetidas en cada fila del producto: son su TOTAL, no el de
     // la fila. Sumar "Cantidad pedida" de un producto debe dar "Total pedido".
-    { header: 'Total pedido del producto', key: 'comprometido', width: 24 },
+    { header: 'Reservado del producto',    key: 'comprometido', width: 24 },
     { header: 'Stock real del producto',   key: 'stock_real',   width: 22 },
-    { header: 'Faltante del producto',     key: 'disponible',   width: 22 },
+    { header: 'Disponible real del producto', key: 'disponible', width: 24 },
   ]
   const hDetalle = wsDetalle.getRow(1)
   hDetalle.font = { bold: true, color: { argb: 'FFFFFFFF' } }
@@ -76,6 +79,7 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
   for (const p of items) {
     for (const o of p.ordenes) {
       wsDetalle.addRow({
+        codigo: p.codigo ?? '',
         nombre: p.nombre,
         presentacion: p.presentacion ?? '',
         numero: o.numero,
@@ -88,7 +92,7 @@ async function exportarSobrePedidos(items: ProductoSobrePedido[]) {
       })
     }
   }
-  wsDetalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 9 } }
+  wsDetalle.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 10 } }
 
   const buf = await wb.xlsx.writeBuffer()
   const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' })
@@ -127,7 +131,7 @@ export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
           <AlertTriangle className="w-4 h-4" />
           <h2 className="font-heading font-semibold text-sm">Productos sobre-pedidos</h2>
           <span className="rounded-full bg-red-600 px-2 py-0.5 font-body text-[11px] font-bold text-white">{items.length}</span>
-          <span className="font-body text-xs text-red-500/80 hidden sm:inline">se pidió más de lo que hay en órdenes en cola</span>
+          <span className="font-body text-xs text-red-500/80 hidden sm:inline">lo reservado por pedidos aprobados supera el stock real · por ítem</span>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -150,17 +154,18 @@ export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
               <div key={p.producto_id} className="bg-white/70">
                 <button onClick={() => toggle(p.producto_id)} className="w-full flex items-center gap-3 px-4 py-2.5 text-left hover:bg-red-50/40">
                   <PackageX className="w-4 h-4 text-red-500 shrink-0" />
+                  <span className="w-10 shrink-0 font-mono text-xs text-gray-500">{p.codigo ?? '—'}</span>
                   <div className="min-w-0 flex-1">
                     <p className="font-body text-sm font-medium text-gray-900 truncate">{p.nombre}</p>
                     {p.presentacion && <p className="font-body text-[11px] text-gray-400">{p.presentacion}</p>}
                   </div>
                   <div className="hidden sm:flex items-center gap-4 shrink-0 font-body text-xs">
-                    <span className="text-gray-500">Stock <span className="font-semibold text-gray-700">{p.stock_real}</span></span>
-                    <span className="text-gray-500">Pedido <span className="font-semibold text-gray-700">{p.comprometido}</span> <span className="text-gray-400">({p.ordenes.length} órd.)</span></span>
+                    <span className="text-gray-500">Stock real <span className="font-semibold text-gray-700">{p.stock_real}</span></span>
+                    <span className="text-gray-500">Reservado <span className="font-semibold text-gray-700">{p.comprometido}</span> <span className="text-gray-400">({p.ordenes.length} órd.)</span></span>
                   </div>
                   <span
                     className="shrink-0 rounded-lg bg-red-100 px-2 py-1 font-heading font-bold text-sm text-red-700"
-                    title={`Faltante = stock ${p.stock_real} − pedido ${p.comprometido}`}
+                    title={`Disponible real = stock ${p.stock_real} − reservado ${p.comprometido}`}
                   >
                     {p.disponible}
                   </span>
@@ -170,12 +175,12 @@ export function SobrePedidos({ items }: { items: ProductoSobrePedido[] }) {
                 {open && (
                   <div className="px-4 pb-3 pl-11">
                     <p className="mb-1 font-body text-[11px] font-semibold uppercase tracking-wide text-gray-400">
-                      Órdenes en cola que lo piden ({p.ordenes.length})
+                      Órdenes aprobadas sin despachar que lo reservan ({p.ordenes.length})
                     </p>
                     <p className="mb-2 font-body text-[11px] text-gray-500">
                       Suma de estas órdenes <strong className="text-gray-700">{sumaPedida(p)}</strong>
                       {' − '}stock <strong className="text-gray-700">{p.stock_real}</strong>
-                      {' = '}faltante <strong className="text-red-600">{p.disponible}</strong>
+                      {' = '}disponible real <strong className="text-red-600">{p.disponible}</strong>
                     </p>
                     <div className="space-y-1">
                       {p.ordenes.map(o => (

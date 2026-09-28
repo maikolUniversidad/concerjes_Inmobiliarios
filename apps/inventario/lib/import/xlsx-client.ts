@@ -2,6 +2,7 @@
 import ExcelJS from 'exceljs'
 import type { EntityConfig, FilaParseada, ColumnDef } from './config'
 import { mapearEncabezados, parsearCSV, type ArchivoParseado } from './csv'
+import { ordenarPorItem } from '@/lib/reportes/orden'
 
 export type { ArchivoParseado } from './csv'
 
@@ -211,7 +212,9 @@ export async function descargarInformeCarga(
   header.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: VERDE } }
   ws.views = [{ state: 'frozen', ySplit: 1 }]
 
-  for (const f of filas) {
+  // Por ítem/clave (numérica primero, luego alfabética); la columna "Fila del
+  // archivo" permite volver a la fila original.
+  for (const f of ordenarPorItem(filas, x => x.clave, x => x.clave)) {
     const row = ws.addRow({ fila: f.fila, clave: f.clave, accion: f.accion, error: f.error ?? '' })
     if (f.accion === 'error') {
       row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE2E2' } }

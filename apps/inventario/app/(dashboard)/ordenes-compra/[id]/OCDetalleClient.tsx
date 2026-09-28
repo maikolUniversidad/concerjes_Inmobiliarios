@@ -37,7 +37,7 @@ export interface OCItem {
   cantidad_rec: number
   precio_unit: number
   subtotal: number | null
-  producto: { nombre_estandar: string; presentacion: string | null } | null
+  producto: { codigo?: number | null; nombre_estandar: string; presentacion: string | null } | null
 }
 export interface ProductoLite { id: string; nombre_estandar: string; presentacion: string | null; precio_lista: number | null; precios: { proveedor_id: string; precio: number | null }[] | null }
 export interface ProveedorLite { id: string; nombre: string }
@@ -408,6 +408,7 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
             datos={items}
             columnas={columnasItems}
             filaId={(it) => it.id}
+            itemDescarga={(it) => it.producto?.codigo ?? null}
             busqueda="Buscar producto de la orden…"
             filasPorPagina={0}
             vacio={<p className="font-body text-sm text-gray-400">La orden no tiene ítems.</p>}

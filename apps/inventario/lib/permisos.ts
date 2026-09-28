@@ -27,6 +27,8 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'eliminar_movimientos', label: 'Eliminar movimientos (revierte el stock)' },
       { key: 'ver_arqueo',          label: 'Ver arqueos' },
       { key: 'realizar_arqueo',     label: 'Realizar arqueo / conteo' },
+      { key: 'ver_inventario_fisico',    label: 'Ver inventarios físicos y comparativas' },
+      { key: 'cargar_inventario_fisico', label: 'Cargar inventario físico (ajusta el stock)' },
       { key: 'ver_bodegas',         label: 'Ver bodegas y ubicaciones' },
       { key: 'gestionar_bodegas',   label: 'Gestionar bodegas y ubicaciones' },
       { key: 'generar_codigos',     label: 'Generar códigos de barras' },

@@ -16,7 +16,7 @@ export interface Receta {
   id: string; nombre: string; descripcion: string | null; cantidad_origen: number
   activo: boolean; producto_origen_id: string; origen: ProdLite | null; items: Destino[]
 }
-interface StockRow { producto_id: string; cantidad_disp: number }
+interface StockRow { producto_id: string; cantidad_real: number }
 
 export const etiqueta = (p?: ProdLite | null) =>
   p ? `${p.nombre_estandar}${p.presentacion ? ' · ' + p.presentacion : ''}${p.ref ? ' (REF ' + p.ref + ')' : ''}` : '—'
@@ -84,7 +84,7 @@ export function ReembasadoClient({
 
   const [recetas, setRecetas] = useState<Receta[]>(recetasIni)
   const [stock, setStock] = useState<Map<string, number>>(
-    () => new Map(stockIni.map((s) => [s.producto_id, Number(s.cantidad_disp)])),
+    () => new Map(stockIni.map((s) => [s.producto_id, Number(s.cantidad_real)])),
   )
   const [creando, setCreando] = useState(false)
   const [ejecutar, setEjecutar] = useState<Receta | null>(null)
@@ -346,7 +346,7 @@ export function EjecutarModal({
             <span className={'font-semibold ' + (suficiente ? 'text-gray-800' : 'text-red-600')}>
               {consumo} de {etiqueta(receta.origen)}
             </span></p>
-          <p className="mt-0.5 text-xs text-gray-400">Disponible: {dispOrigen}</p>
+          <p className="mt-0.5 text-xs text-gray-400">En bodega: {dispOrigen}</p>
           <div className="mt-2 border-t border-gray-100 pt-2 space-y-0.5">
             {receta.items.map((it, i) => (
               <p key={i} className="flex justify-between text-xs">

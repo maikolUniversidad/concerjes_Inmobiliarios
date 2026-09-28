@@ -60,6 +60,7 @@ export const navigation: NavModule[] = [
       { label: 'Stock',              href: '/stock',     icon: BarChart3, permiso: 'ver_stock' },
       { label: 'Movimientos',        href: '/movimientos', icon: ArrowLeftRight, permiso: 'ver_movimientos' },
       { label: 'Arqueo',             href: '/arqueo',    icon: ClipboardCheck, permiso: 'ver_arqueo' },
+      { label: 'Inventario físico',  href: '/inventario-fisico', icon: ClipboardList, permiso: 'ver_inventario_fisico' },
       { label: 'Bodegas',            href: '/bodegas',   icon: Warehouse, permiso: 'ver_bodegas' },
       { label: 'Maquinaria',         href: '/maquinaria', icon: Wrench, permiso: 'ver_maquinaria' },
       { label: 'Reembasado',         href: '/reembasado', icon: Split, permiso: 'ver_reembasado' },

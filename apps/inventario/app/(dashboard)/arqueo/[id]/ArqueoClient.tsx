@@ -118,7 +118,7 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
     it.cantidad_fisica !== null ? Number(it.cantidad_fisica) - Number(it.cantidad_sistema) : null
 
   const columnas: ColumnaTabla<ItemRow>[] = [
-    { id: 'ref', header: 'REF', valor: (it) => it.ref ?? '', ancho: 'w-20', prioridad: 2, className: 'font-mono text-xs text-gray-400', tarjeta: 'meta' },
+    { id: 'ref', header: 'Ítem', valor: (it) => it.ref ?? '', ancho: 'w-20', prioridad: 2, className: 'font-mono text-xs text-gray-400', tarjeta: 'meta' },
     {
       id: 'producto', header: 'Producto', valor: (it) => it.nombre, ancho: 'min-w-[220px]', tarjeta: 'titulo',
       celda: (it) => (
@@ -186,7 +186,9 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
               <h1 className="font-heading font-bold text-xl text-gray-900">{arqueo.nombre}</h1>
               {abierto
                 ? <span className="bg-blue-100 text-blue-700 font-body text-xs font-semibold px-2 py-0.5 rounded-full">En progreso</span>
-                : <span className="bg-green-100 text-green-700 font-body text-xs font-semibold px-2 py-0.5 rounded-full">Cerrado</span>}
+                : arqueo.estado === 'ANULADO'
+                  ? <span className="bg-gray-100 text-gray-500 font-body text-xs font-semibold px-2 py-0.5 rounded-full">Anulado</span>
+                  : <span className="bg-green-100 text-green-700 font-body text-xs font-semibold px-2 py-0.5 rounded-full">Cerrado</span>}
             </div>
             {arqueo.descripcion && <p className="font-body text-sm text-gray-500 mt-0.5">{arqueo.descripcion}</p>}
           </div>
@@ -288,7 +290,7 @@ export function ArqueoClient({ arqueo, itemsIniciales, usuario }: {
         datos={filtrados}
         columnas={columnas}
         filaId={(it) => it.id}
-        busqueda="Buscar producto por nombre o REF…"
+        busqueda="Buscar producto por nombre o ítem…"
         filasPorPagina={0}
         filaClassName={(it) => {
           const dif = difDe(it)

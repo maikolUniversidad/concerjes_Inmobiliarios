@@ -7,6 +7,7 @@ import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
 import { ReportesExport } from './ReportesExport'
 import { InformesInventario } from './InformesInventario'
+import { ReporteProyeccion } from './ReporteProyeccion'
 import { ActividadUsuarioTabla } from './ActividadUsuarioTabla'
 
 export const metadata: Metadata = { title: 'Reportes' }
@@ -140,6 +141,9 @@ export default async function ReportesPage() {
 
       {/* Informes de inventario (lista de selección) */}
       <InformesInventario />
+
+      {/* Inventario + consumo + proyección por la diferencia (real − reservado) */}
+      <ReporteProyeccion />
 
       {/* Exportar a Excel + Grafo de relaciones */}
       <div className="grid lg:grid-cols-[2fr,1fr] gap-5">

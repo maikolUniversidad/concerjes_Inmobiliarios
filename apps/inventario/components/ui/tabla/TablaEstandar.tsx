@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { FiltroColumnaMenu } from './FiltroColumna'
 import { copiarBloque, descargarExcel, registrarCopia } from './copiar'
+import { ordenarAlfabetico, ordenarPorItem } from '@/lib/reportes/orden'
 import {
   textoDeValor,
   type BloqueCopiado,
@@ -72,8 +73,23 @@ export interface TablaEstandarProps<T> {
    * columna, lo que se pinta. Recibe las filas ya filtradas y ordenadas.
    */
   pie?: (filas: T[]) => Partial<Record<string, ReactNode>>
+  /**
+   * Orden del Excel descargado cuando el usuario no eligió uno en la tabla:
+   * por ítem (código) y nombre del producto, o alfabético por el nombre
+   * principal. Se detecta por el id de las columnas; `itemDescarga` da el ítem
+   * aunque la tabla no tenga columna de código. 'conservar' = como se ve.
+   */
+  ordenDescarga?: 'auto' | 'conservar'
+  itemDescarga?: (fila: T) => unknown
   className?: string
 }
+
+/** Columnas que identifican el ítem del producto y el nombre principal de la fila. */
+const IDS_ITEM = ['codigo', 'item', 'ref']
+const IDS_NOMBRE = [
+  'producto', 'nombre', 'nombre_estandar', 'candidato', 'proveedor', 'razon_social',
+  'usuario', 'sede', 'titulo',
+]
 
 type Tamano = 'xs' | 'sm' | 'lg'
 
@@ -162,6 +178,8 @@ export function TablaEstandar<T>({
   descargable = true,
   filaClassName,
   pie,
+  ordenDescarga = 'auto',
+  itemDescarga,
   className = '',
 }: TablaEstandarProps<T>) {
   const tamano = useTamano()
@@ -372,9 +390,38 @@ export function TablaEstandar<T>({
     [armarBloque, modulo, entidad, titulo, columnasCopiables, sel]
   )
 
+  /**
+   * Regla de los reportes: el Excel sale por ítem y nombre (o alfabético). Si el
+   * usuario ordenó la tabla por una columna, se respeta su elección.
+   */
+  const filasParaDescarga = (): T[] => {
+    if (orden || ordenDescarga === 'conservar') return ordenadas
+    const colNombre = IDS_NOMBRE.map((idc) => columnas.find((c) => c.id === idc)).find(Boolean)
+    const colsItem = IDS_ITEM.map((idc) => columnas.find((c) => c.id === idc)).filter(
+      (c): c is ColumnaTabla<T> => !!c
+    )
+    // La primera columna de ítem que traiga datos (p. ej. REF puede venir vacía).
+    const colItem = colsItem.find((c) => ordenadas.some((f) => textoDeValor(c.valor(f)) !== ''))
+    const item = itemDescarga ?? (colItem ? (f: T) => colItem.valor(f) : null)
+    if (item && colNombre) return ordenarPorItem(ordenadas, item, (f) => colNombre.valor(f))
+    if (item) return ordenarPorItem(ordenadas, item, () => '')
+    // Tabla de productos sin ítem utilizable (columna vacía o ausente): la
+    // pantalla ya trae su orden (normalmente por ítem); reordenar solo por
+    // nombre lo rompería. Para forzarlo, la pantalla pasa `itemDescarga`.
+    if (colsItem.length > 0 || (colNombre && ['producto', 'nombre_estandar'].includes(colNombre.id))) {
+      return ordenadas
+    }
+    if (colNombre) return ordenarAlfabetico(ordenadas, (f) => colNombre.valor(f))
+    return ordenadas
+  }
+
   const descargar = async () => {
-    const bloque = armarBloque('todo')
-    if (!bloque) return
+    const filas = filasParaDescarga()
+    if (!filas.length || !columnasCopiables.length) return
+    const bloque: BloqueCopiado = {
+      encabezados: columnasCopiables.map((c) => c.header),
+      filas: filas.map((fila) => columnasCopiables.map((c) => textoCelda(c, fila))),
+    }
     setDescargando(true)
     try {
       await descargarExcel(bloque, titulo.toLowerCase().replace(/\s+/g, '_'), titulo)

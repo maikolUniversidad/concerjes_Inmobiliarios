@@ -1,19 +1,25 @@
 'use client'
 import { useMemo, useState } from 'react'
-import { Boxes, TrendingDown, TrendingUp, AlertCircle, Share2, Lock } from 'lucide-react'
+import { Boxes, TrendingDown, TrendingUp, AlertCircle, Share2, Lock, PackageCheck, PackageMinus, Radio } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { useEnVivo } from '@/lib/supabase/useEnVivo'
 
 export interface StockRow {
   id: string
   ref: number | null
+  /** Ítem (productos.codigo). */
+  codigo: number | null
   nombre: string
   presentacion: string | null
   cat: CategoriaRotacion
   real: number
+  /** Disponible real = real − reservado. Negativo: se pidió más de lo que hay. */
   disp: number
+  /** Reservado por órdenes aprobadas aún sin despachar. */
+  reservado: number
   entrante: number
   saliente: number
   minimo: number
@@ -37,6 +43,8 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
   const router = useRouter()
   const [filtro, setFiltro] = useState('')
   const [cceFilter, setCceFilter] = useState('')
+  // En vivo: aprobar/anular/despachar una orden o mover stock refresca la tabla.
+  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
 
   // Los filtros por columna viven dentro de la tabla; aquí solo quedan los
   // atajos de negocio (alertas de stock e inventario CCE).
@@ -44,7 +52,14 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
     return rows.filter((r) => {
       const e = estado(r.real, r.minimo).key
       const matchFiltro =
-        !filtro || (filtro === 'alerta' ? e === 'critico' || e === 'bajo' : e === filtro)
+        !filtro ||
+        (filtro === 'alerta'
+          ? e === 'critico' || e === 'bajo'
+          : filtro === 'sobrepedido'
+            ? r.disp < 0
+            : filtro === 'reservado'
+              ? r.reservado > 0
+              : e === filtro)
       const matchCce =
         !cceFilter ||
         (cceFilter === 'propio'
@@ -61,6 +76,8 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
   }, [rows, filtro, cceFilter])
 
   const totalReal = rows.reduce((a, s) => a + s.real, 0)
+  const totalReservado = rows.reduce((a, s) => a + s.reservado, 0)
+  const sobrePedidos = rows.filter((s) => s.disp < 0).length
   const totalEntrante = rows.reduce((a, s) => a + s.entrante, 0)
   const totalSaliente = rows.reduce((a, s) => a + s.saliente, 0)
   const alertas = rows.filter((s) => {
@@ -69,7 +86,9 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
   }).length
 
   const kpis = [
-    { icon: Boxes, label: 'Unidades totales', value: totalReal.toLocaleString('es-CO'), color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+    { icon: Boxes, label: 'Stock real (bodega)', value: totalReal.toLocaleString('es-CO'), color: 'text-blue-600', bg: 'bg-blue-50 border-blue-100' },
+    { icon: PackageCheck, label: 'Reservado (pedidos aprobados)', value: totalReservado.toLocaleString('es-CO'), color: 'text-amber-700', bg: 'bg-amber-50 border-amber-100' },
+    { icon: PackageMinus, label: 'Productos sobre-pedidos', value: sobrePedidos.toString(), color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
     { icon: TrendingUp, label: 'Entrante', value: '+' + totalEntrante.toLocaleString('es-CO'), color: 'text-green-600', bg: 'bg-green-50 border-green-100' },
     { icon: TrendingDown, label: 'Saliente', value: '-' + totalSaliente.toLocaleString('es-CO'), color: 'text-orange-600', bg: 'bg-orange-50 border-orange-100' },
     { icon: AlertCircle, label: 'Alertas stock', value: alertas.toString(), color: 'text-red-600', bg: 'bg-red-50 border-red-100' },
@@ -77,12 +96,11 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
 
   const columnas: ColumnaTabla<StockRow>[] = [
     {
-      id: 'ref',
-      header: 'REF',
-      valor: (s) => s.ref ?? '',
-      celda: (s) => <span className="font-mono text-xs text-gray-400">{s.ref ?? '—'}</span>,
-      ancho: 'w-20',
-      prioridad: 2,
+      id: 'codigo',
+      header: 'Ítem',
+      valor: (s) => s.codigo ?? '',
+      celda: (s) => <span className="font-mono text-xs text-gray-500">{s.codigo ?? '—'}</span>,
+      ancho: 'w-16',
       tarjeta: 'meta',
     },
     {
@@ -127,7 +145,7 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
     },
     {
       id: 'real',
-      header: 'Real',
+      header: 'Stock real',
       valor: (s) => s.real,
       align: 'right',
       className: 'bg-gray-50/40',
@@ -136,13 +154,35 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
       tarjeta: 'meta',
     },
     {
+      id: 'reservado',
+      header: 'Reservado (pedidos aprobados)',
+      valor: (s) => s.reservado,
+      align: 'right',
+      className: 'bg-amber-50/30',
+      headerClassName: 'bg-amber-50 text-amber-700',
+      celda: (s) =>
+        s.reservado > 0 ? (
+          <span className="font-heading text-sm font-semibold text-amber-700">{s.reservado}</span>
+        ) : (
+          <span className="text-xs text-gray-300">—</span>
+        ),
+      tarjeta: 'meta',
+    },
+    {
       id: 'disp',
-      header: 'Disp.',
+      header: 'Disponible real',
       valor: (s) => s.disp,
       align: 'right',
       className: 'bg-green-50/30',
       headerClassName: 'bg-green-50 text-green-600',
-      celda: (s) => <span className="font-heading text-sm font-semibold text-green-700">{s.disp}</span>,
+      celda: (s) => (
+        <span
+          title={s.disp < 0 ? `Se pidió ${-s.disp} más de lo que hay en bodega` : undefined}
+          className={`font-heading text-sm font-semibold ${s.disp < 0 ? 'text-red-600' : 'text-green-700'}`}
+        >
+          {s.disp}
+        </span>
+      ),
       tarjeta: 'meta',
     },
     {
@@ -238,7 +278,13 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
   return (
     <div className="space-y-5">
       {/* KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <p className="flex items-center gap-1.5 font-body text-xs text-gray-500">
+        <Radio className="h-3.5 w-3.5 text-green-600" />
+        En vivo. <span className="font-semibold">Disponible real</span> = stock real − lo reservado por órdenes de insumo
+        que ya salieron de borrador y aún no se despachan. Al despachar, la reserva se libera y el stock real baja.
+        En rojo: se pidió más de lo que hay.
+      </p>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         {kpis.map((k) => (
           <div key={k.label} className={`rounded-xl border p-4 ${k.bg} flex items-start gap-3`}>
             <k.icon className={`mt-0.5 h-5 w-5 ${k.color}`} />
@@ -260,8 +306,8 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
         filaId={(s) => s.id}
         onFilaClick={(s) => router.push(`/productos/${s.id}`)}
         anchoAcciones="w-28"
-        busqueda="Buscar por nombre, ref, categoría, estado…"
-        filaClassName={(s) => (estado(s.real, s.minimo).key === 'critico' ? 'bg-red-50/20' : '')}
+        busqueda="Buscar por ítem, nombre, categoría, estado…"
+        filaClassName={(s) => (s.disp < 0 || estado(s.real, s.minimo).key === 'critico' ? 'bg-red-50/20' : '')}
         vacio={
           <>
             <p className="font-heading font-bold text-gray-500">Sin resultados</p>
@@ -280,6 +326,8 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
               <option value="critico">Crítico / Agotado</option>
               <option value="bajo">Bajo</option>
               <option value="normal">Normal</option>
+              <option value="reservado">Con reserva de pedidos</option>
+              <option value="sobrepedido">Sobre-pedidos (disponible negativo)</option>
             </select>
             <select
               value={cceFilter}

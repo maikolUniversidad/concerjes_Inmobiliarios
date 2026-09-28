@@ -24,7 +24,7 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
 
   const esBorrador = (oc as { estado: string }).estado === 'BORRADOR'
   const [{ data: items }, { data: eventos }, { data: productos }, { data: proveedores }] = await Promise.all([
-    supabase.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec, precio_unit, subtotal, producto:productos ( nombre_estandar, presentacion )').eq('oc_id', id),
+    supabase.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec, precio_unit, subtotal, producto:productos ( codigo, nombre_estandar, presentacion )').eq('oc_id', id),
     supabase.from('oc_eventos').select('*').eq('oc_id', id).order('created_at', { ascending: false }),
     esBorrador
       // Paginado: PostgREST devuelve máximo 1.000 filas por respuesta.

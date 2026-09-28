@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import ExcelJS from 'exceljs'
+import { compararTexto, ordenarAlfabetico, ordenarPorItem } from '@/lib/reportes/orden'
 
 // Paleta visual igual a los Excel originales
 const COL_TITULO_BG = 'FF1F4E79'   // azul oscuro
@@ -18,7 +19,7 @@ const COL_CAT_FONTS: Record<string, string> = {
 
 interface Sede { id: string; nombre: string; grupo: string | null }
 interface Producto {
-  id: string; nombre_estandar: string; presentacion: string | null
+  id: string; codigo: number | null; nombre_estandar: string; presentacion: string | null
   complemento: string | null; cat_rotacion: string
 }
 
@@ -47,9 +48,9 @@ export async function GET(req: NextRequest) {
   //    y PostgREST devuelve máximo 1.000 filas por respuesta)
   const productosData = await traerTodo((desde, hasta) => supabase
     .from('productos')
-    .select('id, nombre_estandar, presentacion, complemento, cat_rotacion')
+    .select('id, codigo, nombre_estandar, presentacion, complemento, cat_rotacion')
     .eq('activo', true)
-    .order('nombre_estandar').order('id')
+    .order('codigo', { ascending: true, nullsFirst: false }).order('nombre_estandar').order('id')
     .range(desde, hasta))
 
   // 3. Parametrización sede_productos (cantidades máximas)
@@ -80,8 +81,12 @@ export async function GET(req: NextRequest) {
 
   // ── Estructuras de datos ───────────────────────────────────────────────────
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sedes: Sede[] = ((sedesData ?? []) as any[]).map(s => ({ id: s.id, nombre: s.nombre, grupo: s.grupo?.nombre ?? null }))
-  const productos = (productosData ?? []) as Producto[]
+  const sedes: Sede[] = ordenarAlfabetico(
+    ((sedesData ?? []) as any[]).map(s => ({ id: s.id, nombre: s.nombre, grupo: s.grupo?.nombre ?? null })),
+    s => s.nombre,
+  )
+  // Por ítem (código) y nombre, con la regla única de los reportes.
+  const productos = ordenarPorItem((productosData ?? []) as Producto[], p => p.codigo, p => p.nombre_estandar)
 
   // Mapa param: "sede_id|producto_id" → cantidad_maxima
   const paramMap = new Map<string, number>()
@@ -218,7 +223,7 @@ export async function GET(req: NextRequest) {
       const rowNum = 7 + idx
       const row = ws.getRow(rowNum); row.height = 16
       ws.getCell(rowNum, 1).value = ''
-      ws.getCell(rowNum, 2).value = idx + 1
+      ws.getCell(rowNum, 2).value = prod.codigo ?? ''
       ws.getCell(rowNum, 3).value = prod.nombre_estandar
       ws.getCell(rowNum, 4).value = prod.presentacion ?? ''
       ws.getCell(rowNum, 5).value = prod.complemento ?? ''
@@ -282,7 +287,7 @@ export async function GET(req: NextRequest) {
   const usados = new Set<string>(['todos', 'productos'])
   // Solo tiene sentido separar por contrato si hay más de uno.
   if (porContrato.size > 1) {
-    for (const [contrato, ss] of porContrato) {
+    for (const [contrato, ss] of [...porContrato].sort((a, b) => compararTexto(a[0], b[0]))) {
       const nombreHoja = nombreUnico(contrato, usados)
       poblarHoja(wb.addWorksheet(nombreHoja), ss, `SOLICITUD MENSUAL — ${contrato.toUpperCase()}`)
     }
@@ -306,7 +311,7 @@ export async function GET(req: NextRequest) {
   hdr2.eachCell(c => { c.border = { bottom: { style: 'medium', color: { argb: 'FF1B5E20' } } } })
   productos.forEach((p, i) => {
     const stock = stockMap.get(p.id) ?? 0
-    const r = wsProd.addRow({ item: i + 1, nombre: p.nombre_estandar, presentacion: p.presentacion ?? '', complemento: p.complemento ?? '', cat: p.cat_rotacion, stock })
+    const r = wsProd.addRow({ item: p.codigo ?? '', nombre: p.nombre_estandar, presentacion: p.presentacion ?? '', complemento: p.complemento ?? '', cat: p.cat_rotacion, stock })
     r.height = 16
     if (i % 2 === 1) r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F7F7' } } })
     r.getCell('cat').font = { bold: true, color: { argb: COL_CAT_FONTS[p.cat_rotacion] ?? 'FF4D4D4D' } }

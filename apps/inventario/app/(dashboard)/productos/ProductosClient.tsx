@@ -7,6 +7,7 @@ import Image from 'next/image'
 import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib/types/database'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { useEnVivo } from '@/lib/supabase/useEnVivo'
 
 interface CceBien {
   id: string
@@ -45,6 +46,10 @@ function getStockStatus(real: number, minimo: number) {
   return                          { label: 'Normal',  cls: 'bg-green-100 text-green-700' }
 }
 
+/** Disponible real = real − reservado por pedidos aprobados (lo fija la BD). */
+const dispDe = (p: Producto) => (p.stock ? Number(p.stock.cantidad_disp) : 0)
+const reservadoDe = (p: Producto) => (p.stock ? Number(p.stock.cantidad_real) - Number(p.stock.cantidad_disp) : 0)
+
 export function ProductosClient({ productos, total }: { productos: Producto[]; total: number }) {
   const router = useRouter()
   const [search, setSearch]     = useState('')
@@ -54,6 +59,8 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [cceFilter, setCce]     = useState('')
   const [invFilter, setInv]     = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
+  // En vivo: movimientos de stock y órdenes aprobadas/despachadas refrescan la lista.
+  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -68,7 +75,9 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       const matchStock = !stockFilter || (
         stockFilter === 'agotado' ? real === 0 :
         stockFilter === 'critico' ? real > 0 && real <= minimo :
-        stockFilter === 'normal'  ? real > minimo * 1.5 : true
+        stockFilter === 'normal'  ? real > minimo * 1.5 :
+        stockFilter === 'sobrepedido' ? dispDe(p) < 0 :
+        stockFilter === 'reservado'   ? reservadoDe(p) > 0 : true
       )
       const matchCce = !cceFilter || (
         cceFilter === 'cce'        ? p.cce !== null :
@@ -118,6 +127,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       return r <= (p.stock_minimo_def ?? 0)
     }).length,
     noHallado: productos.filter(noHallado).length,
+    sobrePedidos: productos.filter(p => dispDe(p) < 0).length,
   }), [productos])
 
   // Periodo del último inventario físico cruzado (para rotular la etiqueta)
@@ -137,6 +147,10 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
             : <div className="w-full h-full flex items-center justify-center text-lg">📦</div>}
         </div>
       ),
+    },
+    {
+      id: 'codigo', header: 'Ítem', valor: p => p.codigo ?? '', ancho: 'w-16', tarjeta: 'meta',
+      celda: p => <span className="font-mono text-xs text-gray-500">{p.codigo ?? '—'}</span>,
     },
     {
       id: 'ref', header: 'REF', valor: p => p.ref ?? p.codigo ?? '', ancho: 'w-20', tarjeta: 'meta',
@@ -191,12 +205,27 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
       ) : null,
     },
     {
-      id: 'stock', header: 'Stock', valor: p => p.stock?.cantidad_real ?? 0, align: 'right', tarjeta: 'meta',
+      id: 'stock', header: 'Stock real', valor: p => p.stock?.cantidad_real ?? 0, align: 'right', tarjeta: 'meta',
       celda: p => {
         const real = p.stock?.cantidad_real ?? 0
         return real > 0
           ? <><span className="font-heading font-bold text-base text-gray-900">{real}</span><span className="font-body text-xs text-gray-400 ml-1">/ mín {p.stock_minimo_def}</span></>
           : <span className="font-body text-sm font-bold text-red-600">No hay</span>
+      },
+    },
+    {
+      id: 'reservado', header: 'Reservado (pedidos aprobados)', valor: p => reservadoDe(p), align: 'right', tarjeta: 'meta',
+      celda: p => {
+        const r = reservadoDe(p)
+        return r > 0 ? <span className="font-heading font-semibold text-sm text-amber-700">{r}</span> : <span className="text-xs text-gray-300">—</span>
+      },
+    },
+    {
+      id: 'disponible', header: 'Disponible real', valor: p => dispDe(p), align: 'right', tarjeta: 'meta',
+      celda: p => {
+        const d = dispDe(p)
+        return <span title={d < 0 ? `Se pidió ${-d} más de lo que hay` : undefined}
+          className={`font-heading font-semibold text-sm ${d < 0 ? 'text-red-600' : 'text-green-700'}`}>{d}</span>
       },
     },
     { id: 'minimo', header: 'Mín.', valor: p => p.stock_minimo_def, align: 'right', prioridad: 3, className: 'text-gray-500', tarjeta: 'oculto' },
@@ -217,11 +246,12 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   return (
     <>
       {/* Stats chips */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
         {[
           { label: 'Total productos',  value: stats.total,   color: 'bg-blue-50 text-blue-700 border-blue-100' },
           { label: 'Cat. A alta rot.', value: stats.catA,    color: 'bg-green-50 text-green-700 border-green-100' },
           { label: 'Stock crítico',    value: stats.critico, color: 'bg-red-50 text-red-700 border-red-100' },
+          { label: 'Sobre-pedidos (disp. < 0)', value: stats.sobrePedidos, color: 'bg-rose-50 text-rose-700 border-rose-100' },
           { label: periodo ? `🏷 No hallados · ${periodo}` : '🏷 No hallados', value: stats.noHallado, color: 'bg-orange-50 text-orange-700 border-orange-100' },
         ].map(s => (
           <div key={s.label} className={`rounded-xl border p-3 ${s.color}`}>
@@ -277,6 +307,8 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           <option value="critico">Crítico</option>
           <option value="agotado">Agotado</option>
           <option value="normal">Normal</option>
+          <option value="reservado">Con reserva de pedidos</option>
+          <option value="sobrepedido">Sobre-pedidos (disponible negativo)</option>
         </select>
         <select value={cceFilter} onChange={e => setCce(e.target.value)}
           className="border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 outline-none focus:border-brand-green bg-white">
@@ -391,6 +423,11 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                     {real > 0 ? (
                       <span className="font-body text-xs text-gray-500">
                         <b className="font-heading text-sm text-gray-900">{real}</b> en stock
+                        {reservadoDe(p) > 0 && (
+                          <span className={`block text-[10px] ${dispDe(p) < 0 ? 'text-red-600 font-semibold' : 'text-amber-700'}`}>
+                            {reservadoDe(p)} reservado · disp. {dispDe(p)}
+                          </span>
+                        )}
                       </span>
                     ) : (
                       <span className="font-body text-xs font-bold text-red-600">No hay</span>

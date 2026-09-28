@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
+import { traerTodo } from '@/lib/supabase/paginado'
+import { compararProducto } from '@/lib/arqueo-analisis'
 import { ArqueoClient, type ArqueoHeader, type ItemRow } from './ArqueoClient'
 import { requirePermiso } from '@/lib/permisos-server'
 
@@ -20,7 +22,7 @@ interface RawItem {
   observacion: string | null
   contado_por_nombre: string | null
   precio_lista: number | null
-  producto: { ref: number | null; nombre_estandar: string; presentacion: string | null } | null
+  producto: { codigo: number | null; nombre_estandar: string; presentacion: string | null } | null
 }
 
 export default async function ArqueoDetallePage({ params }: Props) {
@@ -34,10 +36,14 @@ export default async function ArqueoDetallePage({ params }: Props) {
     .eq('id', id).single()
   if (error || !arqueoData) notFound()
 
-  const [{ data: itemsData }, { data: { user } }] = await Promise.all([
-    supabase.from('arqueo_items')
-      .select('id, producto_id, cantidad_sistema, cantidad_fisica, estado, observacion, contado_por_nombre, precio_lista, producto:productos ( ref, nombre_estandar, presentacion )')
-      .eq('arqueo_id', id),
+  // Un arqueo sin filtro abarca todo el catálogo: se pagina para no perder
+  // filas por el tope de 1.000 de PostgREST.
+  const [itemsData, { data: { user } }] = await Promise.all([
+    traerTodo<RawItem>((desde, hasta) => supabase.from('arqueo_items')
+      .select('id, producto_id, cantidad_sistema, cantidad_fisica, estado, observacion, contado_por_nombre, precio_lista, producto:productos ( codigo, nombre_estandar, presentacion )')
+      .eq('arqueo_id', id)
+      .order('id')
+      .range(desde, hasta) as never, { etiqueta: 'Ítems del arqueo' }),
     supabase.auth.getUser(),
   ])
 
@@ -47,18 +53,20 @@ export default async function ArqueoDetallePage({ params }: Props) {
     nombre = (u as { nombre: string } | null)?.nombre ?? nombre
   }
 
-  const items: ItemRow[] = ((itemsData as unknown as RawItem[]) ?? [])
+  const items: ItemRow[] = itemsData
     .map(i => ({
       id: i.id, producto_id: i.producto_id,
-      ref: i.producto?.ref ?? null,
+      // La columna `ref` de productos está vacía; el ítem visible es `codigo`
+      ref: i.producto?.codigo ?? null,
       nombre: i.producto?.nombre_estandar ?? '—',
       presentacion: i.producto?.presentacion ?? null,
       cantidad_sistema: Number(i.cantidad_sistema),
       cantidad_fisica: i.cantidad_fisica === null ? null : Number(i.cantidad_fisica),
       estado: i.estado, observacion: i.observacion,
-      contado_por_nombre: i.contado_por_nombre, precio_lista: i.precio_lista,
+      contado_por_nombre: i.contado_por_nombre,
+      precio_lista: i.precio_lista === null ? null : Number(i.precio_lista),
     }))
-    .sort((a, b) => a.nombre.localeCompare(b.nombre))
+    .sort((a, b) => compararProducto({ codigo: a.ref, nombre: a.nombre }, { codigo: b.ref, nombre: b.nombre }))
 
   const arqueo = arqueoData as unknown as ArqueoHeader
 

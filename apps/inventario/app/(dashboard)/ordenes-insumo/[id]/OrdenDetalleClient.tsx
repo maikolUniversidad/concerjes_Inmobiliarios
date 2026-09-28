@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
@@ -16,6 +16,7 @@ import { VideoDespacho } from './VideoDespacho'
 import { VideoGrabado } from '@/components/ui/VideoGrabado'
 import { ProductoThumb } from './ProductoThumb'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { ordenarPorItem, pedidoVsInventario } from '@/lib/stock-reservas'
 
 interface Item {
   id: string
@@ -25,11 +26,16 @@ interface Item {
   cantidad_alistada: number
   alistado: boolean
   es_adicional?: boolean
-  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: { cantidad_disp: number } | null } | null
+  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; codigo?: number | null; stock?: { cantidad_real: number; cantidad_disp: number } | null } | null
 }
 
-/** Disponible en bodega del producto del ítem (0 si no hay fila de stock). */
-const dispDe = (it: Item) => Number(it.producto?.stock?.cantidad_disp ?? 0)
+/**
+ * Stock FÍSICO en bodega del producto del ítem (0 si no hay fila de stock).
+ * El alistamiento se habilita con lo que hay físicamente: `cantidad_disp` ya
+ * descuenta las reservas, incluida la de ESTA orden, y bloquearía el ítem.
+ */
+const realDe = (it: Item) => Number(it.producto?.stock?.cantidad_real ?? 0)
+const ordenarItems = (xs: Item[]) => ordenarPorItem(xs, (i) => ({ codigo: i.producto?.codigo ?? null, nombre: i.producto?.nombre_estandar ?? '' }))
 interface Orden {
   id: string
   numero: string
@@ -62,7 +68,25 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [sb] = useState<any>(() => createClient())
-  const [items, setItems] = useState<Item[]>(orden.items ?? [])
+  const [items, setItems] = useState<Item[]>(() => ordenarItems(orden.items ?? []))
+  // Al refrescar (en vivo o tras una acción) se toman los datos nuevos del
+  // servidor, pero se conserva la cantidad alistada que el usuario está
+  // escribiendo si en el servidor no cambió.
+  const alistadaSrv = useRef<Record<string, number>>(
+    Object.fromEntries((orden.items ?? []).map((i) => [i.id, Number(i.cantidad_alistada)])),
+  )
+  useEffect(() => {
+    const nuevos = orden.items ?? []
+    setItems((prev) => {
+      const previo = new Map(prev.map((x) => [x.id, x]))
+      return ordenarItems(nuevos.map((n) => {
+        const p = previo.get(n.id)
+        const srv = Number(n.cantidad_alistada)
+        return p && alistadaSrv.current[n.id] === srv ? { ...n, cantidad_alistada: p.cantidad_alistada } : n
+      }))
+    })
+    alistadaSrv.current = Object.fromEntries(nuevos.map((i) => [i.id, Number(i.cantidad_alistada)]))
+  }, [orden.items])
   const [busyItem, setBusyItem] = useState<string | null>(null)
   const [showVideo, setShowVideo] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
@@ -116,8 +140,8 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
 
   async function toggleAlistado(it: Item) {
     if (!editable) return
-    // Sin stock disponible no se puede alistar (y no saldrá en el despacho).
-    if (!it.alistado && dispDe(it) <= 0) {
+    // Sin stock físico no se puede alistar (y no saldrá en el despacho).
+    if (!it.alistado && realDe(it) <= 0) {
       toast.error('Sin stock disponible: este producto no se puede alistar.')
       return
     }
@@ -185,7 +209,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
       interactiva: true, tarjeta: 'badge',
       valor: (it) => (it.alistado ? 'Alistado' : 'Pendiente'),
       celda: (it) => {
-        const sinStock = dispDe(it) <= 0
+        const sinStock = realDe(it) <= 0
         return (
           <button onClick={() => toggleAlistado(it)} disabled={!editable || busyItem === it.id || (sinStock && !it.alistado)}
             title={sinStock ? 'Sin stock disponible' : undefined}
@@ -199,7 +223,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
       id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
       ancho: 'min-w-[220px]', tarjeta: 'titulo',
       celda: (it) => {
-        const disp = dispDe(it)
+        const disp = realDe(it)
         const sinStock = disp <= 0
         return (
           <div className="flex items-center gap-2.5">
@@ -218,7 +242,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
               </div>
               <p className="font-body text-[11px] text-gray-400">
                 {it.producto?.presentacion ? it.producto.presentacion + ' · ' : ''}
-                <span className={sinStock ? 'text-red-500 font-semibold' : ''}>Disp: {disp}</span>
+                <span className={sinStock ? 'text-red-500 font-semibold' : ''}>En bodega: {disp}</span>
               </p>
             </div>
           </div>
@@ -227,7 +251,23 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     },
     { id: 'presentacion', header: 'Presentación', valor: (it) => it.producto?.presentacion ?? '', prioridad: 3, className: 'text-xs text-gray-400', tarjeta: 'subtitulo' },
     { id: 'tipo', header: 'Tipo', valor: (it) => (it.es_adicional ? 'Adicional' : 'Parametrizado'), prioridad: 3, tarjeta: 'oculto' },
-    { id: 'disponible', header: 'Disp.', valor: (it) => dispDe(it), align: 'right', prioridad: 3, className: 'text-gray-500', tarjeta: 'meta' },
+    { id: 'codigo', header: 'Ítem', valor: (it) => it.producto?.codigo ?? '', ancho: 'w-14', prioridad: 3, className: 'font-mono text-xs text-gray-500', tarjeta: 'oculto' },
+    { id: 'disponible', header: 'Stock real', valor: (it) => realDe(it), align: 'right', prioridad: 3, className: 'text-gray-500', tarjeta: 'meta' },
+    {
+      id: 'diferencia', header: 'Diferencia', align: 'right', prioridad: 2, tarjeta: 'meta',
+      valor: (it) => {
+        if (!it.producto?.stock) return ''
+        const d = pedidoVsInventario({ estado: orden.estado, pedido: Number(it.cantidad_solicitada), real: realDe(it), disp: Number(it.producto.stock.cantidad_disp) }).diferencia
+        return d ?? ''
+      },
+      celda: (it) => {
+        if (!it.producto?.stock) return <span className="text-xs text-gray-300">—</span>
+        const d = pedidoVsInventario({ estado: orden.estado, pedido: Number(it.cantidad_solicitada), real: realDe(it), disp: Number(it.producto.stock.cantidad_disp) }).diferencia
+        if (d === null) return <span className="text-xs text-gray-300">—</span>
+        return <span title="Disponible para esta orden (stock real − reservas de otras órdenes) menos lo pedido"
+          className={`font-body text-sm font-semibold ${d < 0 ? 'text-red-600' : 'text-emerald-700'}`}>{d > 0 ? `+${d}` : d}</span>
+      },
+    },
     {
       id: 'solicitado', header: 'Solicitado', valor: (it) => Number(it.cantidad_solicitada), align: 'center', ancho: 'w-24',
       className: 'font-semibold text-gray-700', tarjeta: 'meta',
@@ -236,7 +276,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
       id: 'alistadoCant', header: 'Alistado', align: 'center', ancho: 'w-28', interactiva: true, tarjeta: 'meta',
       valor: (it) => Number(it.cantidad_alistada),
       celda: (it) => (
-        <input type="number" min={0} step="1" value={Number(it.cantidad_alistada)} disabled={!editable || dispDe(it) <= 0}
+        <input type="number" min={0} step="1" value={Number(it.cantidad_alistada)} disabled={!editable || realDe(it) <= 0}
           onChange={(e) => setCantAlistada(it, Number(e.target.value) || 0)} onBlur={() => guardarCant(it)}
           className="w-full border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
       ),
@@ -303,7 +343,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
             filaId={(it) => it.id}
             busqueda="Buscar producto de la orden…"
             filasPorPagina={0}
-            filaClassName={(it) => (dispDe(it) <= 0 ? 'bg-gray-50/70 opacity-70' : it.alistado ? 'bg-green-50/40' : '')}
+            filaClassName={(it) => (realDe(it) <= 0 ? 'bg-gray-50/70 opacity-70' : it.alistado ? 'bg-green-50/40' : '')}
             vacio={<p className="font-body text-sm text-gray-400">La orden no tiene ítems.</p>}
           />
         </div>
@@ -320,6 +360,9 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
             <div className="flex items-center gap-2 text-green-700 font-body text-sm font-semibold">
               <CheckCircle2 className="w-4 h-4" /> Despachada el {fmt(orden.despachado_at)}
             </div>
+            <p className="font-body text-xs text-gray-500">
+              La mercancía ya salió de bodega: el stock real se descontó con la salida y este pedido ya no reserva inventario.
+            </p>
             {/* Cómo salió el pedido */}
             <div className="flex items-start gap-2 rounded-lg bg-gray-50 px-3 py-2">
               {orden.tipo_despacho === 'TRANSPORTADORA'

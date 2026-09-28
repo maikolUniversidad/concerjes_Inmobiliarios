@@ -4,10 +4,12 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
+import { ordenarPorItem } from '@/lib/stock-reservas'
 import { ProductosClient } from './ProductosClient'
 
 export const metadata: Metadata = { title: 'Productos' }
-export const revalidate = 30
+// Dinámica: la tabla se refresca en vivo (Realtime → router.refresh()).
+export const dynamic = 'force-dynamic'
 
 export default async function ProductosPage() {
   const perm = await requirePermiso('ver_productos')
@@ -33,12 +35,14 @@ export default async function ProductosPage() {
       .from('productos')
       .select(SELECT)
       .eq('activo', true)
-      .order('ref', { ascending: false })
+      .order('ref', { ascending: false }).order('id')
       .range(from, from + PAGE - 1)
     if (e) { error = e; break }
     productos = productos.concat(data ?? [])
     if (!data || data.length < PAGE) break
   }
+  // Orden estándar: por ítem (código) y luego alfabético.
+  productos = ordenarPorItem(productos, (p) => ({ codigo: p.codigo, nombre: p.nombre_estandar }))
   const total = productos.length
 
   if (error) {

@@ -8,11 +8,28 @@ import {
   ClipboardCheck, Boxes, Clock, ListChecks, PackageOpen, User2, AlertTriangle,
 } from 'lucide-react'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+import { useEnVivo } from '@/lib/supabase/useEnVivo'
 
 export interface Fila {
   id: string; numero: string; estado: string; created_at: string; aprobado_at: string | null
+  despachado_at?: string | null
   sede: { nombre: string } | null
-  items: { alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number }[]
+  items: {
+    alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number
+    producto?: { stock?: { cantidad_real: number; cantidad_disp: number } | null } | null
+  }[]
+}
+
+/**
+ * Ítems de una orden por despachar cuyo stock FÍSICO no alcanza para lo pedido
+ * (pedido > stock real en bodega). Las despachadas ya salieron: no aplica.
+ */
+const sinStock = (o: Fila) => o.estado === 'DESPACHADO' ? 0 : (o.items ?? []).filter((i) =>
+  !i.alistado && Number(i.cantidad_solicitada) > Number(i.producto?.stock?.cantidad_real ?? 0)).length
+
+function fmtFecha(iso?: string | null) {
+  if (!iso) return ''
+  return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 /** Ítems y unidades que quedaron sin enviar (solicitado − alistado). */
@@ -46,6 +63,8 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
 }) {
   const router = useRouter()
   const [filtro, setFiltro] = useState<string>('PENDIENTES')
+  // En vivo: nuevas aprobaciones, avances de alistamiento, despachos y stock.
+  useEnVivo(['ordenes_insumo', 'orden_insumo_items', 'stock'])
 
   // ── Resumen global de la bodega (todas las órdenes, no el filtro) ──────────
   const resumen = useMemo(() => {
@@ -113,7 +132,25 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
       valor: (o) => META[o.estado]?.label ?? o.estado,
       celda: (o) => {
         const m = META[o.estado] ?? { label: o.estado, color: 'bg-gray-100 text-gray-600' }
-        return <span className={`rounded-full px-2 py-0.5 font-body text-[11px] font-semibold ${m.color}`}>{m.label}</span>
+        return (
+          <span className="inline-flex flex-col items-center leading-tight">
+            <span className={`rounded-full px-2 py-0.5 font-body text-[11px] font-semibold ${m.color}`}>{m.label}</span>
+            {o.estado === 'DESPACHADO' && o.despachado_at && (
+              <span className="font-body text-[10px] text-gray-400 whitespace-nowrap" title="La mercancía ya salió de bodega">salió {fmtFecha(o.despachado_at)}</span>
+            )}
+          </span>
+        )
+      },
+    },
+    {
+      id: 'sinStock', header: 'Sin stock', align: 'center', prioridad: 2, tarjeta: 'meta',
+      valor: (o) => sinStock(o),
+      celda: (o) => {
+        const n = sinStock(o)
+        return n > 0
+          ? <span title="Ítems por alistar cuyo stock real en bodega no alcanza para lo pedido"
+              className="rounded-full bg-red-100 px-2 py-0.5 font-body text-[11px] font-bold text-red-700">{n}</span>
+          : <span className="text-gray-200 text-xs">—</span>
       },
     },
     {
