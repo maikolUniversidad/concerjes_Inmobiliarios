@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase/server'
 import { requirePermiso } from '@/lib/permisos-server'
 import { CATEGORIA_LABELS, type CategoriaRotacion } from '@/lib/types/database'
 import { ordenarPorItem } from '@/lib/stock-reservas'
+import { FLUJO_VACIO } from '@/lib/stock-flujo'
+import { traerFlujoStock } from '@/lib/supabase/stock-flujo'
 import { ProductosClient } from './ProductosClient'
 
 export const metadata: Metadata = { title: 'Productos' }
@@ -24,6 +26,8 @@ export default async function ProductosPage() {
     cce:cce_bien_id ( id, item, bien ),
     stock_cce ( cantidad_real, cantidad_disp )
   `
+  // Flujo de las órdenes (alistado en bodega / despachado), en paralelo.
+  const flujoP = traerFlujoStock(supabase)
   // Paginar para traer TODOS los productos activos (Supabase limita a 1000 por request)
   const PAGE = 1000
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -41,6 +45,8 @@ export default async function ProductosPage() {
     productos = productos.concat(data ?? [])
     if (!data || data.length < PAGE) break
   }
+  const flujo = await flujoP
+  productos = productos.map((p) => ({ ...p, flujo: flujo.get(p.id) ?? FLUJO_VACIO }))
   // Orden estándar: por ítem (código) y luego alfabético.
   productos = ordenarPorItem(productos, (p) => ({ codigo: p.codigo, nombre: p.nombre_estandar }))
   const total = productos.length

@@ -125,8 +125,9 @@ export function CargarInventario({ periodos, onClose }: { periodos: string[]; on
         periodo: periodoNorm, fechaCorte, archivo: vista.archivo, observacion, items: vista.filas,
       })
       if (r.error) { setError(r.error); return }
-      router.refresh()
-      onClose()
+      // Recién aplicado, se abre su informe comparativo contra los conteos anteriores
+      if (r.id) router.push(`/inventario-fisico/${r.id}`)
+      else { router.refresh(); onClose() }
     })
   }
 

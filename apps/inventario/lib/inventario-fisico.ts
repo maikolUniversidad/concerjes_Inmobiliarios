@@ -3,6 +3,8 @@
 // Sin dependencias de React ni de Supabase para poder usarla en cliente y
 // servidor por igual.
 
+import { ordenarPorItem } from '@/lib/reportes/orden'
+
 export interface InventarioFisico {
   id: string
   periodo: string
@@ -36,12 +38,75 @@ export interface ItemFisico {
   producto_nuevo: boolean
 }
 
-/** Clave estable de un producto entre conteos (el id; si se borró, el código). */
-export const claveItem = (i: Pick<ItemFisico, 'producto_id' | 'codigo' | 'nombre'>) =>
-  i.producto_id ?? (i.codigo !== null ? `c:${i.codigo}` : `n:${i.nombre}`)
+type ConClave = { producto_id: string | null; codigo: number | null; nombre: string }
+
+const nombreClave = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').trim().replace(/\s+/g, ' ').toUpperCase()
+
+/**
+ * Clave estable de un producto entre conteos (el id; si se borró, el código).
+ * Ojo: sola no basta para cruzar conteos — si el producto se borró después,
+ * sus filas viejas quedan con `producto_id` null y no casarían con las nuevas.
+ * Para cruzar usa `resolverClaves`.
+ */
+export const claveItem = (i: ConClave) =>
+  i.producto_id ?? (i.codigo !== null ? `c:${i.codigo}` : `n:${nombreClave(i.nombre)}`)
+
+/**
+ * Arma la función de clave para cruzar varias listas de ítems entre sí.
+ * La función SQL casa el archivo con el catálogo por ITEM (= codigo), así que
+ * el mismo código es el mismo producto: una fila sin `producto_id` (producto
+ * borrado después del conteo, ON DELETE SET NULL) toma el id que ese código
+ * tiene en los demás conteos, si es uno solo. Si no, queda `c:<codigo>`.
+ */
+export function resolverClaves<T extends ConClave>(...listas: readonly (readonly T[])[]): (i: T) => string {
+  const idsPorCodigo = new Map<number, Set<string>>()
+  for (const l of listas) for (const i of l) {
+    if (i.producto_id === null || i.codigo === null) continue
+    const s = idsPorCodigo.get(i.codigo)
+    if (s) s.add(i.producto_id)
+    else idsPorCodigo.set(i.codigo, new Set([i.producto_id]))
+  }
+  return (i: T) => {
+    if (i.producto_id !== null) return i.producto_id
+    if (i.codigo !== null) {
+      const ids = idsPorCodigo.get(i.codigo)
+      if (ids && ids.size === 1) return [...ids][0]
+      return `c:${i.codigo}`
+    }
+    return `n:${nombreClave(i.nombre)}`
+  }
+}
 
 /** ¿El producto vino en el archivo de ese conteo? */
-export const vinoEnConteo = (i: ItemFisico) => i.estado !== 'NO_HALLADO'
+export const vinoEnConteo = (i: Pick<ItemFisico, 'estado'>) => i.estado !== 'NO_HALLADO'
+
+/**
+ * Índice clave → ítem de UN conteo. Si dos filas caen en la misma clave (p. ej.
+ * un no hallado borrado con el mismo código de uno contado) gana la que vino
+ * en el archivo, para no perder lo contado.
+ */
+export function indexarConteo(items: readonly ItemFisico[], clave: (i: ItemFisico) => string): Map<string, ItemFisico> {
+  const m = new Map<string, ItemFisico>()
+  for (const i of items) {
+    const k = clave(i)
+    const previo = m.get(k)
+    if (!previo || (!vinoEnConteo(previo) && vinoEnConteo(i))) m.set(k, i)
+  }
+  return m
+}
+
+/** Orden cronológico de los conteos: fecha de corte (no el nombre del periodo) y, a igual fecha, el que se cargó primero. */
+export function ordenCronologico<T extends Pick<InventarioFisico, 'fecha_corte' | 'created_at' | 'id'>>(invs: readonly T[]): T[] {
+  return [...invs].sort((a, b) =>
+    a.fecha_corte.localeCompare(b.fecha_corte) || a.created_at.localeCompare(b.created_at) || a.id.localeCompare(b.id))
+}
+
+/** Diferencia contra el sistema (la columna generada; si no vino, se recalcula). */
+export function diferenciaSistema(i: Pick<ItemFisico, 'estado' | 'cantidad_contada' | 'stock_sistema' | 'diferencia'>): number | null {
+  if (i.estado !== 'CONTADO') return null
+  if (i.diferencia !== null) return i.diferencia
+  return i.cantidad_contada !== null && i.stock_sistema !== null ? i.cantidad_contada - i.stock_sistema : null
+}
 
 // ── Comparativa entre dos conteos ────────────────────────────────────────────
 
@@ -56,7 +121,7 @@ export type EstadoComparacion =
   | 'SIN_DATO'    // una de las dos celdas vino vacía
 
 export const ETIQUETA_COMPARACION: Record<EstadoComparacion, string> = {
-  FALTANTE: 'Faltante',
+  FALTANTE: 'Dejó de venir',
   NUEVO: 'Nuevo en conteo',
   AGOTADO: 'Se agotó',
   REPUESTO: 'Repuesto',
@@ -96,9 +161,13 @@ function estadoComparacion(a: ItemFisico | undefined, b: ItemFisico | undefined)
 }
 
 /** Compara el conteo A (anterior) contra el B (actual), producto por producto. */
-export function compararConteos(itemsA: ItemFisico[], itemsB: ItemFisico[]): FilaComparacion[] {
-  const mapA = new Map(itemsA.map(i => [claveItem(i), i]))
-  const mapB = new Map(itemsB.map(i => [claveItem(i), i]))
+export function compararConteos(
+  itemsA: ItemFisico[],
+  itemsB: ItemFisico[],
+  clave: (i: ItemFisico) => string = resolverClaves(itemsA, itemsB),
+): FilaComparacion[] {
+  const mapA = indexarConteo(itemsA, clave)
+  const mapB = indexarConteo(itemsB, clave)
   const claves = new Set([...mapA.keys(), ...mapB.keys()])
   const filas: FilaComparacion[] = []
   for (const clave of claves) {
@@ -129,7 +198,7 @@ export function compararConteos(itemsA: ItemFisico[], itemsB: ItemFisico[]): Fil
       estado,
     })
   }
-  return filas.sort((x, y) => (x.codigo ?? 1e9) - (y.codigo ?? 1e9) || x.nombre.localeCompare(y.nombre))
+  return ordenarPorItem(filas, f => f.codigo, f => f.nombre)
 }
 
 export function resumenComparacion(filas: FilaComparacion[]) {
@@ -153,7 +222,10 @@ export function resumenComparacion(filas: FilaComparacion[]) {
 
 // ── Conteo vs sistema (lo contado frente a lo que decía el stock) ───────────
 
-export type EstadoSistema = 'FALTANTE' | 'SOBRANTE' | 'CUADRA' | 'NO_HALLADO' | 'SIN_CANTIDAD'
+// SIN_SISTEMA: se contó, pero no se sabe qué decía el sistema (fotos
+// históricas de productos que se crearon con ese mismo cruce). No es
+// "sin cantidad": la cantidad sí está.
+export type EstadoSistema = 'FALTANTE' | 'SOBRANTE' | 'CUADRA' | 'NO_HALLADO' | 'SIN_CANTIDAD' | 'SIN_SISTEMA'
 
 export const ETIQUETA_SISTEMA: Record<EstadoSistema, string> = {
   FALTANTE: 'Faltante físico',
@@ -161,13 +233,16 @@ export const ETIQUETA_SISTEMA: Record<EstadoSistema, string> = {
   CUADRA: 'Cuadra',
   NO_HALLADO: 'No hallado',
   SIN_CANTIDAD: 'Sin cantidad',
+  SIN_SISTEMA: 'Sin dato del sistema',
 }
 
 export function estadoSistema(i: ItemFisico): EstadoSistema {
   if (i.estado === 'NO_HALLADO') return 'NO_HALLADO'
-  if (i.estado === 'SIN_CANTIDAD' || i.diferencia === null) return 'SIN_CANTIDAD'
-  if (i.diferencia < 0) return 'FALTANTE'
-  if (i.diferencia > 0) return 'SOBRANTE'
+  const d = diferenciaSistema(i)
+  if (i.estado === 'SIN_CANTIDAD' || i.cantidad_contada === null) return 'SIN_CANTIDAD'
+  if (d === null) return 'SIN_SISTEMA'
+  if (d < 0) return 'FALTANTE'
+  if (d > 0) return 'SOBRANTE'
   return 'CUADRA'
 }
 
@@ -190,24 +265,31 @@ export interface FilaTendencia {
 export function tendencia(inventarios: InventarioFisico[], items: ItemFisico[]): FilaTendencia[] {
   const orden = new Map(inventarios.map((inv, i) => [inv.id, i]))
   const filas = new Map<string, FilaTendencia>()
+  const claveDe = resolverClaves(items)
   for (const it of items) {
     if (!vinoEnConteo(it) || !orden.has(it.inventario_id)) continue
-    const clave = claveItem(it)
+    const clave = claveDe(it)
     let f = filas.get(clave)
     if (!f) {
       f = { clave, codigo: it.codigo, nombre: it.nombre, presentacion: it.presentacion, valores: {}, apariciones: 0, ultimo: null }
       filas.set(clave, f)
+    }
+    // Dos filas del mismo conteo en la misma clave: no se cuenta dos veces
+    if (it.inventario_id in f.valores) {
+      if (f.valores[it.inventario_id] === null) f.valores[it.inventario_id] = it.cantidad_contada
+      continue
     }
     f.valores[it.inventario_id] = it.cantidad_contada
     f.apariciones++
     if (f.ultimo === null || orden.get(it.inventario_id)! > orden.get(f.ultimo)!) {
       f.ultimo = it.inventario_id
       // El nombre más reciente es el que manda
+      f.codigo = it.codigo ?? f.codigo
       f.nombre = it.nombre
       f.presentacion = it.presentacion
     }
   }
-  return [...filas.values()].sort((x, y) => (x.codigo ?? 1e9) - (y.codigo ?? 1e9) || x.nombre.localeCompare(y.nombre))
+  return ordenarPorItem([...filas.values()], f => f.codigo, f => f.nombre)
 }
 
 // ── Lectura del Excel de conteo (ITEM | NOMBRE ESTANDAR | PRESENTACION | CANTIDADES) ──
@@ -245,6 +327,9 @@ export function aNumero(v: unknown): number | null {
 
 /** Periodo sugerido a partir de una fecha: "SEPTIEMBRE 2026". */
 export function periodoDe(fecha: Date): string {
+  // Mes y año en hora de Colombia (con getFullYear() el 31 de diciembre en la
+  // noche salía "DICIEMBRE" del año siguiente según la zona del equipo)
   const mes = fecha.toLocaleDateString('es-CO', { month: 'long', timeZone: 'America/Bogota' })
-  return `${mes} ${fecha.getFullYear()}`.toUpperCase()
+  const anio = fecha.toLocaleDateString('en-CA', { year: 'numeric', timeZone: 'America/Bogota' })
+  return `${mes} ${anio}`.toUpperCase()
 }

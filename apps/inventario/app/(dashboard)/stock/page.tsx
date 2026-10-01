@@ -4,6 +4,8 @@ import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import type { CategoriaRotacion } from '@/lib/types/database'
 import { ordenarPorItem } from '@/lib/stock-reservas'
+import { FLUJO_VACIO } from '@/lib/stock-flujo'
+import { traerFlujoStock } from '@/lib/supabase/stock-flujo'
 import { StockClient, type StockRow } from './StockClient'
 
 export const metadata: Metadata = { title: 'Stock' }
@@ -29,6 +31,8 @@ export default async function StockPage() {
 
   // Paginado: el listado de stock debe traer el catálogo COMPLETO y PostgREST
   // corta en 1.000 filas por respuesta.
+  // En paralelo: el flujo de las órdenes (alistado en bodega / despachado).
+  const flujoP = traerFlujoStock(supabase)
   let data: Row[] = []
   let error: { message: string } | null = null
   try {
@@ -52,6 +56,8 @@ export default async function StockPage() {
     )
   }
 
+  const flujo = await flujoP
+
   // disp = real − reservado (lo fija la BD), así que reservado = real − disp.
   const rows: StockRow[] = ordenarPorItem(data, (p) => ({ codigo: p.codigo, nombre: p.nombre_estandar })).map(p => ({
     id: p.id,
@@ -66,6 +72,7 @@ export default async function StockPage() {
     entrante: p.stock?.cantidad_entr ?? 0,
     saliente: p.stock?.cantidad_sal ?? 0,
     minimo: p.stock_minimo_def ?? 0,
+    flujo: flujo.get(p.id) ?? FLUJO_VACIO,
     cceTipo: p.cce_tipo ?? null,
     cceReal: p.stock_cce?.cantidad_real ?? null,
     cceDisp: p.stock_cce?.cantidad_disp ?? null,

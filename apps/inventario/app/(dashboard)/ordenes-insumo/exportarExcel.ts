@@ -1,5 +1,6 @@
 import type { OrdenRow } from './OrdenesInsumoClient'
 import { compararPorItem, pedidoVsInventario } from '@/lib/stock-reservas'
+import { etapaAlistamiento, etapaDespacho, flujoItem, textoEtapa } from '@/lib/stock-flujo'
 
 // Generador del Excel de órdenes de insumo. Multi-hoja, con encabezados
 // estilizados, autofiltro (filtrable en Excel) y anchos de columna.
@@ -12,7 +13,10 @@ export interface ItemExport {
   presentacion: string | null
   es_adicional: boolean
   solicitado: number
-  alistado: number
+  /** orden_insumo_items.cantidad_alistada (arranca igual a lo solicitado). */
+  cantidad_alistada: number
+  /** orden_insumo_items.alistado: el ítem se chuleó. */
+  chuleado: boolean
   /** stock.cantidad_real / cantidad_disp del producto (null si no hay fila). */
   real?: number | null
   disp?: number | null
@@ -69,6 +73,8 @@ export async function exportarOrdenesExcel(
     { header: 'Ítems', key: 'total', width: 9 },
     { header: 'Alistados', key: 'alistados', width: 11 },
     { header: '% avance', key: 'avance', width: 10 },
+    { header: 'Alistamiento', key: 'etapaAlist', width: 26 },
+    { header: 'Despacho', key: 'etapaDesp', width: 30 },
     { header: 'Urgente', key: 'urgente', width: 10 },
     { header: 'Creada', key: 'creada', width: 13 },
     { header: 'Entrega pactada', key: 'entrega', width: 16 },
@@ -87,6 +93,8 @@ export async function exportarOrdenesExcel(
       total: o.total_items,
       alistados: o.alistados,
       avance: o.total_items > 0 ? Math.round((o.alistados / o.total_items) * 100) / 100 : 0,
+      etapaAlist: textoEtapa(etapaAlistamiento({ estado: o.estado, totalItems: o.total_items, alistados: o.alistados, alistadoAt: o.alistado_at, despachadoAt: o.despachado_at })),
+      etapaDesp: textoEtapa(etapaDespacho({ estado: o.estado, despachadoAt: o.despachado_at, tomadoRutaAt: o.tomado_ruta_at, recibidoAt: o.recibido_at })),
       urgente: o.urgente ? 'Sí' : 'No',
       creada: fechaCorta(o.created_at),
       entrega: fechaCorta(o.fecha_entrega_pactada),
@@ -113,6 +121,7 @@ export async function exportarOrdenesExcel(
     { header: 'Tipo', key: 'tipo', width: 16 },
     { header: 'Solicitado', key: 'solicitado', width: 12 },
     { header: 'Alistado', key: 'alistado', width: 11 },
+    { header: 'Despachado (ya salió)', key: 'despachado', width: 14 },
     { header: 'Stock real', key: 'real', width: 12 },
     { header: 'Reservado (pedidos aprobados)', key: 'reservado', width: 16 },
     { header: 'Disponible para la orden', key: 'dispOrden', width: 16 },
@@ -137,7 +146,10 @@ export async function exportarOrdenesExcel(
       presentacion: it.presentacion ?? '',
       tipo: it.es_adicional ? 'Adicional' : 'Parametrizado',
       solicitado: it.solicitado,
-      alistado: it.alistado,
+      ...(() => {
+        const f = flujoItem({ estado: o?.estado ?? '', solicitado: it.solicitado, cantidadAlistada: it.cantidad_alistada, alistado: it.chuleado })
+        return { alistado: f.alistado, despachado: f.despachado }
+      })(),
       real: inv?.real ?? '',
       reservado: inv?.reservadoTotal ?? '',
       dispOrden: inv && !inv.salio ? inv.disponibleParaOrden : inv?.salio ? 'Ya salió' : '',

@@ -8,6 +8,8 @@ import { CATEGORIA_LABELS, type CategoriaRotacion, type TipoInsumo } from '@/lib
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { useEnVivo } from '@/lib/supabase/useEnVivo'
+import { FLUJO_VACIO, type FlujoProducto } from '@/lib/stock-flujo'
+import { columnasFlujo } from '@/components/inventario/columnasFlujo'
 
 interface CceBien {
   id: string
@@ -34,13 +36,16 @@ interface Producto {
   stock: { cantidad_real: number; cantidad_disp: number } | null
   cce: CceBien | null
   stock_cce: { cantidad_real: number; cantidad_disp: number } | null
+  /** Flujo de las órdenes (v_stock_flujo); lo agrega la página. */
+  flujo?: FlujoProducto
 }
 
 /** true = el producto no aparecio en el ultimo inventario fisico cruzado */
 const noHallado = (p: Producto) => p.inventario_encontrado === false
 
+/** Estado medido sobre el DISPONIBLE REAL (lo que queda libre tras las reservas). */
 function getStockStatus(real: number, minimo: number) {
-  if (real === 0)          return { label: 'Agotado', cls: 'bg-red-100 text-red-700' }
+  if (real <= 0)           return { label: 'Agotado', cls: 'bg-red-100 text-red-700' }
   if (real <= minimo)      return { label: 'Crítico', cls: 'bg-orange-100 text-orange-700' }
   if (real <= minimo * 1.5)return { label: 'Bajo',    cls: 'bg-yellow-100 text-yellow-700' }
   return                          { label: 'Normal',  cls: 'bg-green-100 text-green-700' }
@@ -70,10 +75,11 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
     const matchOtros = (p: Producto) => {
       const matchCat  = !catFilter  || p.cat_rotacion === catFilter
       const matchTipo = !tipoFilter || p.tipo_insumo === tipoFilter
-      const real    = p.stock?.cantidad_real ?? 0
+      // Agotado / crítico / normal se miden sobre el disponible real.
+      const real    = dispDe(p)
       const minimo  = p.stock_minimo_def ?? 0
       const matchStock = !stockFilter || (
-        stockFilter === 'agotado' ? real === 0 :
+        stockFilter === 'agotado' ? real <= 0 :
         stockFilter === 'critico' ? real > 0 && real <= minimo :
         stockFilter === 'normal'  ? real > minimo * 1.5 :
         stockFilter === 'sobrepedido' ? dispDe(p) < 0 :
@@ -123,7 +129,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
     total: productos.length,
     catA:  productos.filter(p => p.cat_rotacion === 'A').length,
     critico: productos.filter(p => {
-      const r = p.stock?.cantidad_real ?? 0
+      const r = dispDe(p)
       return r <= (p.stock_minimo_def ?? 0)
     }).length,
     noHallado: productos.filter(noHallado).length,
@@ -228,12 +234,13 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
           className={`font-heading font-semibold text-sm ${d < 0 ? 'text-red-600' : 'text-green-700'}`}>{d}</span>
       },
     },
+    ...columnasFlujo<Producto>((p) => p.flujo ?? FLUJO_VACIO),
     { id: 'minimo', header: 'Mín.', valor: p => p.stock_minimo_def, align: 'right', prioridad: 3, className: 'text-gray-500', tarjeta: 'oculto' },
     {
       id: 'estado', header: 'Estado', align: 'center', tarjeta: 'badge',
-      valor: p => getStockStatus(p.stock?.cantidad_real ?? 0, p.stock_minimo_def).label,
+      valor: p => getStockStatus(dispDe(p), p.stock_minimo_def).label,
       celda: p => {
-        const status = getStockStatus(p.stock?.cantidad_real ?? 0, p.stock_minimo_def)
+        const status = getStockStatus(dispDe(p), p.stock_minimo_def)
         return <span className={`font-body text-xs font-medium px-2.5 py-1 rounded-full ${status.cls}`}>{status.label}</span>
       },
     },
@@ -364,8 +371,10 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
         }
         renderTarjeta={p => {
           const cat    = CATEGORIA_LABELS[p.cat_rotacion]
-          const real   = p.stock?.cantidad_real ?? 0
-          const status = getStockStatus(real, p.stock_minimo_def)
+          const real   = Number(p.stock?.cantidad_real ?? 0)
+          const disp   = dispDe(p)
+          const flujo  = p.flujo ?? FLUJO_VACIO
+          const status = getStockStatus(disp, p.stock_minimo_def)
           return (
             <div className="group bg-white border border-gray-100 rounded-2xl overflow-hidden hover:shadow-md hover:border-brand-green/30 transition-all duration-200 flex flex-col">
               <Link href={`/productos/${p.id}`} className="block">
@@ -390,7 +399,7 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                   <span className={`absolute top-2 left-2 font-body font-bold text-xs px-1.5 py-0.5 rounded-md ${cat.bg} ${cat.color}`}>
                     {p.cat_rotacion}
                   </span>
-                  {real <= p.stock_minimo_def && real > 0 && (
+                  {disp <= p.stock_minimo_def && disp > 0 && (
                     <AlertTriangle className="absolute top-2 right-2 w-4 h-4 text-orange-500" />
                   )}
                 </div>
@@ -420,12 +429,19 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
                     </div>
                   )}
                   <div className="flex items-center justify-between gap-1">
-                    {real > 0 ? (
+                    {real > 0 || disp !== 0 ? (
                       <span className="font-body text-xs text-gray-500">
-                        <b className="font-heading text-sm text-gray-900">{real}</b> en stock
+                        <b className={`font-heading text-sm ${disp < 0 ? 'text-red-600' : 'text-gray-900'}`}>{disp}</b> disponible
                         {reservadoDe(p) > 0 && (
-                          <span className={`block text-[10px] ${dispDe(p) < 0 ? 'text-red-600 font-semibold' : 'text-amber-700'}`}>
-                            {reservadoDe(p)} reservado · disp. {dispDe(p)}
+                          <span className={`block text-[10px] ${disp < 0 ? 'text-red-600 font-semibold' : 'text-amber-700'}`}>
+                            {real} en bodega · {reservadoDe(p)} reservado
+                          </span>
+                        )}
+                        {(flujo.alistado > 0 || flujo.despachadoMes > 0) && (
+                          <span className="block text-[10px] text-gray-400">
+                            {flujo.alistado > 0 && `${flujo.alistado} alistado`}
+                            {flujo.alistado > 0 && flujo.despachadoMes > 0 && ' · '}
+                            {flujo.despachadoMes > 0 && `${flujo.despachadoMes} despachado (mes)`}
                           </span>
                         )}
                       </span>

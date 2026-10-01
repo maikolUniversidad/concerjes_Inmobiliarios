@@ -20,7 +20,7 @@ export default async function AlistamientoPage() {
   // 1.000 filas por respuesta.
   const ordenes = (await traerTodo((desde, hasta) => supabase
     .from('ordenes_insumo')
-    .select('id, numero, estado, created_at, aprobado_at, despachado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado, cantidad_solicitada, cantidad_alistada, producto:productos ( stock ( cantidad_real, cantidad_disp ) ) )')
+    .select('id, numero, estado, created_at, aprobado_at, despachado_at, alistado_at, tomado_ruta_at, recibido_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado, cantidad_solicitada, cantidad_alistada, producto:productos ( stock ( cantidad_real, cantidad_disp ) ) )')
     .in('estado', ESTADOS_ALISTAMIENTO)
     .order('aprobado_at', { ascending: false, nullsFirst: false }).order('id')
     .range(desde, hasta))) as unknown as Fila[]

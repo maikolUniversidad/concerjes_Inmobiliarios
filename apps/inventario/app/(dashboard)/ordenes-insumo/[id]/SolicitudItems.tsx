@@ -11,11 +11,15 @@ import { ProductoThumb } from './ProductoThumb'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { useEnVivo } from '@/lib/supabase/useEnVivo'
 import { ordenarPorItem, pedidoVsInventario, reservaStock, yaSalio } from '@/lib/stock-reservas'
+import { flujoItem } from '@/lib/stock-flujo'
 
 interface Item {
   id: string
   producto_id: string
   cantidad_solicitada: number
+  /** Arranca igual a lo solicitado: solo cuenta si `alistado` (chuleado). */
+  cantidad_alistada?: number
+  alistado?: boolean
   es_adicional?: boolean
   modificado_nombre?: string | null
   modificado_at?: string | null
@@ -113,6 +117,11 @@ export function SolicitudItems({ ordenId, estado, despachadoAt = null, items: it
     const st = stockDe(it)
     return st ? pedidoVsInventario({ estado, pedido: Number(it.cantidad_solicitada), real: st.real, disp: st.disp }) : null
   }
+  /** Pedido / alistado / despachado del ítem (lib/stock-flujo). */
+  const flujoDe = (it: Item) => flujoItem({
+    estado, solicitado: Number(it.cantidad_solicitada),
+    cantidadAlistada: Number(it.cantidad_alistada ?? 0), alistado: !!it.alistado,
+  })
   const faltantes = items.filter((it) => { const v = inv(it); return v?.diferencia !== null && v?.diferencia !== undefined && v.diferencia < 0 }).length
 
   // Catálogo para agregar productos (solo si se puede editar).
@@ -237,6 +246,30 @@ export function SolicitudItems({ ordenId, estado, despachadoAt = null, items: it
       ) : (
         <span className="font-body text-sm font-semibold text-gray-700">{Number(it.cantidad_solicitada)}</span>
       ),
+    },
+    {
+      // Ya ordenado/preparado en bodega (ítem chuleado). Tras el despacho, lo que salió.
+      id: 'alistadoFlujo', header: 'Alistado', align: 'right', ancho: 'w-20', tarjeta: 'meta',
+      valor: (it) => flujoDe(it).alistado,
+      celda: (it) => {
+        const f = flujoDe(it)
+        if (f.alistado === 0) return <span className="text-xs text-gray-300">{reservaStock(estado) ? 'Pendiente' : '—'}</span>
+        return <span title={f.alistado < f.pedido ? `Faltan ${f.pedido - f.alistado} por alistar` : undefined}
+          className={`font-body text-sm font-semibold ${f.alistado < f.pedido ? 'text-amber-700' : 'text-indigo-700'}`}>{f.alistado}</span>
+      },
+    },
+    {
+      // Lo que ya salió de bodega con el despacho (bajó el stock real).
+      id: 'despachado', header: 'Despachado (ya salió)', align: 'right', ancho: 'w-24', tarjeta: 'meta',
+      valor: (it) => flujoDe(it).despachado,
+      celda: (it) => {
+        const f = flujoDe(it)
+        if (!salio) return <span className="text-xs text-gray-300">Pendiente</span>
+        return <span className={`font-body text-sm font-semibold ${f.despachado < f.pedido ? 'text-amber-700' : 'text-green-700'}`}
+          title={f.despachado < f.pedido ? `Salieron ${f.despachado} de ${f.pedido}; lo demás pasó a una orden pendiente o quedó por enviar` : undefined}>
+          {f.despachado}
+        </span>
+      },
     },
     {
       id: 'real', header: 'Stock real', align: 'right', ancho: 'w-20', prioridad: 2, tarjeta: 'meta',

@@ -64,7 +64,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
 
   // El alistamiento SOLO se habilita cuando ya firmaron las dos partes.
   const estado = (orden as unknown as { estado: string }).estado
-  const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'RECIBIDO'].includes(estado)
+  const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
   // La solicitud de ítems se muestra siempre; en estados aprobados también
   // se puede editar (novedad post-aprobación) y queda en trazabilidad.
   const puedeEditarSolicitud =

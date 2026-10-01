@@ -12,6 +12,7 @@ import { type CategoriaRotacion } from '@/lib/types/database'
 import { MovimientosChart, type ChartPoint } from './MovimientosChart'
 import { PedidosBodegaTabla, type PedidoFila } from './PedidosBodegaTabla'
 import { AlertasStockTabla } from './AlertasStockTabla'
+import { ordenarPorItem } from '@/lib/stock-reservas'
 
 export const metadata: Metadata = { title: 'Dashboard' }
 export const dynamic = 'force-dynamic'
@@ -20,7 +21,7 @@ const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP',
 const num = (n: number) => n.toLocaleString('es-CO')
 
 interface ProductoDash {
-  id: string; nombre_estandar: string; presentacion: string | null
+  id: string; codigo: number | null; nombre_estandar: string; presentacion: string | null
   cat_rotacion: CategoriaRotacion; stock_minimo_def: number; precio_lista: number | null
   stock: { cantidad_real: number; cantidad_disp: number } | null
 }
@@ -93,14 +94,24 @@ export default async function DashboardPage() {
     // Paginado: el valor del inventario suma el catálogo COMPLETO.
     productos = (await traerTodo((desde, hasta) => supabase
       .from('productos')
-      .select('id, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
+      .select('id, codigo, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
       .eq('activo', true)
       .order('id')
       .range(desde, hasta))) as unknown as ProductoDash[]
   }
-  const criticos = productos.filter((p) => (p.stock_minimo_def > 0) && (p.stock?.cantidad_real ?? 0) <= p.stock_minimo_def)
-  const unidadesStock = productos.reduce((a, p) => a + (p.stock?.cantidad_real ?? 0), 0)
-  const valorInventario = productos.reduce((a, p) => a + (p.stock?.cantidad_real ?? 0) * (p.precio_lista ?? 0), 0)
+  // "Con cuánto se cuenta" = DISPONIBLE REAL (stock real − lo reservado por
+  // pedidos aprobados sin despachar; lo fija la BD en stock.cantidad_disp).
+  // El crítico se mide contra el disponible; las unidades y el valor del
+  // inventario siguen siendo lo físico en bodega. Los numeric llegan como string.
+  const realDe = (p: ProductoDash) => Number(p.stock?.cantidad_real ?? 0)
+  const dispDe = (p: ProductoDash) => (p.stock ? Number(p.stock.cantidad_disp) : 0)
+  const criticos = ordenarPorItem(
+    productos.filter((p) => (p.stock_minimo_def > 0) && dispDe(p) <= p.stock_minimo_def),
+    (p) => ({ codigo: p.codigo, nombre: p.nombre_estandar }),
+  )
+  const unidadesStock = productos.reduce((a, p) => a + realDe(p), 0)
+  const unidadesDisp = productos.reduce((a, p) => a + dispDe(p), 0)
+  const valorInventario = productos.reduce((a, p) => a + realDe(p) * Number(p.precio_lista ?? 0), 0)
 
   // ── Movimientos (14 días + hoy) ──────────────────────────────────────────
   let movs: { tipo: string; cantidad: number; created_at: string }[] = []
@@ -171,9 +182,9 @@ export default async function DashboardPage() {
           </h2>
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
             <Kpi label="Productos" value={productos.length} sub="en catálogo activo" icon={Package} color="bg-blue-50 text-blue-600" href="/productos" />
-            <Kpi label="Unidades en stock" value={unidadesStock} sub="cantidad total real" icon={Boxes} color="bg-indigo-50 text-indigo-600" href="/stock" />
+            <Kpi label="Disponible real" value={unidadesDisp} sub={`${num(unidadesStock)} en bodega · ${num(unidadesStock - unidadesDisp)} reservado`} icon={Boxes} color="bg-indigo-50 text-indigo-600" href="/stock" />
             <Kpi label="Valor inventario" valueText={cop.format(valorInventario)} sub="COP estimado" icon={TrendingUp} color="bg-emerald-50 text-emerald-600" href="/reportes" />
-            <Kpi label="Stock crítico" value={criticos.length} sub="productos bajo mínimo" icon={AlertTriangle} color="bg-red-50 text-red-600" href="/aprovisionamiento" alerta={criticos.length > 0} />
+            <Kpi label="Stock crítico" value={criticos.length} sub="disponible bajo mínimo" icon={AlertTriangle} color="bg-red-50 text-red-600" href="/aprovisionamiento" alerta={criticos.length > 0} />
           </div>
         </section>
       )}
@@ -218,7 +229,9 @@ export default async function DashboardPage() {
               presentacion: p.presentacion,
               cat_rotacion: p.cat_rotacion,
               stock_minimo_def: p.stock_minimo_def,
-              real: p.stock?.cantidad_real ?? 0,
+              codigo: p.codigo,
+              real: realDe(p),
+              disp: dispDe(p),
             }))}
           />
         </div>

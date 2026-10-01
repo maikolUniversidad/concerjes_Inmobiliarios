@@ -39,6 +39,7 @@ export default async function OrdenesInsumoPage({
       .from('ordenes_insumo')
       .select(`
         id, numero, estado, periodo, created_at, despachado_at, observacion,
+        alistamiento_iniciado_at, alistado_at, tomado_ruta_at, recibido_at,
         fecha_entrega_pactada, urgente, creado_por,
         sede:sedes ( nombre ),
         items:orden_insumo_items ( id, alistado, producto:productos ( stock ( cantidad_disp ) ) ),
@@ -121,6 +122,9 @@ export default async function OrdenesInsumoPage({
     sede: o.sede?.nombre ?? '—',
     created_at: o.created_at,
     despachado_at: o.despachado_at,
+    alistado_at: o.alistado_at ?? null,
+    tomado_ruta_at: o.tomado_ruta_at ?? null,
+    recibido_at: o.recibido_at ?? null,
     total_items: o.items?.length ?? 0,
     alistados: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
     // Ítems cuyo producto quedó con disponible real negativo (sobre-pedido).

@@ -68,7 +68,7 @@ export async function GET(req: NextRequest) {
   // 4. Stock actual
   const stockData = await traerTodo((desde, hasta) => supabase
     .from('stock')
-    .select('producto_id, cantidad_real')
+    .select('producto_id, cantidad_real, cantidad_disp')
     .order('producto_id')
     .range(desde, hasta))
 
@@ -95,10 +95,15 @@ export async function GET(req: NextRequest) {
   }
   const hayParam = !!paramData && paramData.length > 0
 
-  // Mapa stock: producto_id → cantidad
+  // Mapas de stock: producto_id → físico en bodega y → disponible real
+  // (real − lo reservado por pedidos aprobados sin despachar). Quien arma el
+  // pedido debe ver con cuánto se cuenta de verdad, no solo lo físico.
   const stockMap = new Map<string, number>()
-  for (const s of stockData as { producto_id: string; cantidad_real: number }[]) {
+  const dispMap = new Map<string, number>()
+  for (const s of stockData as { producto_id: string; cantidad_real: number; cantidad_disp: number | null }[]) {
     stockMap.set(s.producto_id, (stockMap.get(s.producto_id) ?? 0) + (Number(s.cantidad_real) || 0))
+    const d = s.cantidad_disp === null || s.cantidad_disp === undefined ? Number(s.cantidad_real) || 0 : Number(s.cantidad_disp) || 0
+    dispMap.set(s.producto_id, (dispMap.get(s.producto_id) ?? 0) + d)
   }
 
   const solicitante = (usuarioData as { nombre?: string } | null)?.nombre ?? ''
@@ -301,7 +306,8 @@ export async function GET(req: NextRequest) {
     { header: 'PRESENTACIÓN', key: 'presentacion', width: 22 },
     { header: 'COMPLEMENTO', key: 'complemento', width: 20 },
     { header: 'CAT', key: 'cat', width: 6 },
-    { header: 'STOCK ACTUAL', key: 'stock', width: 14 },
+    { header: 'STOCK EN BODEGA', key: 'stock', width: 16 },
+    { header: 'DISPONIBLE REAL', key: 'disp', width: 16 },
   ]
   const hdr2 = wsProd.getRow(1)
   hdr2.height = 22
@@ -311,14 +317,17 @@ export async function GET(req: NextRequest) {
   hdr2.eachCell(c => { c.border = { bottom: { style: 'medium', color: { argb: 'FF1B5E20' } } } })
   productos.forEach((p, i) => {
     const stock = stockMap.get(p.id) ?? 0
-    const r = wsProd.addRow({ item: p.codigo ?? '', nombre: p.nombre_estandar, presentacion: p.presentacion ?? '', complemento: p.complemento ?? '', cat: p.cat_rotacion, stock })
+    const disp = dispMap.get(p.id) ?? 0
+    const r = wsProd.addRow({ item: p.codigo ?? '', nombre: p.nombre_estandar, presentacion: p.presentacion ?? '', complemento: p.complemento ?? '', cat: p.cat_rotacion, stock, disp })
     r.height = 16
     if (i % 2 === 1) r.eachCell(c => { c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF7F7F7' } } })
     r.getCell('cat').font = { bold: true, color: { argb: COL_CAT_FONTS[p.cat_rotacion] ?? 'FF4D4D4D' } }
     const stockC = r.getCell('stock'); stockC.alignment = { horizontal: 'center' }
     if (stock <= 0) stockC.font = { color: { argb: 'FFCC0000' } }
+    const dispC = r.getCell('disp'); dispC.alignment = { horizontal: 'center' }
+    dispC.font = disp <= 0 ? { bold: true, color: { argb: 'FFCC0000' } } : { bold: true }
   })
-  wsProd.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 6 } }
+  wsProd.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: 7 } }
   wsProd.views = [{ state: 'frozen', xSplit: 0, ySplit: 1 }]
 
   // ── Serializar y devolver ────────────────────────────────────────────────────

@@ -13,6 +13,24 @@ import { exportarOrdenesExcel, type ItemExport } from './exportarExcel'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { useEnVivo } from '@/lib/supabase/useEnVivo'
 import { reservaStock, yaSalio } from '@/lib/stock-reservas'
+import { etapaAlistamiento, etapaDespacho, textoEtapa, CLASE_TONO, type EtapaOrden } from '@/lib/stock-flujo'
+
+const alistamientoDe = (o: OrdenRow) => etapaAlistamiento({
+  estado: o.estado, totalItems: o.total_items, alistados: o.alistados,
+  alistadoAt: o.alistado_at, despachadoAt: o.despachado_at,
+})
+const despachoDe = (o: OrdenRow) => etapaDespacho({
+  estado: o.estado, despachadoAt: o.despachado_at, tomadoRutaAt: o.tomado_ruta_at, recibidoAt: o.recibido_at,
+})
+
+function CeldaEtapa({ e }: { e: EtapaOrden }) {
+  return (
+    <span className="inline-flex flex-col items-center leading-tight">
+      <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${CLASE_TONO[e.tono]}`}>{e.label}</span>
+      {e.detalle && <span className="font-body text-[10px] text-gray-400 whitespace-nowrap">{e.detalle}</span>}
+    </span>
+  )
+}
 
 export interface OrdenRow {
   id: string
@@ -21,6 +39,9 @@ export interface OrdenRow {
   sede: string
   created_at: string
   despachado_at: string | null
+  alistado_at: string | null
+  tomado_ruta_at: string | null
+  recibido_at: string | null
   total_items: number
   alistados: number
   responsables: number
@@ -279,7 +300,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       const filas = await traerTodoPorIds<any>(ids, (lote, desde, hasta) =>
         sb
           .from('orden_insumo_items')
-          .select('orden_id, cantidad_solicitada, cantidad_alistada, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion, stock ( cantidad_real, cantidad_disp ) )')
+          .select('orden_id, cantidad_solicitada, cantidad_alistada, alistado, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion, stock ( cantidad_real, cantidad_disp ) )')
           .in('orden_id', lote)
           .order('id', { ascending: true })
           .range(desde, hasta),
@@ -295,7 +316,8 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
             presentacion: r.producto?.presentacion ?? null,
             es_adicional: !!r.es_adicional,
             solicitado: Number(r.cantidad_solicitada ?? 0),
-            alistado: Number(r.cantidad_alistada ?? 0),
+            cantidad_alistada: Number(r.cantidad_alistada ?? 0),
+            chuleado: !!r.alistado,
             real: r.producto?.stock ? Number(r.producto.stock.cantidad_real) : null,
             disp: r.producto?.stock ? Number(r.producto.stock.cantidad_disp) : null,
           })
@@ -375,8 +397,16 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     },
     { id: 'items', header: 'Ítems', valor: o => o.total_items, align: 'right', prioridad: 2, tarjeta: 'meta' },
     {
-      id: 'alistado', header: 'Alistado', align: 'right', prioridad: 3, tarjeta: 'meta',
-      valor: o => `${o.alistados}/${o.total_items}`,
+      // Qué ya se ordenó en bodega: pendiente / en curso (x de y) / alistado con fecha.
+      id: 'alistamiento', header: 'Alistamiento', align: 'center', prioridad: 2, tarjeta: 'meta',
+      valor: o => textoEtapa(alistamientoDe(o)),
+      celda: o => <CeldaEtapa e={alistamientoDe(o)} />,
+    },
+    {
+      // Qué ya salió: pendiente / despachado con fecha / en ruta / entregado / recibido.
+      id: 'despacho', header: 'Despacho', align: 'center', prioridad: 2, tarjeta: 'meta',
+      valor: o => textoEtapa(despachoDe(o)),
+      celda: o => <CeldaEtapa e={despachoDe(o)} />,
     },
     { id: 'responsables', header: 'Resp.', valor: o => o.responsables, align: 'right', prioridad: 3, tarjeta: 'oculto' },
     {

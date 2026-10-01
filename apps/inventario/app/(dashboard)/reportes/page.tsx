@@ -20,7 +20,7 @@ interface Prod {
   cat_rotacion: CategoriaRotacion
   stock_minimo_def: number
   precio_lista: number | null
-  stock: { cantidad_real: number } | null
+  stock: { cantidad_real: number; cantidad_disp: number } | null
 }
 
 interface ActLog { usuario_nombre: string | null; usuario_email: string | null; modulo: string | null; created_at: string }
@@ -34,7 +34,7 @@ export default async function ReportesPage() {
   // devuelve máximo 1.000 filas por respuesta (`.limit()` no levanta ese tope).
   const productos = (await traerTodo((desde, hasta) => supabase
     .from('productos')
-    .select('tipo_insumo, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real )')
+    .select('tipo_insumo, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
     .eq('activo', true)
     .order('id')
     .range(desde, hasta))) as unknown as Prod[]
@@ -62,9 +62,11 @@ export default async function ReportesPage() {
   const usuariosAct = [...mapaUsuarios.values()].sort((x, y) => y.total - x.total)
 
   const totalProductos = productos.length
-  const valorInventario = productos.reduce((a, p) => a + (p.stock?.cantidad_real ?? 0) * (p.precio_lista ?? 0), 0)
-  const unidades = productos.reduce((a, p) => a + (p.stock?.cantidad_real ?? 0), 0)
-  const criticos = productos.filter(p => p.stock_minimo_def > 0 && (p.stock?.cantidad_real ?? 0) <= p.stock_minimo_def).length
+  // Valor y unidades: lo físico en bodega. Crítico: contra el DISPONIBLE REAL
+  // (real − reservado por pedidos aprobados sin despachar). numeric llega como string.
+  const valorInventario = productos.reduce((a, p) => a + Number(p.stock?.cantidad_real ?? 0) * Number(p.precio_lista ?? 0), 0)
+  const unidades = productos.reduce((a, p) => a + Number(p.stock?.cantidad_real ?? 0), 0)
+  const criticos = productos.filter(p => p.stock_minimo_def > 0 && (p.stock ? Number(p.stock.cantidad_disp) : 0) <= p.stock_minimo_def).length
 
   // Por tipo de insumo
   const porTipo = new Map<string, number>()

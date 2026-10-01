@@ -11,11 +11,16 @@ export interface CriticoFila {
   presentacion: string | null
   cat_rotacion: CategoriaRotacion
   stock_minimo_def: number
+  codigo: number | null
+  /** Stock físico en bodega. */
   real: number
+  /** Disponible real = real − reservado (con lo que se cuenta). */
+  disp: number
 }
 
 export function AlertasStockTabla({ criticos }: { criticos: CriticoFila[] }) {
   const columnas: ColumnaTabla<CriticoFila>[] = [
+    { id: 'codigo', header: 'Ítem', valor: (p) => p.codigo ?? '', ancho: 'w-14', prioridad: 2, className: 'font-mono text-xs text-gray-500', tarjeta: 'meta' },
     {
       id: 'producto', header: 'Producto', valor: (p) => p.nombre_estandar, tarjeta: 'titulo',
       ancho: 'min-w-[200px]',
@@ -37,10 +42,18 @@ export function AlertasStockTabla({ criticos }: { criticos: CriticoFila[] }) {
         return <span className={`font-body font-bold text-xs px-2 py-0.5 rounded-full ${cat.bg} ${cat.color}`}>{p.cat_rotacion}</span>
       },
     },
+    { id: 'real', header: 'Stock real', valor: (p) => p.real, align: 'right', prioridad: 2, className: 'text-gray-500', tarjeta: 'meta' },
     {
-      id: 'disponible', header: 'Disponible', valor: (p) => p.real, align: 'right', tarjeta: 'meta',
+      id: 'reservado', header: 'Reservado', valor: (p) => p.real - p.disp, align: 'right', prioridad: 2, tarjeta: 'meta',
+      celda: (p) => p.real - p.disp > 0
+        ? <span className="font-body text-sm text-amber-700">{p.real - p.disp}</span>
+        : <span className="text-xs text-gray-300">—</span>,
+    },
+    {
+      id: 'disponible', header: 'Disponible real', valor: (p) => p.disp, align: 'right', tarjeta: 'meta',
       celda: (p) => (
-        <span className={`font-heading font-bold text-base ${p.real === 0 ? 'text-red-600' : 'text-orange-600'}`}>{p.real}</span>
+        <span title={p.disp < 0 ? `Se pidió ${-p.disp} más de lo que hay en bodega` : undefined}
+          className={`font-heading font-bold text-base ${p.disp <= 0 ? 'text-red-600' : 'text-orange-600'}`}>{p.disp}</span>
       ),
     },
     { id: 'minimo', header: 'Mínimo', valor: (p) => p.stock_minimo_def, align: 'right', className: 'text-gray-500', tarjeta: 'meta' },

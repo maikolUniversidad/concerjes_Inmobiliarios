@@ -57,17 +57,20 @@ async function construirContexto(personaId?: string) {
 
     // ── Inventario ──
     const productos = (prodRes.data as unknown as ProdCtx[]) ?? []
+    // disponible = stock real − reservado por pedidos aprobados sin despachar
+    // (stock.cantidad_disp, lo fija la BD). Es con lo que de verdad se cuenta.
+    const dispDe = (p: ProdCtx) => (p.stock ? Number(p.stock.cantidad_disp) : 0)
     const criticos = productos
-      .filter(p => p.stock_minimo_def > 0 && (p.stock?.cantidad_real ?? 0) <= p.stock_minimo_def)
-      .map(p => ({ producto: p.nombre_estandar, presentacion: p.presentacion, disponible: p.stock?.cantidad_real ?? 0, minimo: p.stock_minimo_def, categoria: p.cat_rotacion }))
-    const valorInventario = productos.reduce((a, p) => a + (p.stock?.cantidad_real ?? 0) * (p.precio_lista ?? 0), 0)
+      .filter(p => p.stock_minimo_def > 0 && dispDe(p) <= p.stock_minimo_def)
+      .map(p => ({ producto: p.nombre_estandar, presentacion: p.presentacion, disponible: dispDe(p), en_bodega: Number(p.stock?.cantidad_real ?? 0), minimo: p.stock_minimo_def, categoria: p.cat_rotacion }))
+    const valorInventario = productos.reduce((a, p) => a + Number(p.stock?.cantidad_real ?? 0) * Number(p.precio_lista ?? 0), 0)
     const porCategoria: Record<string, { items: number; unidades: number; valor: number }> = {}
     for (const p of productos) {
       const c = p.cat_rotacion || 'N/D'
       porCategoria[c] = porCategoria[c] ?? { items: 0, unidades: 0, valor: 0 }
       porCategoria[c].items += 1
-      porCategoria[c].unidades += p.stock?.cantidad_real ?? 0
-      porCategoria[c].valor += (p.stock?.cantidad_real ?? 0) * (p.precio_lista ?? 0)
+      porCategoria[c].unidades += Number(p.stock?.cantidad_real ?? 0)
+      porCategoria[c].valor += Number(p.stock?.cantidad_real ?? 0) * Number(p.precio_lista ?? 0)
     }
 
     // ── Personal (Gestión Humana) ──
@@ -123,7 +126,7 @@ async function construirContexto(personaId?: string) {
         por_categoria: porCategoria,
         total_criticos: criticos.length,
         productos_criticos: criticos.slice(0, 25),
-        muestra_inventario: productos.slice(0, 40).map(p => ({ producto: p.nombre_estandar, disponible: p.stock?.cantidad_real ?? 0, minimo: p.stock_minimo_def, categoria: p.cat_rotacion })),
+        muestra_inventario: productos.slice(0, 40).map(p => ({ producto: p.nombre_estandar, disponible: dispDe(p), en_bodega: Number(p.stock?.cantidad_real ?? 0), minimo: p.stock_minimo_def, categoria: p.cat_rotacion })),
       },
       personal: {
         total_personas: personas.length,

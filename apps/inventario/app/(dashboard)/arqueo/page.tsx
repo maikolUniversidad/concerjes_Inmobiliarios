@@ -195,7 +195,7 @@ function TarjetaArqueo({ a, contados }: { a: ArqueoRow; contados: number }) {
 
 function TarjetaCargue({ c }: { c: CargueRow }) {
   return (
-    <Link href="/inventario-fisico"
+    <Link href={`/inventario-fisico/${c.id}`} title="Ver el informe comparativo de este cargue"
       className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-indigo-200 transition-all">
       <div className="flex items-start justify-between gap-2 mb-1">
         <h3 className="font-heading font-bold text-base text-gray-900 line-clamp-1">{c.periodo}</h3>

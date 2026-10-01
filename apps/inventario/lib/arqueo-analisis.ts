@@ -3,7 +3,8 @@
 // (inventarios_fisicos / inventario_fisico_items), y los compara.
 // Lógica pura: sin React ni Supabase, sirve en cliente y servidor.
 
-import type { InventarioFisico, ItemFisico } from '@/lib/inventario-fisico'
+import { resolverClaves, type InventarioFisico, type ItemFisico } from '@/lib/inventario-fisico'
+import { compararItem } from '@/lib/reportes/orden'
 
 export type FuenteConteo = 'PLATAFORMA' | 'CARGUE'
 export type EstadoArqueo = 'ABIERTO' | 'CERRADO' | 'ANULADO'
@@ -36,7 +37,14 @@ export interface Conteo {
   /** Ítems en el alcance del conteo (arqueo: total_items; cargue: filas del archivo). */
   alcance: number
   items: ItemConteo[]
+  /**
+   * Cargue masivo: productos que vinieron en el archivo con la celda vacía.
+   * No son 0 ni "dejaron de aparecer": vinieron, pero no se sabe la cantidad.
+   */
+  sinCantidad: ProductoRef[]
 }
+
+export type ProductoRef = Pick<ItemConteo, 'producto_id' | 'codigo' | 'nombre' | 'presentacion'>
 
 // ── Adaptadores ─────────────────────────────────────────────────────────────
 
@@ -94,6 +102,7 @@ export function conteoDeArqueo(a: ArqueoFila, items: ArqueoItemFila[]): Conteo {
     estado: a.estado,
     parcial: a.estado === 'ABIERTO',
     alcance: a.total_items,
+    sinCantidad: [],
     items: ordenarItems(items
       .filter(i => i.arqueo_id === a.id && i.estado !== 'PENDIENTE' && i.cantidad_fisica !== null)
       .map(i => ({
@@ -109,7 +118,12 @@ export function conteoDeArqueo(a: ArqueoFila, items: ArqueoItemFila[]): Conteo {
   }
 }
 
-/** Cargue masivo → Conteo. Solo entran las filas con cantidad (estado CONTADO). */
+/**
+ * Cargue masivo → Conteo. En `items` entran las filas con cantidad (CONTADO);
+ * las de celda vacía (SIN_CANTIDAD) van aparte en `sinCantidad` para que no
+ * se lean como 0 ni como "dejó de aparecer". Los NO_HALLADO no entran: no
+ * vinieron en el archivo.
+ */
 export function conteoDeCargue(inv: InventarioFisico, items: ItemFisico[]): Conteo {
   return {
     fuente: 'CARGUE',
@@ -120,6 +134,9 @@ export function conteoDeCargue(inv: InventarioFisico, items: ItemFisico[]): Cont
     estado: null,
     parcial: false,
     alcance: inv.total_items,
+    sinCantidad: ordenarItems(items
+      .filter(i => i.inventario_id === inv.id && (i.estado === 'SIN_CANTIDAD' || (i.estado === 'CONTADO' && i.cantidad_contada === null)))
+      .map(i => ({ producto_id: i.producto_id, codigo: i.codigo, nombre: i.nombre, presentacion: i.presentacion }))),
     items: ordenarItems(items
       .filter(i => i.inventario_id === inv.id && i.estado === 'CONTADO' && i.cantidad_contada !== null)
       .map(i => ({
@@ -146,21 +163,27 @@ export function compararProducto(
   a: { codigo: number | null; nombre: string },
   b: { codigo: number | null; nombre: string },
 ): number {
-  if (a.codigo !== b.codigo) {
-    if (a.codigo === null) return 1
-    if (b.codigo === null) return -1
-    return a.codigo - b.codigo
-  }
-  return a.nombre.localeCompare(b.nombre, 'es')
+  // El mismo criterio de todos los reportes (lib/reportes/orden.ts)
+  return compararItem(a.codigo, a.nombre, b.codigo, b.nombre)
 }
 
 export function ordenarItems<T extends { codigo: number | null; nombre: string }>(l: T[]): T[] {
   return [...l].sort(compararProducto)
 }
 
-/** Clave de un producto entre conteos: id; si no hay, código; si no, nombre. */
+/**
+ * Clave de un producto entre conteos: id; si no hay, código; si no, nombre.
+ * Para cruzar conteos usa `clavesDe(conteos)`: una fila de cargue sin
+ * producto_id (producto borrado después) toma el id que ese código tiene en
+ * los demás conteos; con la clave suelta no casaría con su propio historial.
+ */
 export const claveProducto = (i: Pick<ItemConteo, 'producto_id' | 'codigo' | 'nombre'>) =>
   i.producto_id ?? (i.codigo !== null ? `c:${i.codigo}` : `n:${i.nombre.trim().toUpperCase()}`)
+
+/** Función de clave común para cruzar varios conteos entre sí. */
+export function clavesDe(conteos: readonly Conteo[]): (i: ProductoRef) => string {
+  return resolverClaves<ProductoRef>(...conteos.flatMap(c => [c.items, c.sinCantidad]))
+}
 
 // ── Métricas de un conteo ───────────────────────────────────────────────────
 
@@ -231,7 +254,7 @@ export function resumenPorMes(conteos: Conteo[]): ResumenMes[] {
 
 // ── Comparar dos conteos cualesquiera ───────────────────────────────────────
 
-export type EstadoCambio = 'FALTANTE' | 'NUEVO' | 'AGOTADO' | 'BAJO' | 'SUBIO' | 'IGUAL' | 'SIN_COMPARAR'
+export type EstadoCambio = 'FALTANTE' | 'NUEVO' | 'AGOTADO' | 'BAJO' | 'SUBIO' | 'IGUAL' | 'SIN_COMPARAR' | 'SIN_CANTIDAD'
 
 export const ETIQUETA_CAMBIO: Record<EstadoCambio, string> = {
   FALTANTE: 'Dejó de aparecer',
@@ -241,6 +264,7 @@ export const ETIQUETA_CAMBIO: Record<EstadoCambio, string> = {
   SUBIO: 'Subió',
   IGUAL: 'Igual',
   SIN_COMPARAR: 'Falta contarlo en el parcial',
+  SIN_CANTIDAD: 'Vino sin cantidad',
 }
 
 export interface FilaCambio {
@@ -277,20 +301,27 @@ function estadoCambio(a: number | null, b: number | null, parcialA: boolean, par
 
 /** A = conteo anterior, B = conteo actual. Ordenado por ítem y nombre. */
 export function compararDosConteos(A: Conteo, B: Conteo): FilaCambio[] {
-  const mapA = new Map(A.items.map(i => [claveProducto(i), i]))
-  const mapB = new Map(B.items.map(i => [claveProducto(i), i]))
+  const clave = clavesDe([A, B])
+  const mapA = new Map(A.items.map(i => [clave(i), i]))
+  const mapB = new Map(B.items.map(i => [clave(i), i]))
+  // Vinieron en el archivo con la celda vacía: no se sabe la cantidad
+  const vaciasA = new Map(A.sinCantidad.map(i => [clave(i), i]))
+  const vaciasB = new Map(B.sinCantidad.map(i => [clave(i), i]))
   const filas: FilaCambio[] = []
-  for (const clave of new Set([...mapA.keys(), ...mapB.keys()])) {
-    const ia = mapA.get(clave)
-    const ib = mapB.get(clave)
+  for (const k of new Set([...mapA.keys(), ...mapB.keys(), ...vaciasA.keys(), ...vaciasB.keys()])) {
+    const ia = mapA.get(k)
+    const ib = mapB.get(k)
+    // Vacío en uno y ausente o vacío en el otro: no hay nada que comparar
+    if (!ia && !ib) continue
     const ref = ib ?? ia!
     const a = ia ? ia.contado : null
     const b = ib ? ib.contado : null
-    const estado = estadoCambio(a, b, A.parcial, B.parcial)
-    const diferencia = estado === 'SIN_COMPARAR' ? null : (b ?? 0) - (a ?? 0)
+    const vacia = (!ia && vaciasA.has(k)) || (!ib && vaciasB.has(k))
+    const estado: EstadoCambio = vacia ? 'SIN_CANTIDAD' : estadoCambio(a, b, A.parcial, B.parcial)
+    const diferencia = estado === 'SIN_COMPARAR' || estado === 'SIN_CANTIDAD' ? null : (b ?? 0) - (a ?? 0)
     const precio = ib?.precio ?? ia?.precio ?? null
     filas.push({
-      clave,
+      clave: k,
       codigo: ref.codigo,
       nombre: ref.nombre,
       presentacion: ref.presentacion,
@@ -311,10 +342,12 @@ export function resumenCambios(filas: FilaCambio[]) {
   return {
     FALTANTE: n('FALTANTE'), NUEVO: n('NUEVO'), AGOTADO: n('AGOTADO'),
     BAJO: n('BAJO'), SUBIO: n('SUBIO'), IGUAL: n('IGUAL'), SIN_COMPARAR: n('SIN_COMPARAR'),
+    SIN_CANTIDAD: n('SIN_CANTIDAD'),
     enAmbos: filas.filter(f => f.a !== null && f.b !== null).length,
-    // Las unidades solo se suman en lo comparable (no en lo que falta contar en un parcial)
-    unidadesA: filas.reduce((s, f) => s + (f.estado === 'SIN_COMPARAR' ? 0 : f.a ?? 0), 0),
-    unidadesB: filas.reduce((s, f) => s + (f.estado === 'SIN_COMPARAR' ? 0 : f.b ?? 0), 0),
+    // Las unidades solo se suman en lo comparable (no en lo que falta contar en
+    // un parcial ni en lo que vino sin cantidad)
+    unidadesA: filas.reduce((s, f) => s + (f.estado === 'SIN_COMPARAR' || f.estado === 'SIN_CANTIDAD' ? 0 : f.a ?? 0), 0),
+    unidadesB: filas.reduce((s, f) => s + (f.estado === 'SIN_COMPARAR' || f.estado === 'SIN_CANTIDAD' ? 0 : f.b ?? 0), 0),
     valorBajas: filas.reduce((s, f) => s + (f.valor !== null && f.valor < 0 ? f.valor : 0), 0),
     valorAlzas: filas.reduce((s, f) => s + (f.valor !== null && f.valor > 0 ? f.valor : 0), 0),
   }
@@ -337,6 +370,8 @@ export interface FilaMatriz {
   nombre: string
   presentacion: string | null
   celdas: Record<string, CeldaMatriz>
+  /** Conteos (id) en que vino en el archivo con la celda vacía. */
+  vacias: string[]
   /** En cuántos conteos se contó. */
   veces: number
   /** En cuántos conteos tuvo diferencia ≠ 0 contra el sistema. */
@@ -348,14 +383,21 @@ export interface FilaMatriz {
 /** `conteos` en orden cronológico (las columnas). */
 export function matrizConteos(conteos: Conteo[]): FilaMatriz[] {
   const filas = new Map<string, FilaMatriz>()
+  const claveDe = clavesDe(conteos)
+  const fila = (it: ProductoRef) => {
+    const clave = claveDe(it)
+    let f = filas.get(clave)
+    if (!f) {
+      f = { clave, codigo: it.codigo, nombre: it.nombre, presentacion: it.presentacion, celdas: {}, vacias: [], veces: 0, conDiferencia: 0, acumulado: 0 }
+      filas.set(clave, f)
+    }
+    return f
+  }
   for (const c of conteos) {
+    for (const it of c.sinCantidad) fila(it).vacias.push(c.id)
     for (const it of c.items) {
-      const clave = claveProducto(it)
-      let f = filas.get(clave)
-      if (!f) {
-        f = { clave, codigo: it.codigo, nombre: it.nombre, presentacion: it.presentacion, celdas: {}, veces: 0, conDiferencia: 0, acumulado: 0 }
-        filas.set(clave, f)
-      }
+      const f = fila(it)
+      if (c.id in f.celdas) continue // la misma clave dos veces en un conteo no se cuenta doble
       // El nombre del conteo más reciente es el que manda
       f.codigo = it.codigo ?? f.codigo
       f.nombre = it.nombre

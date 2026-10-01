@@ -9,10 +9,14 @@ import {
 } from 'lucide-react'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { useEnVivo } from '@/lib/supabase/useEnVivo'
+import { CLASE_TONO, etapaAlistamiento, etapaDespacho, flujoItem, textoEtapa, type EtapaOrden } from '@/lib/stock-flujo'
 
 export interface Fila {
   id: string; numero: string; estado: string; created_at: string; aprobado_at: string | null
   despachado_at?: string | null
+  alistado_at?: string | null
+  tomado_ruta_at?: string | null
+  recibido_at?: string | null
   sede: { nombre: string } | null
   items: {
     alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number
@@ -43,6 +47,33 @@ const pendienteEnvio = (o: Fila) => {
 }
 /** DESPACHADO pero se fue con productos pendientes. */
 const despachoIncompleto = (o: Fila) => o.estado === 'DESPACHADO' && pendienteEnvio(o).items > 0
+
+/** Unidades pedidas / alistadas (chuleadas) / despachadas de la orden. */
+const unidades = (o: Fila) => {
+  let pedido = 0; let alistado = 0; let despachado = 0
+  for (const i of o.items ?? []) {
+    const f = flujoItem({ estado: o.estado, solicitado: Number(i.cantidad_solicitada), cantidadAlistada: Number(i.cantidad_alistada), alistado: i.alistado })
+    pedido += f.pedido; alistado += f.alistado; despachado += f.despachado
+  }
+  return { pedido, alistado, despachado }
+}
+const etapaAlist = (o: Fila) => etapaAlistamiento({
+  estado: o.estado, totalItems: o.items?.length ?? 0, alistados: (o.items ?? []).filter((i) => i.alistado).length,
+  alistadoAt: o.alistado_at, despachadoAt: o.despachado_at,
+})
+const etapaDesp = (o: Fila) => etapaDespacho({
+  estado: o.estado, despachadoAt: o.despachado_at, tomadoRutaAt: o.tomado_ruta_at, recibidoAt: o.recibido_at,
+})
+
+function CeldaEtapa({ e, extra }: { e: EtapaOrden; extra?: string }) {
+  return (
+    <span className="inline-flex flex-col items-center leading-tight">
+      <span className={`rounded-full px-2 py-0.5 font-body text-[11px] font-semibold whitespace-nowrap ${CLASE_TONO[e.tono]}`}>{e.label}</span>
+      {e.detalle && <span className="font-body text-[10px] text-gray-400 whitespace-nowrap">{e.detalle}</span>}
+      {extra && <span className="font-body text-[10px] text-gray-500 whitespace-nowrap">{extra}</span>}
+    </span>
+  )
+}
 
 const META: Record<string, { label: string; color: string; chip: string }> = {
   APROBADA:        { label: 'Lista para alistar', color: 'bg-blue-100 text-blue-700',     chip: 'bg-blue-600' },
@@ -161,8 +192,25 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
       },
     },
     {
-      id: 'alistado', header: 'Alistado', align: 'right', prioridad: 2, tarjeta: 'meta',
-      valor: (o) => `${cuenta(o).listos}/${cuenta(o).total}`, className: 'text-gray-700',
+      // Qué ya está ordenado en bodega: pendiente / en curso (x de y) / alistado con fecha.
+      id: 'alistamiento', header: 'Alistamiento', align: 'center', prioridad: 2, tarjeta: 'meta',
+      valor: (o) => `${textoEtapa(etapaAlist(o))} · ${unidades(o).alistado}/${unidades(o).pedido} und`,
+      celda: (o) => {
+        const u = unidades(o)
+        return <CeldaEtapa e={etapaAlist(o)} extra={`${u.alistado}/${u.pedido} und`} />
+      },
+    },
+    {
+      // Qué ya salió de bodega (bajó el stock real) y a dónde va.
+      id: 'despacho', header: 'Despacho', align: 'center', prioridad: 2, tarjeta: 'meta',
+      valor: (o) => {
+        const u = unidades(o)
+        return `${textoEtapa(etapaDesp(o))}${u.despachado > 0 ? ` · ${u.despachado} und` : ''}`
+      },
+      celda: (o) => {
+        const u = unidades(o)
+        return <CeldaEtapa e={etapaDesp(o)} extra={u.despachado > 0 ? `${u.despachado} und salieron` : undefined} />
+      },
     },
     {
       id: 'avance', header: 'Avance', ancho: 'w-40', prioridad: 3, filtrable: false, tarjeta: 'oculto',

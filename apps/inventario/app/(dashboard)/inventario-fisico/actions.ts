@@ -42,6 +42,9 @@ export async function aplicarInventarioFisico(input: {
   if (error) return { error: error.message }
 
   revalidatePath('/inventario-fisico')
+  revalidatePath(`/inventario-fisico/${data}`)
+  revalidatePath('/arqueo')
+  revalidatePath('/arqueo/analisis')
   revalidatePath('/productos')
   revalidatePath('/stock')
   return { ok: true, id: data as string }

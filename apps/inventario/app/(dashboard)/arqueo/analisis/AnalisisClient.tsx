@@ -1,8 +1,9 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
-  CalendarRange, GitCompareArrows, Grid3x3, Download, Search, Monitor, FileSpreadsheet, Info,
+  CalendarRange, GitCompareArrows, Grid3x3, Download, Search, Monitor, FileSpreadsheet, Info, FileBarChart,
 } from 'lucide-react'
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Legend, ReferenceLine,
@@ -40,7 +41,11 @@ const CLS_CAMBIO: Record<EstadoCambio, string> = {
   NUEVO: 'bg-blue-100 text-blue-700',
   IGUAL: 'bg-gray-100 text-gray-500',
   SIN_COMPARAR: 'bg-gray-50 text-gray-400',
+  SIN_CANTIDAD: 'bg-gray-100 text-gray-500',
 }
+
+/** Informe comparativo de un cargue masivo (contra todos los anteriores). */
+const urlInforme = (c: Conteo) => `/inventario-fisico/${c.id}`
 
 /** Nombre corto de un conteo para columnas y selectores. */
 const rotulo = (c: Conteo) => `${c.nombre} (${c.fuente === 'CARGUE' ? 'cargue' : 'plataforma'}${c.parcial ? ', parcial' : ''})`
@@ -158,6 +163,10 @@ function LineaDeTiempo({ conteos }: { conteos: Conteo[] }) {
                 {fmt.format(c.items.length)} {c.fuente === 'PLATAFORMA' ? `de ${fmt.format(c.alcance)} ` : ''}contados
                 {m.exactitud !== null && <> · <b className="text-gray-700">{pct(m.exactitud)}</b> exactitud</>}
               </p>
+              <Link href={c.fuente === 'CARGUE' ? urlInforme(c) : `/arqueo/${c.id}`}
+                className="inline-flex items-center gap-1 mt-2 font-body text-xs font-semibold text-brand-green hover:underline">
+                {c.fuente === 'CARGUE' ? <><FileBarChart className="w-3.5 h-3.5" /> Ver informe</> : 'Ver arqueo'}
+              </Link>
             </li>
           )
         })}
@@ -287,7 +296,11 @@ function FilaMes({ c, m }: { c: Conteo | null; m: Metricas }) {
       <td className="px-3 py-2 min-w-[13rem]">
         {c ? (
           <>
-            <p className="text-gray-900 leading-tight">{c.nombre}</p>
+            <Link href={c.fuente === 'CARGUE' ? urlInforme(c) : `/arqueo/${c.id}`}
+              className="text-gray-900 leading-tight hover:text-brand-green hover:underline"
+              title={c.fuente === 'CARGUE' ? 'Ver el informe comparativo de este cargue' : 'Ver el arqueo'}>
+              {c.nombre}
+            </Link>
             <p className="text-xs text-gray-400">
               {fecha(c.fecha)}{c.parcial ? ` · parcial: ${fmt.format(c.items.length)} de ${fmt.format(c.alcance)} contados` : ''}
             </p>
@@ -332,13 +345,13 @@ function Comparar({ conteos }: { conteos: Conteo[] }) {
 
   const cumple = (f: (typeof filas)[number], fl: FiltroCambio) =>
     fl === 'TODOS' ? true
-      : fl === 'CAMBIOS' ? f.estado !== 'IGUAL' && f.estado !== 'SIN_COMPARAR'
+      : fl === 'CAMBIOS' ? f.estado !== 'IGUAL' && f.estado !== 'SIN_COMPARAR' && f.estado !== 'SIN_CANTIDAD'
       : fl === 'AMBOS' ? f.a !== null && f.b !== null
       : f.estado === fl
   const visibles = filas.filter(f => cumple(f, filtro) && coincideBusqueda(busca, f.codigo, f.nombre))
 
   const chips: { id: FiltroCambio; label: string; n: number }[] = [
-    { id: 'CAMBIOS', label: 'Con cambios', n: filas.length - r.IGUAL - r.SIN_COMPARAR },
+    { id: 'CAMBIOS', label: 'Con cambios', n: filas.length - r.IGUAL - r.SIN_COMPARAR - r.SIN_CANTIDAD },
     { id: 'FALTANTE', label: 'Dejaron de aparecer', n: r.FALTANTE },
     { id: 'NUEVO', label: 'Nuevos', n: r.NUEVO },
     { id: 'AGOTADO', label: 'Se agotaron', n: r.AGOTADO },
@@ -347,6 +360,7 @@ function Comparar({ conteos }: { conteos: Conteo[] }) {
     { id: 'IGUAL', label: 'Iguales', n: r.IGUAL },
     { id: 'AMBOS', label: 'Contados en ambos', n: r.enAmbos },
     ...(r.SIN_COMPARAR ? [{ id: 'SIN_COMPARAR' as const, label: 'Faltan en el parcial', n: r.SIN_COMPARAR }] : []),
+    ...(r.SIN_CANTIDAD ? [{ id: 'SIN_CANTIDAD' as const, label: 'Vinieron sin cantidad', n: r.SIN_CANTIDAD }] : []),
     { id: 'TODOS', label: 'Todos', n: filas.length },
   ]
 
@@ -413,8 +427,8 @@ function Comparar({ conteos }: { conteos: Conteo[] }) {
               celdas: [
                 <span key="c" className="text-gray-500">{f.codigo ?? '—'}</span>,
                 <Nombre key="n" nombre={f.nombre} presentacion={f.presentacion} />,
-                <span key="a" className="tabular-nums">{f.a === null ? <i className="text-gray-400">no contado</i> : q(f.a)}</span>,
-                <span key="b" className="tabular-nums">{f.b === null ? <i className="text-gray-400">no contado</i> : q(f.b)}</span>,
+                <span key="a" className="tabular-nums">{f.a === null ? <i className="text-gray-400">{f.estado === 'SIN_CANTIDAD' && f.b !== null ? 'sin cantidad' : 'no contado'}</i> : q(f.a)}</span>,
+                <span key="b" className="tabular-nums">{f.b === null ? <i className="text-gray-400">{f.estado === 'SIN_CANTIDAD' && f.a !== null ? 'sin cantidad' : 'no contado'}</i> : q(f.b)}</span>,
                 <Delta key="d" valor={f.diferencia} porcentaje={f.porcentaje} />,
                 <Badge key="e" cls={CLS_CAMBIO[f.estado]} texto={ETIQUETA_CAMBIO[f.estado]} />,
                 <Delta key="sa" valor={f.difSistemaA} tenue />,
@@ -489,7 +503,7 @@ function Matriz({ conteos }: { conteos: Conteo[] }) {
             const cel = f.celdas[c.id]
             const base = `${fecha(c.fecha)} ${rotulo(c)}`
             return [
-              [`${base} CONTADO`, cel ? cel.contado : null],
+              [`${base} CONTADO`, cel ? cel.contado : f.vacias.includes(c.id) ? 'sin cantidad' : null],
               [`${base} DIF`, cel ? cel.diferencia : null],
             ]
           })),
@@ -505,7 +519,7 @@ function Matriz({ conteos }: { conteos: Conteo[] }) {
           celdas: [
             <span key="c" className="text-gray-500">{f.codigo ?? '—'}</span>,
             <Nombre key="n" nombre={f.nombre} presentacion={f.presentacion} />,
-            ...conteos.map(c => <CeldaDif key={c.id} cel={f.celdas[c.id]} />),
+            ...conteos.map(c => <CeldaDif key={c.id} cel={f.celdas[c.id]} vacia={f.vacias.includes(c.id)} />),
             <span key="v" className={`tabular-nums font-semibold ${f.conDiferencia >= 2 ? 'text-red-600' : 'text-gray-500'}`}>
               {f.conDiferencia} / {f.veces}
             </span>,
@@ -517,7 +531,8 @@ function Matriz({ conteos }: { conteos: Conteo[] }) {
   )
 }
 
-function CeldaDif({ cel }: { cel: { contado: number; sistema: number | null; diferencia: number | null } | undefined }) {
+function CeldaDif({ cel, vacia }: { cel: { contado: number; sistema: number | null; diferencia: number | null } | undefined; vacia?: boolean }) {
+  if (!cel && vacia) return <span className="text-gray-400 text-xs italic whitespace-nowrap" title="Vino en el archivo con la celda vacía">sin cantidad</span>
   if (!cel) return <span className="text-gray-200">·</span>
   const t = `Contado ${q(cel.contado)} · sistema ${q(cel.sistema)}`
   if (cel.diferencia === null) return <span title={t} className="text-gray-400 text-xs">sin sistema</span>

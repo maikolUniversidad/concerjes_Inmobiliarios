@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
-import type { InventarioFisico, ItemFisico } from '@/lib/inventario-fisico'
+import { ordenCronologico, type InventarioFisico, type ItemFisico } from '@/lib/inventario-fisico'
 import { InventarioFisicoClient } from './InventarioFisicoClient'
 
 export const metadata: Metadata = { title: 'Inventario físico' }
@@ -16,6 +16,7 @@ export default async function InventarioFisicoPage() {
     .from('inventarios_fisicos' as never)
     .select('id, periodo, fecha_corte, archivo_nombre, observacion, historico, total_items, items_con_cantidad, items_en_cero, total_unidades, items_nuevos, items_ajustados, items_no_hallados, created_at')
     .order('fecha_corte', { ascending: true })
+    .order('created_at', { ascending: true })
 
   let items: ItemFisico[] = []
   let errorItems: string | null = null
@@ -42,7 +43,8 @@ export default async function InventarioFisicoPage() {
 
   // numeric llega como string desde PostgREST
   const n = (v: unknown) => (v === null || v === undefined ? null : Number(v))
-  const inventarios = ((invs ?? []) as unknown as InventarioFisico[]).map(i => ({ ...i, total_unidades: Number(i.total_unidades) }))
+  // Cronológico por fecha de corte (no por el nombre del periodo: "AGOSTO 2025" llegó después de "JULIO 2026")
+  const inventarios = ordenCronologico(((invs ?? []) as unknown as InventarioFisico[]).map(i => ({ ...i, total_unidades: Number(i.total_unidades) })))
   const limpios = items.map(i => ({
     ...i,
     cantidad_contada: n(i.cantidad_contada),

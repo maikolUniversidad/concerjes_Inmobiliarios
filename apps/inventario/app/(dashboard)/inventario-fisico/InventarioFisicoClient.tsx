@@ -1,9 +1,10 @@
 'use client'
 
 import { useMemo, useState } from 'react'
+import Link from 'next/link'
 import {
   ClipboardList, GitCompareArrows, Scale, TrendingUp, Upload, Download, Search,
-  ArrowDownRight, ArrowUpRight, Minus, History,
+  ArrowDownRight, ArrowUpRight, Minus, History, FileBarChart, ChevronRight,
 } from 'lucide-react'
 import {
   ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, CartesianGrid, Legend,
@@ -18,7 +19,7 @@ import { CargarInventario } from './CargarInventario'
 
 const fmt = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 })
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
-const fecha = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric' })
+const fecha = (d: string) => new Date(d + 'T12:00:00-05:00').toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' })
 const q = (v: number | null | undefined) => (v === null || v === undefined ? '—' : fmt.format(v))
 
 type Tab = 'resumen' | 'comparar' | 'sistema' | 'tendencia'
@@ -40,6 +41,7 @@ const CLS_SISTEMA: Record<EstadoSistema, string> = {
   CUADRA: 'bg-green-50 text-green-700',
   NO_HALLADO: 'bg-orange-100 text-orange-700',
   SIN_CANTIDAD: 'bg-gray-100 text-gray-500',
+  SIN_SISTEMA: 'bg-gray-50 text-gray-400',
 }
 
 async function exportar(nombre: string, hoja: string, filas: Record<string, unknown>[]) {
@@ -173,7 +175,8 @@ function Resumen({ inventarios }: { inventarios: InventarioFisico[] }) {
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {recientes.map(i => (
-          <div key={i.id} className="bg-white border border-gray-100 rounded-2xl p-5 shadow-sm">
+          <Link key={i.id} href={`/inventario-fisico/${i.id}`} title="Ver el informe comparativo de este conteo"
+            className="block bg-white border border-gray-100 rounded-2xl p-5 shadow-sm hover:shadow-md hover:border-brand-green/30 transition-all">
             <div className="flex items-start justify-between gap-2">
               <div>
                 <h3 className="font-heading font-bold text-base text-gray-900">{i.periodo}</h3>
@@ -193,7 +196,10 @@ function Resumen({ inventarios }: { inventarios: InventarioFisico[] }) {
               <Dato k="No hallados" v={fmt.format(i.items_no_hallados)} tono="text-red-600" />
             </dl>
             {i.observacion && <p className="font-body text-xs text-gray-400 mt-3">{i.observacion}</p>}
-          </div>
+            <p className="flex items-center gap-1.5 font-body text-sm font-semibold text-brand-green mt-4">
+              <FileBarChart className="w-4 h-4" /> Ver informe comparativo <ChevronRight className="w-4 h-4" />
+            </p>
+          </Link>
         ))}
       </div>
     </div>
@@ -313,7 +319,9 @@ function Comparar({ inventarios, porInventario }: { inventarios: InventarioFisic
             <Buscador value={busca} onChange={setBusca} />
             <button onClick={() => exportar(`comparativa-${invA.periodo}-vs-${invB.periodo}.xlsx`, 'Comparativa', visibles.map(f => ({
               ITEM: f.codigo, PRODUCTO: f.nombre, PRESENTACION: f.presentacion ?? '',
-              [invA.periodo]: f.anterior, [invB.periodo]: f.actual, DIFERENCIA: f.diferencia,
+              [invA.periodo]: f.estado === 'NUEVO' ? 'no vino' : f.anterior ?? 'sin cantidad',
+              [invB.periodo]: f.estado === 'FALTANTE' ? 'no vino' : f.actual ?? 'sin cantidad',
+              DIFERENCIA: f.diferencia,
               'VARIACION %': f.porcentaje === null ? null : Math.round(f.porcentaje), ESTADO: ETIQUETA_COMPARACION[f.estado],
               'VALOR DIFERENCIA': f.valorDiferencia,
             })))}
@@ -330,8 +338,8 @@ function Comparar({ inventarios, porInventario }: { inventarios: InventarioFisic
               celdas: [
                 <span key="c" className="text-gray-500">{f.codigo ?? '—'}</span>,
                 <Nombre key="n" nombre={f.nombre} presentacion={f.presentacion} />,
-                <span key="a" className="tabular-nums">{f.estado === 'NUEVO' ? <i className="text-gray-400">no vino</i> : q(f.anterior)}</span>,
-                <span key="b" className="tabular-nums">{f.estado === 'FALTANTE' ? <i className="text-gray-400">no vino</i> : q(f.actual)}</span>,
+                <span key="a" className="tabular-nums">{f.estado === 'NUEVO' ? <i className="text-gray-400">no vino</i> : f.anterior === null ? <SinCantidad /> : q(f.anterior)}</span>,
+                <span key="b" className="tabular-nums">{f.estado === 'FALTANTE' ? <i className="text-gray-400">no vino</i> : f.actual === null ? <SinCantidad /> : q(f.actual)}</span>,
                 <Delta key="d" valor={f.diferencia} porcentaje={f.porcentaje} />,
                 <Badge key="e" cls={CLS_COMPARACION[f.estado]} texto={ETIQUETA_COMPARACION[f.estado]} />,
               ],
@@ -350,8 +358,9 @@ function VsSistema({ inventarios, porInventario }: { inventarios: InventarioFisi
   const [filtro, setFiltro] = useState<EstadoSistema | 'DIFERENCIAS'>('DIFERENCIAS')
   const [busca, setBusca] = useState('')
   const inv = inventarios.find(i => i.id === id)!
-  const lista = useMemo(() => (porInventario.get(id) ?? []).map(i => ({ ...i, es: estadoSistema(i) }))
-    .sort((a, b) => (a.diferencia ?? 0) - (b.diferencia ?? 0)), [id, porInventario])
+  // Por ítem y luego alfabético, como todo el módulo
+  const lista = useMemo(() => ordenarPorItem((porInventario.get(id) ?? []).map(i => ({ ...i, es: estadoSistema(i) })),
+    i => i.codigo, i => i.nombre), [id, porInventario])
 
   const cuenta = (e: EstadoSistema) => lista.filter(i => i.es === e).length
   const valor = (e: EstadoSistema) => lista.filter(i => i.es === e)
@@ -368,6 +377,7 @@ function VsSistema({ inventarios, porInventario }: { inventarios: InventarioFisi
     { id: 'SOBRANTE', label: 'Sobrantes', n: cuenta('SOBRANTE') },
     { id: 'NO_HALLADO', label: 'No hallados', n: cuenta('NO_HALLADO') },
     { id: 'SIN_CANTIDAD', label: 'Sin cantidad', n: cuenta('SIN_CANTIDAD') },
+    ...(cuenta('SIN_SISTEMA') ? [{ id: 'SIN_SISTEMA' as const, label: 'Sin dato del sistema', n: cuenta('SIN_SISTEMA') }] : []),
     { id: 'CUADRA', label: 'Cuadran', n: cuenta('CUADRA') },
   ]
 
@@ -379,6 +389,9 @@ function VsSistema({ inventarios, porInventario }: { inventarios: InventarioFisi
           Compara lo contado con el stock que tenía el sistema justo antes de aplicar el conteo.
           {inv.historico && ' En este conteo histórico el stock previo se reconstruyó del reporte del cruce.'}
         </p>
+        <Link href={`/inventario-fisico/${id}`} className="flex items-center gap-1.5 font-body text-sm font-semibold text-brand-green pb-2 hover:underline">
+          <FileBarChart className="w-4 h-4" /> Informe completo de {inv.periodo}
+        </Link>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -408,7 +421,8 @@ function VsSistema({ inventarios, porInventario }: { inventarios: InventarioFisi
         <Buscador value={busca} onChange={setBusca} />
         <button onClick={() => exportar(`conteo-vs-sistema-${inv.periodo}.xlsx`, 'Conteo vs sistema', visibles.map(i => ({
           ITEM: i.codigo, PRODUCTO: i.nombre, PRESENTACION: i.presentacion ?? '',
-          'STOCK SISTEMA': i.stock_sistema, CONTADO: i.cantidad_contada, DIFERENCIA: i.diferencia,
+          'STOCK SISTEMA': i.stock_sistema,
+          CONTADO: i.es === 'NO_HALLADO' ? 'no vino' : i.cantidad_contada ?? 'sin cantidad', DIFERENCIA: i.diferencia,
           ESTADO: ETIQUETA_SISTEMA[i.es],
           'VALOR DIFERENCIA': i.diferencia !== null && i.precio_unitario ? i.diferencia * i.precio_unitario : null,
         })))}
@@ -426,7 +440,7 @@ function VsSistema({ inventarios, porInventario }: { inventarios: InventarioFisi
             <span key="c" className="text-gray-500">{i.codigo ?? '—'}</span>,
             <Nombre key="n" nombre={i.nombre} presentacion={i.presentacion} />,
             <span key="s" className="tabular-nums">{q(i.stock_sistema)}</span>,
-            <span key="q" className="tabular-nums">{i.es === 'NO_HALLADO' ? <i className="text-gray-400">no vino</i> : q(i.cantidad_contada)}</span>,
+            <span key="q" className="tabular-nums">{i.es === 'NO_HALLADO' ? <i className="text-gray-400">no vino</i> : i.cantidad_contada === null ? <SinCantidad /> : q(i.cantidad_contada)}</span>,
             <Delta key="d" valor={i.diferencia} />,
             <Badge key="e" cls={CLS_SISTEMA[i.es]} texto={ETIQUETA_SISTEMA[i.es]} />,
           ],
@@ -482,7 +496,8 @@ function Tendencia({ inventarios, items }: { inventarios: InventarioFisico[]; it
         <Buscador value={busca} onChange={setBusca} />
         <button onClick={() => exportar('tendencia-inventario-fisico.xlsx', 'Tendencia', visibles.map(f => ({
           ITEM: f.codigo, PRODUCTO: f.nombre, PRESENTACION: f.presentacion ?? '',
-          ...Object.fromEntries(inventarios.map(i => [i.periodo, i.id in f.valores ? f.valores[i.id] : 'no vino'])),
+          ...Object.fromEntries(inventarios.map(i => [i.periodo,
+            !(i.id in f.valores) ? 'no vino' : f.valores[i.id] === null ? 'sin cantidad' : f.valores[i.id]])),
         })))}
           className="flex items-center gap-1.5 border border-gray-200 bg-white rounded-lg px-3 py-2 font-body text-sm font-semibold text-gray-700 hover:bg-gray-50">
           <Download className="w-4 h-4" /> Excel
@@ -502,7 +517,9 @@ function Tendencia({ inventarios, items }: { inventarios: InventarioFisico[]; it
               <Nombre key="n" nombre={f.nombre} presentacion={f.presentacion} />,
               ...inventarios.map(i => (
                 <span key={i.id} className="tabular-nums">
-                  {i.id in f.valores ? q(f.valores[i.id]) : <i className="text-red-400">no vino</i>}
+                  {!(i.id in f.valores) ? <i className="text-red-400">no vino</i>
+                    : f.valores[i.id] === null ? <i className="text-gray-400 whitespace-nowrap" title="Celda vacía en el archivo">sin cantidad</i>
+                    : q(f.valores[i.id])}
                 </span>
               )),
               <span key="t" title={s.length < 2 ? 'Un solo conteo' : `${q(s[0])} → ${q(s[s.length - 1])}`}>
@@ -519,6 +536,11 @@ function Tendencia({ inventarios, items }: { inventarios: InventarioFisico[]; it
 }
 
 // ── Piezas comunes ──────────────────────────────────────────────────────────
+
+/** Celda vacía en el archivo: no es 0, no se sabe cuánto había. */
+function SinCantidad() {
+  return <i className="text-gray-400 whitespace-nowrap" title="Celda vacía en el archivo">sin cantidad</i>
+}
 
 function Kpi({ titulo, valor, nota, tono = 'text-gray-900' }: { titulo: string; valor: number | string; nota?: string; tono?: string }) {
   return (

@@ -16,7 +16,7 @@ import { VideoDespacho } from './VideoDespacho'
 import { VideoGrabado } from '@/components/ui/VideoGrabado'
 import { ProductoThumb } from './ProductoThumb'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
-import { ordenarPorItem, pedidoVsInventario } from '@/lib/stock-reservas'
+import { ordenarPorItem, pedidoVsInventario, yaSalio } from '@/lib/stock-reservas'
 
 interface Item {
   id: string
@@ -100,7 +100,9 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
   const [transpGuia, setTranspGuia] = useState('')
 
   const meta = metaEstado(orden.estado)
-  const despachado = orden.estado === 'DESPACHADO'
+  // Despachada o después (en ruta, entregada, recibida): el alistamiento queda
+  // de solo lectura; antes solo se bloqueaba en DESPACHADO.
+  const despachado = yaSalio(orden.estado)
   const anulada = orden.estado === 'ANULADA'
   const editable = puedeAlistar && !despachado && !anulada
 
@@ -269,7 +271,7 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
       },
     },
     {
-      id: 'solicitado', header: 'Solicitado', valor: (it) => Number(it.cantidad_solicitada), align: 'center', ancho: 'w-24',
+      id: 'solicitado', header: 'Pedido', valor: (it) => Number(it.cantidad_solicitada), align: 'center', ancho: 'w-24',
       className: 'font-semibold text-gray-700', tarjeta: 'meta',
     },
     {
@@ -280,6 +282,14 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
           onChange={(e) => setCantAlistada(it, Number(e.target.value) || 0)} onBlur={() => guardarCant(it)}
           className="w-full border border-gray-200 rounded-lg px-2 py-1.5 font-body text-sm text-center outline-none focus:border-brand-green disabled:bg-gray-50" />
       ),
+    },
+    {
+      // Lo que ya salió de bodega: tras el despacho, lo alistado (lo no chuleado queda en 0).
+      id: 'despachadoCant', header: 'Despachado', align: 'center', ancho: 'w-24', tarjeta: 'meta',
+      valor: (it) => (despachado ? Number(it.cantidad_alistada) : 0),
+      celda: (it) => despachado
+        ? <span className="font-body text-sm font-semibold text-green-700">{Number(it.cantidad_alistada)}</span>
+        : <span className="font-body text-xs text-gray-300">Pendiente</span>,
     },
   ]
 

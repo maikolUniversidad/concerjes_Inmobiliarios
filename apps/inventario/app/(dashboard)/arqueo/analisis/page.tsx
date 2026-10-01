@@ -69,7 +69,8 @@ export default async function ArqueoAnalisisPage() {
       const itemsFisicos = await traerTodo<ItemFisico>((desde, hasta) => supabase
         .from('inventario_fisico_items' as never)
         .select('inventario_id, producto_id, codigo, nombre, presentacion, estado, cantidad_contada, stock_sistema, diferencia, precio_unitario, producto_nuevo')
-        .eq('estado', 'CONTADO')
+        // CONTADO y SIN_CANTIDAD (vino con la celda vacía: no es 0); los NO_HALLADO no vinieron
+        .neq('estado', 'NO_HALLADO')
         .order('id')
         .range(desde, hasta) as never, { etiqueta: 'Ítems de cargues' })
       const limpios = itemsFisicos.map(i => ({

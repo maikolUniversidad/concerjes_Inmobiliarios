@@ -13,14 +13,26 @@ interface ItemIn {
   cantidad_solicitada: number
   cantidad_alistada: number
   cantidad_a_pendiente?: number | null
-  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: { cantidad_real: number } | { cantidad_real: number }[] | null } | null
+  producto: { nombre_estandar: string; presentacion: string | null; imagen_url?: string | null; stock?: StockIn | StockIn[] | null } | null
 }
 
-/** Stock FÍSICO en bodega (lo que se puede enviar ya). */
-const stockDisp = (it: ItemIn): number => {
+interface StockIn { cantidad_real: number; cantidad_disp?: number | null }
+const filaStock = (it: ItemIn): StockIn | null => {
   const s = it.producto?.stock
-  if (!s) return 0
-  return Array.isArray(s) ? Number(s[0]?.cantidad_real ?? 0) : Number(s.cantidad_real ?? 0)
+  if (!s) return null
+  return (Array.isArray(s) ? s[0] : s) ?? null
+}
+/** Stock FÍSICO en bodega. */
+const stockReal = (it: ItemIn): number => Number(filaStock(it)?.cantidad_real ?? 0)
+/**
+ * Disponible real = físico − lo reservado por órdenes aprobadas sin despachar.
+ * Esta orden ya salió y no reserva, así que enviar más de esto le quita
+ * mercancía a otro pedido ya aprobado.
+ */
+const stockDisp = (it: ItemIn): number => {
+  const f = filaStock(it)
+  if (!f) return 0
+  return f.cantidad_disp === null || f.cantidad_disp === undefined ? Number(f.cantidad_real ?? 0) : Number(f.cantidad_disp)
 }
 
 /** Lo que falta por enviar: ni salió ni se pasó a una orden pendiente. */
@@ -81,10 +93,15 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
       className: 'font-heading font-bold text-amber-700',
     },
     {
-      id: 'stock', header: 'Stock real', valor: (it) => stockDisp(it), align: 'right', prioridad: 2, tarjeta: 'meta',
+      id: 'stock', header: 'Disponible real', valor: (it) => stockDisp(it), align: 'right', prioridad: 2, tarjeta: 'meta',
       celda: (it) => {
         const disp = stockDisp(it)
-        return <span className={disp <= 0 ? 'text-red-500' : 'text-gray-500'}>{disp}</span>
+        return (
+          <span className="inline-flex flex-col items-end leading-tight" title="Disponible real = stock en bodega − lo reservado por pedidos aprobados sin despachar">
+            <span className={disp <= 0 ? 'text-red-500 font-semibold' : 'text-gray-700 font-semibold'}>{disp}</span>
+            <span className="font-body text-[10px] text-gray-400">{stockReal(it)} en bodega</span>
+          </span>
+        )
       },
     },
   ]
@@ -96,13 +113,15 @@ export function EnvioRestante({ ordenId, items, puedeAlistar }: {
       celda: (it) => {
         const pend = faltante(it)
         const valor = Number(cant[it.id]) || 0
-        const sinStock = valor > stockDisp(it)
+        const sinStock = valor > stockReal(it)
+        const tomaReservado = !sinStock && valor > stockDisp(it)
         return (
           <>
             <input type="number" min={0} max={pend} value={cant[it.id] ?? 0}
               onChange={e => setCant(c => ({ ...c, [it.id]: Math.max(0, Math.min(pend, Number(e.target.value) || 0)) }))}
               className={`w-20 rounded-lg border px-2 py-1 text-sm text-right outline-none focus:border-brand-green ${sinStock ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
             {sinStock && <p className="font-body text-[10px] text-red-500 mt-0.5">supera stock</p>}
+            {tomaReservado && <p className="font-body text-[10px] text-amber-600 mt-0.5" title="Hay stock en bodega, pero está reservado para otros pedidos aprobados">toma lo reservado</p>}
           </>
         )
       },
