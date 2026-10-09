@@ -8,6 +8,7 @@ import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { NotificationBell } from '@/components/layout/NotificationBell'
 import { TopSearch } from '@/components/layout/TopSearch'
+import { BotonSoporte } from '@/components/soporte/BotonSoporte'
 import { PanelLeft, Search } from 'lucide-react'
 
 export function DashboardShell({ children }: { children: React.ReactNode }) {
@@ -63,6 +64,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <Link href="/ia/asistente" className="sm:hidden p-2 rounded-lg hover:bg-gray-100 transition-colors" aria-label="Buscar / Asistente IA">
               <Search className="w-5 h-5 text-gray-500" />
             </Link>
+
+            {/* Reportar error / soporte / mejora */}
+            <BotonSoporte />
 
             {/* Notifications */}
             <NotificationBell />

@@ -38,7 +38,7 @@ const VISTAS: { k: Vista; label: string; estados: string[] | null }[] = [
 ]
 const ACTIVOS = ['ABIERTO', 'RECIBIDO', 'EN_PROCESO', 'EN_ESPERA']
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
-const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
 const minutos = (a: string | null, b: string | null) => (a && b ? Math.max(0, (new Date(b).getTime() - new Date(a).getTime()) / 60000) : null)
 function duracion(min: number | null) {
   if (min == null) return '—'

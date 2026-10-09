@@ -4,6 +4,10 @@
 
 export const BUCKET_MANT = 'mantenimiento'
 
+// Zona fija: el servidor (UTC en Vercel) y el navegador deben formatear igual
+// o React falla al hidratar.
+export const ZONA_HORARIA = 'America/Bogota'
+
 export const ESTADO_TICKET_META: Record<string, { label: string; cls: string; dot: string }> = {
   ABIERTO:    { label: 'Abierto',     cls: 'bg-red-100 text-red-700',       dot: 'bg-red-500' },
   RECIBIDO:   { label: 'Recibido',    cls: 'bg-sky-100 text-sky-700',       dot: 'bg-sky-500' },
@@ -60,7 +64,7 @@ export const CHECKLIST_INSPECCION = [
 ]
 
 export const fechaHora = (iso: string) =>
-  new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short' })
+  new Date(iso).toLocaleString('es-CO', { dateStyle: 'medium', timeStyle: 'short', timeZone: ZONA_HORARIA })
 
 export function haceCuanto(iso: string): string {
   const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000)

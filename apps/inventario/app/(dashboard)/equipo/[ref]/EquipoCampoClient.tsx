@@ -101,7 +101,7 @@ export function EquipoCampoClient({ maquina, tickets, actividades, eventos, perm
             </div>
             <div className="mt-3 flex flex-wrap gap-2 text-xs">
               <span className="inline-flex items-center gap-1 rounded-lg bg-gray-50 px-2 py-1 text-gray-600">
-                <History className="w-3.5 h-3.5" /> Último mant.: {maquina.ultimo_mant_at ? new Date(maquina.ultimo_mant_at).toLocaleDateString('es-CO') : 'sin registro'}
+                <History className="w-3.5 h-3.5" /> Último mant.: {maquina.ultimo_mant_at ? new Date(maquina.ultimo_mant_at).toLocaleDateString('es-CO', { timeZone: 'America/Bogota' }) : 'sin registro'}
               </span>
               {maquina.proximo_mant && (
                 <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 ${vencido ? 'bg-purple-50 text-purple-700 font-semibold' : 'bg-gray-50 text-gray-600'}`}>

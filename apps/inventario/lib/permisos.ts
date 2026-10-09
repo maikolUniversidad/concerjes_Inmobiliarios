@@ -97,6 +97,14 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
+    // Reportar (botón de bug) y ver los propios tickets no requiere permiso.
+    grupo: 'Soporte',
+    permisos: [
+      { key: 'ver_tickets_soporte', label: 'Ver los tickets de soporte de todos' },
+      { key: 'gestionar_soporte',   label: 'Atender tickets: asignar, cambiar estado y cerrar con evidencia' },
+    ],
+  },
+  {
     grupo: 'Notificaciones y Correo',
     permisos: [
       { key: 'gestionar_integraciones',      label: 'Configurar la cuenta de correo (SMTP / OAuth)' },

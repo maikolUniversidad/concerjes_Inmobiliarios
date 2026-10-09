@@ -6,7 +6,7 @@ import {
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
-  ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser,
+  ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -143,6 +143,15 @@ export const navigation: NavModule[] = [
     ],
   },
   {
+    id: 'soporte',
+    title: 'Soporte',
+    icon: Bug,
+    // Sin permiso: todos ven sus propios tickets (la RLS filtra el resto).
+    items: [
+      { label: 'Tickets de soporte', href: '/soporte', icon: Bug },
+    ],
+  },
+  {
     id: 'administracion',
     title: 'Administración',
     icon: Settings,
@@ -181,6 +190,7 @@ export const moduleShortLabel: Record<string, string> = {
   logistica: 'Logística',
   servicios_hogar: 'Hogar',
   ia: 'IA',
+  soporte: 'Soporte',
   administracion: 'Admin',
 }
 

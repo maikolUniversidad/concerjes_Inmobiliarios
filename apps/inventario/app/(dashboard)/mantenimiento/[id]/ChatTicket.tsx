@@ -7,7 +7,7 @@ import { createClient } from '@/lib/supabase/client'
 import type { MantenimientoMensaje } from '@/lib/types/database'
 import { firmarRutas, subirArchivoMant, tamanoLegible, MAX_ADJUNTO_BYTES } from '@/lib/mantenimiento'
 
-const hora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+const hora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
 
 /**
  * Chat del ticket: soporte remoto entre la sede y mantenimiento.
