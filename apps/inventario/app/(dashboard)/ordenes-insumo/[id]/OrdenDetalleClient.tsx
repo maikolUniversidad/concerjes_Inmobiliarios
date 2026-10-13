@@ -194,7 +194,15 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     setDespachando(false)
     if (res.error && !res.ok) { toast.error(res.error); return }
     if (res.error) toast.warning(res.error)
-    toast.success(res.id ? 'Orden despachada. Lo que no salió quedó en una orden pendiente.' : 'Orden despachada.')
+    if (res.id) {
+      const repoId = res.id
+      toast.success('Orden despachada. Lo que faltó quedó en una orden de reposición.', {
+        duration: 12000,
+        action: { label: 'Ver reposición', onClick: () => router.push(`/ordenes-insumo/${repoId}`) },
+      })
+    } else {
+      toast.success('Orden despachada.')
+    }
     router.refresh()
   }
 

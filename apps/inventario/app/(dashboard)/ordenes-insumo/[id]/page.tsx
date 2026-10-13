@@ -58,6 +58,21 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     .select('id, numero, estado').eq('orden_origen_id', id).order('created_at')
   const hijas = (hijasData ?? []) as unknown as { id: string; numero: string; estado: string }[]
 
+  // Reposición N: cuántas pendientes hay en la cadena hasta la orden original
+  // (1 = pendiente de la original, 2 = pendiente de una pendiente…).
+  let reposicion = 0
+  let origenRaizNumero: string | null = null
+  let actual = (orden as unknown as { orden_origen_id: string | null }).orden_origen_id
+  while (actual && reposicion < 20) {
+    reposicion++
+    const { data: ant } = await supabase.from('ordenes_insumo')
+      .select('numero, orden_origen_id').eq('id', actual).single()
+    const a = ant as unknown as { numero: string; orden_origen_id: string | null } | null
+    if (!a) break
+    origenRaizNumero = a.numero
+    actual = a.orden_origen_id
+  }
+
   const { data: eventosData } = await supabase.from('orden_insumo_eventos')
     .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
     .eq('orden_id', id).order('created_at', { ascending: true })
@@ -95,9 +110,27 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
   const despachada = ['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
   const puedeDevolver = perm.puede('alistar_ordenes_insumo') || perm.puede('aprobar_ordenes_insumo')
 
-  // Datos planos para los PDF (orden / remisión que viaja con el pedido).
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const o = orden as any
+
+  // Lo que pasó a la reposición ya no es de esta orden: se descuenta de lo
+  // solicitado y, si se fue completo, el ítem no se muestra aquí (ni en sus PDF).
+  // `cantidad_a_pendiente` queda en 0 en la copia para que "Envío restante" no lo
+  // descuente dos veces.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const itemsTodos = (o.items ?? []) as any[]
+  const itemsVisibles = itemsTodos
+    .filter((i) => !(Number(i.cantidad_a_pendiente ?? 0) > 0 && Number(i.cantidad_alistada ?? 0) <= 0
+      && Number(i.cantidad_solicitada ?? 0) <= Number(i.cantidad_a_pendiente ?? 0)))
+    .map((i) => ({
+      ...i,
+      cantidad_solicitada: Math.max(0, Number(i.cantidad_solicitada ?? 0) - Number(i.cantidad_a_pendiente ?? 0)),
+      cantidad_a_pendiente: 0,
+    }))
+  const itemsMovidos = itemsTodos.length - itemsVisibles.length
+  o.items = itemsVisibles
+
+  // Datos planos para los PDF (orden / remisión que viaja con el pedido).
   const datosDoc: DatosDoc = {
     ordenId: id,
     sedeId: o.sede_id ?? '',
@@ -119,6 +152,8 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     })),
     origenNumero: o.origen?.numero ?? null,
     pendientesNumeros: hijas.map((h) => h.numero),
+    reposicion,
+    origenRaizNumero,
   }
 
   return (
@@ -138,22 +173,34 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       {(o.origen || hijas.length > 0) && (
         <div className="bg-orange-50 border border-orange-200 rounded-2xl p-4 shadow-sm space-y-1.5">
           <p className="font-heading font-semibold text-sm text-orange-900 flex items-center gap-2">
-            <GitBranch className="w-4 h-4" /> {o.origen ? 'Orden pendiente' : 'Quedó pendiente'}
+            <GitBranch className="w-4 h-4" /> {o.origen ? 'Orden de reposición' : 'Quedó pendiente'}
+            {reposicion > 0 && (
+              <span className="rounded-full bg-orange-600 px-2.5 py-0.5 font-body text-xs font-bold text-white">
+                Reposición {reposicion}
+              </span>
+            )}
           </p>
           {o.origen && (
             <p className="font-body text-sm text-orange-900/90">
               Viene de la orden{' '}
               <Link href={`/ordenes-insumo/${o.origen.id}`} className="font-semibold underline">{o.origen.numero}</Link>
               : son los productos que no salieron en su despacho.
+              {reposicion > 1 && origenRaizNumero && <> Orden original: <strong>{origenRaizNumero}</strong>.</>}
             </p>
           )}
           {hijas.map((h) => (
             <p key={h.id} className="font-body text-sm text-orange-900/90">
-              Lo que no salió en el despacho sigue en{' '}
+              Lo que no salió en el despacho sigue en la reposición{' '}
               <Link href={`/ordenes-insumo/${h.id}`} className="font-semibold underline">{h.numero}</Link>
               {' '}({h.estado.replace(/_/g, ' ').toLowerCase()}).
             </p>
           ))}
+          {hijas.length > 0 && (
+            <p className="font-body text-xs text-orange-900/70">
+              {itemsMovidos > 0 ? `${itemsMovidos} producto(s) que no salieron ya no se listan en esta orden; ` : 'Aquí solo queda lo que salió en el despacho; '}
+              los ves en la reposición.
+            </p>
+          )}
         </div>
       )}
       {/* Novedad del pedido: la nota que se escribe al crear la orden. Se muestra

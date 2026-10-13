@@ -33,7 +33,18 @@ export interface DatosDoc {
   origenNumero?: string | null
   /** Órdenes pendientes generadas desde esta (lo que no salió). */
   pendientesNumeros?: string[]
+  /** Nivel en la cadena de pendientes: 0 = orden normal, 1 = 1ª reposición… */
+  reposicion?: number
+  /** Número de la orden original de la cadena (cuando es reposición). */
+  origenRaizNumero?: string | null
 }
+
+/**
+ * Desde que se aprueba, la orden ya está en manos de bodega: el documento deja
+ * de ser la solicitud de insumo y pasa a ser la orden de alistamiento.
+ */
+const ESTADOS_ALISTAMIENTO = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO']
+const esEtapaAlistamiento = (estado: string) => ESTADOS_ALISTAMIENTO.includes(estado)
 
 interface PdfHistorialItem {
   id: string
@@ -188,6 +199,12 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       empresa: { fontSize: 13, fontFamily: 'Helvetica-Bold' },
       sub: { fontSize: 8, color: '#6b7280' },
       titulo: { fontSize: 14, fontFamily: 'Helvetica-Bold', textAlign: 'right' },
+      // Etiqueta resaltada con la etapa del documento (insumo / alistamiento).
+      etiqueta: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#ffffff', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 3, textAlign: 'right', marginBottom: 3 },
+      // Franja de reposición: que en bodega y en la sede se vea de lejos.
+      repo: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff7ed', borderWidth: 1.5, borderColor: '#ea580c', borderRadius: 4, padding: 7, marginBottom: 10 },
+      repoTag: { fontSize: 12, fontFamily: 'Helvetica-Bold', color: '#ffffff', backgroundColor: '#ea580c', paddingVertical: 3, paddingHorizontal: 7, borderRadius: 3, marginRight: 8 },
+      repoTxt: { flex: 1, fontSize: 9, color: '#9a3412' },
       numero: { fontSize: 11, textAlign: 'right', color: '#2E7D32', fontFamily: 'Helvetica-Bold' },
       head: { flexDirection: 'row', justifyContent: 'space-between', borderBottomWidth: 2, borderBottomColor: '#2E7D32', paddingBottom: 8, marginBottom: 12 },
       box: { borderWidth: 1, borderColor: '#e5e7eb', borderRadius: 4, padding: 8, marginBottom: 10 },
@@ -219,6 +236,8 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       : datos.items
     const total = itemsDoc.reduce((a, i) => a + cantOf(i), 0)
     const dir = (direccion || '').trim() || datos.direccion || null
+    const alistamiento = esEtapaAlistamiento(datos.estado)
+    const reposicion = datos.reposicion ?? 0
 
     const doc = h(Document, { title: `${tipo}-${datos.numero}` },
       h(Page, { size: 'LETTER', style: s.page },
@@ -231,11 +250,22 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
               emisor.direccion ? h(Text, { style: s.sub }, emisor.direccion) : null,
             ),
           ),
-          h(View, null,
-            h(Text, { style: s.titulo }, esRemision ? 'REMISIÓN DE DESPACHO' : 'ORDEN DE INSUMO'),
+          h(View, { style: { alignItems: 'flex-end' } },
+            esRemision
+              ? h(Text, { style: s.titulo }, 'REMISIÓN DE DESPACHO')
+              : h(Text, { style: [s.etiqueta, { backgroundColor: alistamiento ? '#6d28d9' : '#1d4ed8' }] },
+                  alistamiento ? 'ORDEN DE ALISTAMIENTO' : 'ORDEN DE INSUMO'),
             h(Text, { style: s.numero }, datos.numero),
           ),
         ),
+        reposicion > 0
+          ? h(View, { style: s.repo },
+              h(Text, { style: s.repoTag }, `REPOSICIÓN ${reposicion}`),
+              h(Text, { style: s.repoTxt },
+                `Productos que no salieron en el despacho de la orden ${datos.origenNumero ?? '—'}` +
+                (reposicion > 1 && datos.origenRaizNumero ? ` · orden original ${datos.origenRaizNumero}` : '') + '.'),
+            )
+          : null,
         // El encabezado del documento lleva SOLO estos tres datos.
         h(View, { style: s.box },
           h(View, { style: s.row }, h(Text, { style: s.lbl }, 'Sede destino'), h(Text, { style: s.val }, datos.sede)),
@@ -309,7 +339,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     try {
       const blob = await construirBlob(tipo)
       cerrarPreview()
-      setPreview({ url: URL.createObjectURL(blob), titulo: tipo === 'REMISION' ? 'Remisión de despacho' : 'Orden de insumo', blob: true })
+      setPreview({ url: URL.createObjectURL(blob), titulo: tipo === 'REMISION' ? 'Remisión de despacho' : nombreOrden, blob: true })
     } catch (e) {
       toast.error('No se pudo previsualizar: ' + (e instanceof Error ? e.message : 'error'))
     } finally {
@@ -328,7 +358,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${esRemision ? 'Remision' : 'Orden'}_${datos.numero}.pdf`
+      a.download = `${esRemision ? 'Remision' : enAlistamiento ? 'Orden_alistamiento' : 'Orden_insumo'}${reposicion > 0 ? `_Reposicion${reposicion}` : ''}_${datos.numero}.pdf`
       a.click()
       URL.revokeObjectURL(url)
 
@@ -401,6 +431,9 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
   }
 
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO'].includes(datos.estado)
+  const enAlistamiento = esEtapaAlistamiento(datos.estado)
+  const nombreOrden = enAlistamiento ? 'Orden de alistamiento' : 'Orden de insumo'
+  const reposicion = datos.reposicion ?? 0
   // Sin fecha de despacho no se emite ningún documento: sale impresa en ambos.
   const ocupado = generando !== null || previsualizando !== null || !fechaDespacho
 
@@ -409,6 +442,11 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       <div className="flex items-center gap-2 mb-1">
         <FileDown className="w-4 h-4 text-brand-green" />
         <h2 className="font-heading font-semibold text-base text-gray-900">Documentos para imprimir</h2>
+        {reposicion > 0 && (
+          <span className="ml-auto rounded-full bg-orange-600 px-2.5 py-0.5 font-body text-xs font-bold text-white">
+            Reposición {reposicion}
+          </span>
+        )}
       </div>
       <p className="font-body text-sm text-gray-500 mb-3">
         La <strong>remisión</strong> se imprime y viaja físicamente con el pedido; la firma quien recibe en la sede.
@@ -479,7 +517,13 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       {/* Orden de insumo: previsualizar / descargar */}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-body text-xs font-semibold text-gray-400 w-28 shrink-0">Orden de insumo</span>
+          <span className="w-28 shrink-0">
+            <span className={`inline-block rounded-md px-2 py-1 font-body text-[11px] font-bold leading-tight text-white ${
+              enAlistamiento ? 'bg-violet-700' : 'bg-blue-700'
+            }`}>
+              {nombreOrden}
+            </span>
+          </span>
           <button onClick={() => previsualizar('ORDEN')} disabled={ocupado}
             className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
             {previsualizando === 'ORDEN' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} Previsualizar

@@ -57,6 +57,18 @@ export interface OrdenRow {
   comentario_autor: string | null
   /** Ítems de productos cuyo disponible real quedó negativo (se pidió más de lo que hay). */
   sin_stock: number
+  /** 0 = orden normal; N = reposición N (lo que no salió en un despacho anterior). */
+  reposicion: number
+}
+
+function EtiquetaReposicion({ n }: { n: number }) {
+  if (n <= 0) return null
+  return (
+    <span title="Orden de reposición: lo que no salió en el despacho de la orden anterior"
+      className="inline-flex items-center rounded-full bg-orange-600 px-2 py-0.5 font-body text-[10px] font-bold text-white whitespace-nowrap">
+      Reposición {n}
+    </span>
+  )
 }
 
 /** Una orden "tiene comentarios" si trae novedad del pedido o comentarios en la trazabilidad. */
@@ -300,7 +312,7 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       const filas = await traerTodoPorIds<any>(ids, (lote, desde, hasta) =>
         sb
           .from('orden_insumo_items')
-          .select('orden_id, cantidad_solicitada, cantidad_alistada, alistado, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion, stock ( cantidad_real, cantidad_disp ) )')
+          .select('orden_id, cantidad_solicitada, cantidad_alistada, cantidad_a_pendiente, alistado, es_adicional, producto:productos ( codigo, nombre_estandar, presentacion, stock ( cantidad_real, cantidad_disp ) )')
           .in('orden_id', lote)
           .order('id', { ascending: true })
           .range(desde, hasta),
@@ -309,13 +321,16 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
       {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         for (const r of filas as any[]) {
+          // Lo que pasó a la reposición se cuenta en esa orden, no en esta.
+          const solicitado = Number(r.cantidad_solicitada ?? 0) - Number(r.cantidad_a_pendiente ?? 0)
+          if (solicitado <= 0 && Number(r.cantidad_alistada ?? 0) <= 0 && Number(r.cantidad_a_pendiente ?? 0) > 0) continue
           items.push({
             orden_id: r.orden_id,
             codigo: r.producto?.codigo ?? null,
             nombre: r.producto?.nombre_estandar ?? '—',
             presentacion: r.producto?.presentacion ?? null,
             es_adicional: !!r.es_adicional,
-            solicitado: Number(r.cantidad_solicitada ?? 0),
+            solicitado: Math.max(0, solicitado),
             cantidad_alistada: Number(r.cantidad_alistada ?? 0),
             chuleado: !!r.alistado,
             real: r.producto?.stock ? Number(r.producto.stock.cantidad_real) : null,
@@ -340,10 +355,13 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
     {
       id: 'numero', header: 'Número', valor: o => o.numero, tarjeta: 'titulo', ancho: 'w-36',
       celda: o => (
-        <Link href={`/ordenes-insumo/${o.id}`} onClick={e => e.stopPropagation()}
-          className="font-heading font-bold text-sm text-gray-900 hover:text-brand-green">
-          {o.numero}
-        </Link>
+        <span className="inline-flex flex-col items-start gap-0.5">
+          <Link href={`/ordenes-insumo/${o.id}`} onClick={e => e.stopPropagation()}
+            className="font-heading font-bold text-sm text-gray-900 hover:text-brand-green">
+            {o.numero}
+          </Link>
+          <EtiquetaReposicion n={o.reposicion} />
+        </span>
       ),
     },
     {
@@ -597,7 +615,9 @@ export function OrdenesInsumoClient({ ordenes, puedeCrear, estadoInicial }: {
               className={`bg-white border rounded-2xl p-4 shadow-sm hover:border-brand-green/40 hover:shadow transition-all group block ${acento}`}>
               <div className="flex items-start justify-between gap-2">
                 <div className="min-w-0">
-                  <p className="font-heading font-bold text-sm text-gray-900">{o.numero}</p>
+                  <p className="font-heading font-bold text-sm text-gray-900 flex items-center gap-1.5 flex-wrap">
+                    {o.numero} <EtiquetaReposicion n={o.reposicion} />
+                  </p>
                   <p className="font-body text-xs text-gray-500 flex items-center gap-1 mt-0.5 min-w-0">
                     <MapPin className="w-3 h-3 text-brand-green shrink-0" />
                     <span className="truncate" title={o.sede}>{o.sede}</span>

@@ -40,9 +40,9 @@ export default async function OrdenesInsumoPage({
       .select(`
         id, numero, estado, periodo, created_at, despachado_at, observacion,
         alistamiento_iniciado_at, alistado_at, tomado_ruta_at, recibido_at,
-        fecha_entrega_pactada, urgente, creado_por,
+        fecha_entrega_pactada, urgente, creado_por, orden_origen_id,
         sede:sedes ( nombre ),
-        items:orden_insumo_items ( id, alistado, producto:productos ( stock ( cantidad_disp ) ) ),
+        items:orden_insumo_items ( id, alistado, cantidad_solicitada, cantidad_alistada, cantidad_a_pendiente, producto:productos ( stock ( cantidad_disp ) ) ),
         responsables:orden_insumo_responsables ( usuario_id )
       `)
       .order('created_at', { ascending: false })
@@ -114,6 +114,28 @@ export default async function OrdenesInsumoPage({
     })
   }
 
+  // ── Reposiciones ───────────────────────────────────────────────────────────
+  // Nivel en la cadena de pendientes (1 = de la orden original, 2 = de una
+  // pendiente…). Se leen todas las reposiciones (no solo las del filtro) para
+  // que el número salga bien aunque la orden de origen quede fuera de la vista.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const reposRows = await traerTodo<any>((desde, hasta) => supabase
+    .from('ordenes_insumo').select('id, orden_origen_id')
+    .not('orden_origen_id', 'is', null).order('id').range(desde, hasta))
+  const origenDe = new Map<string, string>(reposRows.map((r) => [r.id as string, r.orden_origen_id as string]))
+  const nivelReposicion = (id: string) => {
+    let n = 0
+    let actual: string | undefined = id
+    while (actual && origenDe.has(actual) && n < 20) { n++; actual = origenDe.get(actual) }
+    return n
+  }
+
+  // Lo que pasó a una reposición ya no cuenta como ítem de la orden de origen.
+  type ItemLista = { alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number; cantidad_a_pendiente: number | null; producto?: { stock?: { cantidad_disp: number } | null } | null }
+  const itemsPropios = (items: ItemLista[] | null | undefined) => (items ?? []).filter((i) =>
+    !(Number(i.cantidad_a_pendiente ?? 0) > 0 && Number(i.cantidad_alistada ?? 0) <= 0
+      && Number(i.cantidad_solicitada ?? 0) <= Number(i.cantidad_a_pendiente ?? 0)))
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const ordenes: OrdenRow[] = (data as any[]).map((o) => ({
     id: o.id,
@@ -125,11 +147,11 @@ export default async function OrdenesInsumoPage({
     alistado_at: o.alistado_at ?? null,
     tomado_ruta_at: o.tomado_ruta_at ?? null,
     recibido_at: o.recibido_at ?? null,
-    total_items: o.items?.length ?? 0,
-    alistados: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
+    total_items: itemsPropios(o.items).length,
+    alistados: itemsPropios(o.items).filter((i) => i.alistado).length,
     // Ítems cuyo producto quedó con disponible real negativo (sobre-pedido).
-    sin_stock: (o.items ?? []).filter((i: { producto?: { stock?: { cantidad_disp: number } | null } | null }) =>
-      Number(i.producto?.stock?.cantidad_disp ?? 0) < 0).length,
+    sin_stock: itemsPropios(o.items).filter((i) => Number(i.producto?.stock?.cantidad_disp ?? 0) < 0).length,
+    reposicion: o.orden_origen_id ? nivelReposicion(o.id) : 0,
     responsables: o.responsables?.length ?? 0,
     fecha_entrega_pactada: o.fecha_entrega_pactada ?? null,
     urgente: !!o.urgente,
