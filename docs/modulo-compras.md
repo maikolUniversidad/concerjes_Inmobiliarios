@@ -1,6 +1,6 @@
 # Módulo de Compras — bases
 
-Estado: **propuesta** (2026-09-27, decisiones medidas contra datos reales el 2026-10-18). Nada de esto está migrado todavía: las cuatro decisiones de la sección 7 esperan respuesta del usuario.
+Estado: **decisiones cerradas el 2026-10-18** sobre la propuesta del 2026-09-27. Las cuatro decisiones de la sección 7 están aceptadas y el plan de la fase 1 está en la sección 9. **Nada está migrado ni construido todavía**; quedan tres preguntas de detalle y un paso previo (ver 9.0).
 
 ## 1. Qué existe hoy
 
@@ -110,7 +110,7 @@ Nota aparte: la pantalla de `/aprovisionamiento` todavía muestra el período «
 
 ## 7. Decisiones
 
-Cada una lleva la recomendación y en qué se apoya. **La decisión es del usuario**: lo marcado con ⏳ sigue esperando respuesta y nada se construye hasta entonces.
+Las cuatro quedaron **aceptadas el 2026-10-18**. Cada una conserva la recomendación y en qué se apoya; lo marcado con ⏳ son las preguntas de detalle que siguen esperando respuesta, recogidas en la sección 9.0.
 
 ### 7.1 ¿Toda compra pasa por solicitud, o compras puede crear la orden directo?
 
@@ -129,7 +129,7 @@ Lo reversible: todo. El campo de solicitud nace opcional y se endurece cuando se
 
 **Excepción que sí conviene dejar automática:** las órdenes pendientes por falta de stock (29 solo en octubre) deberían generar su solicitud de compra solas. Ahí el sistema ya sabe qué producto, cuánto, para qué sede y quién lo pidió — no hay nada que escribir, así que no hay fricción. Es la única puerta donde la solicitud sale gratis.
 
-⏳ **Pendiente de responder:** ¿se acepta que en la fase 1 la orden siga naciendo directo y que lo obligatorio sea la orden antes de la entrada?
+✅ **Aceptada el 2026-10-18.** En la fase 1 la orden sigue naciendo directo, y lo obligatorio pasa a ser la orden antes de la entrada. La solicitud nace opcional, y automática solo para las órdenes pendientes por falta de stock.
 
 ### 7.2 Topes de aprobación por monto: ¿cuáles y quién aprueba?
 
@@ -149,7 +149,9 @@ La regla de «quien crea no aprueba» vale cerrarla ya, aparte del monto: la ún
 
 Qué cuesta equivocarse: poco. Los topes viven en una tabla de parámetros y se editan desde la pantalla, sin migración. Lo único difícil de deshacer es haber acostumbrado a la gente a un control que no se ejercía.
 
-⏳ **Pendiente de responder:** (a) ¿se acepta el corte en 5 millones? (b) ¿quién queda con el rol Gerencia, y debería poder aprobar también los montos bajos cuando compras esté incompleta?
+✅ **Aceptada el 2026-10-18** en cuanto al corte: dos niveles, con el límite en 5 millones.
+
+⏳ **Pendiente de responder:** quién queda con el rol Gerencia (hoy está vacío), y si debería poder aprobar también los montos bajos como respaldo cuando compras esté incompleta. Hasta que ese rol tenga un usuario, los topes quedan construidos pero apagados.
 
 ### 7.3 ¿Varias bodegas de destino o todo entra a la central?
 
@@ -164,9 +166,9 @@ Qué pasa con cada opción:
 - **Multi-bodega ahora**: semanas de trabajo en pantallas de traslado entre bodegas, stock por bodega y reservas por bodega, para una sola bodega real. Además complica las reservas de stock, que hoy funcionan sobre un stock único.
 - **Solo Central, con el campo puesto (recomendada)**: una columna con la Central por defecto. Si mañana se abre una segunda bodega, se llena el campo en las órdenes nuevas y las viejas ya tienen su valor correcto. Si no se deja el campo, abrir la segunda bodega obliga a corregir a mano todo el historial de compras — y ese es el momento en que más duele.
 
-Qué cuesta equivocarse: dejar el campo cuesta una columna. No dejarlo cuesta una migración sobre datos históricos de compras.
+✅ **Aceptada el 2026-10-18.** Todo entra a la Central; no se construye multi-bodega, pero el campo de bodega de destino queda puesto con la Central por defecto y la recepción pide la ubicación.
 
-⏳ **Pendiente de responder:** en las observaciones de las entradas aparecen «ingresa desde producción», «de la bodega de maquinaria» y «de lo que se reembasó». ¿Esos son sitios físicos distintos de la Central? Si lo son, conviene registrarlos como bodegas aunque las compras sigan entrando a la Central — no para repartir stock, sino para que lo que viene de producción o de reembasado no se confunda con una compra a proveedor. Hoy ambas cosas son la misma «entrada» y eso distorsiona cualquier medición de gasto.
+⏳ **Pendiente de responder:** en las observaciones de las entradas aparecen «ingresa desde producción», «de la bodega de maquinaria» y «de lo que se reembasó». ¿Esos son sitios físicos distintos de la Central? Si lo son, conviene registrarlos como bodegas aunque las compras sigan entrando a la Central — no para repartir stock, sino para que lo que viene de producción o de reembasado no se confunda con una compra a proveedor. Hoy ambas cosas son la misma «entrada», eso distorsiona cualquier medición de gasto, y es justo la distinción que la fase 1 necesita para poder exigir la orden de compra.
 
 ### 7.4 ¿Las facturas se registran aquí o viven en el sistema contable?
 
@@ -179,14 +181,121 @@ Qué pasa con cada opción:
 - **Cuentas por pagar completas aquí**: es la pieza más cara de toda la propuesta y la que más rápido se desincroniza. Y no se deshace barato, porque en cuanto la gente empieza a consultar el saldo de proveedores en esta pantalla, quitarla es quitarle una herramienta.
 - **Solo el cruce (recomendada)**: con 9 a 11 proveedores activos y 53 compras al mes es un registro liviano, y resuelve el caso que de verdad cuesta dinero: «me facturaron 100 y recibí 95». Eso solo requiere el valor facturado contra las recepciones.
 
-Qué cuesta equivocarse: empezar liviano y crecer después es fácil, se agregan columnas. Empezar completo y tener que decirle a contabilidad «ignore lo que dice el sistema» es un problema de confianza que no se arregla con código.
+✅ **Aceptada el 2026-10-18.** La factura vive en el contable; aquí solo número, fecha, valor y el PDF, para el cruce. No se construyen cuentas por pagar.
+
+⏳ **Pendiente de responder:** ¿cuál es el sistema contable y permite consultar o exportar las facturas de proveedor? Si lo permite, lo mejor es traer el número de factura de allá en vez de escribirlo dos veces. Si no, se digita a mano aquí y es un dato más por compra. Esto es de la fase 4, no bloquea la fase 1.
 
 Nota: para que el cruce sirva hay que registrar las recepciones por entrega (fase 1). Hoy la recepción pisa un acumulado, así que no hay con qué comparar la factura.
-
-⏳ **Pendiente de responder:** ¿cuál es el sistema contable y permite consultar o exportar las facturas de proveedor? Si lo permite, lo mejor es traer el número de factura de allá en vez de escribirlo dos veces. Si no, se digita a mano aquí y es un dato más por compra.
 
 ## 8. Lo que estas decisiones cambian del plan
 
 Si se aceptan las recomendaciones, el orden de las fases de la sección 5 se mantiene, pero con un énfasis distinto: **la fase 1 deja de ser solo «arreglar la recepción» y pasa a ser «hacer que toda entrada tenga orden de compra detrás»**, que es lo que la medición muestra como el hueco real. Las tablas de solicitud, cotización y factura de la sección 3 siguen siendo las mismas; lo que cambia es que `solicitud_id` nace opcional, `bodega_destino_id` nace con la Central por defecto, y la tabla de facturas de proveedor se reduce a los datos del cruce.
 
 El plan detallado de la fase 1 se escribe cuando las cuatro decisiones estén respondidas.
+
+## 9. Plan de la fase 1 (decisiones aceptadas el 2026-10-18)
+
+Las cuatro recomendaciones de la sección 7 quedaron aceptadas. Con eso, la fase 1 ya no es «arreglar la recepción»: es **cerrar la puerta de atrás**, que es donde están los 350–400 millones al mes que hoy entran sin orden de compra.
+
+Nada de esto está construido todavía. Este es el plan, en el orden en que conviene hacerlo.
+
+### 9.0 Lo que hay que resolver antes de empezar
+
+Dos cosas no son de código y bloquean parte de la fase:
+
+1. **Asignarle el rol Gerencia a alguien.** Hoy está creado y vacío. Los topes de aprobación se construyen igual, pero se dejan apagados hasta que exista ese usuario; si se activan antes, toda compra de más de 5 millones queda trabada.
+2. **Decir si «producción», «reembasado» y «bodega de maquinaria» son sitios distintos de la Central.** No para repartir stock —eso ya quedó decidido: todo entra a la Central— sino porque la fase 1 necesita distinguir *una compra a proveedor* de *algo que vino de producción*. Si no se distinguen, no se puede exigir orden de compra sin bloquear las entradas internas. Hay una salida razonable sin respuesta (ver 9.2), pero con respuesta queda mejor.
+
+Y una de coordinación: hay otra sesión trabajando en la base en paralelo, así que la migración se aplica cuando esa termine, no antes.
+
+### 9.1 Recepciones por entrega
+
+**El problema hoy.** `registrarRecepcionOC` escribe `oc_items.cantidad_rec` como un acumulado: si llegan 50 y después 30, el campo queda en 80 y no queda rastro de que fueron dos entregas en dos fechas. Sin eso no se puede medir si el proveedor cumple el plazo, ni cruzar una factura contra lo que llegó.
+
+**Qué se construye.**
+
+- `oc_recepciones`: una fila por entrega. Consecutivo dentro de la orden, fecha, número de remisión del proveedor, bodega (Central por defecto), ubicación, quién recibió, observación.
+- `oc_recepcion_items`: qué llegó en esa entrega. Ítem de la orden, cantidad recibida, cantidad rechazada y motivo del rechazo.
+- `oc_items.cantidad_rec` **se queda** (la usan la pantalla y los reportes) pero deja de escribirse a mano: pasa a mantenerla un trigger que suma las entregas. Así no puede volver a desincronizarse del stock.
+- Backfill: la única orden del sistema tiene cantidades recibidas. Se le crea una entrega histórica con esos valores para no perder el dato.
+
+**Por qué importa el rechazo.** Es el campo que hoy no existe y que explica la mitad de los descuadres: si llegan 100 y 5 vienen malos, hoy la única opción es registrar 100 (y el stock queda inflado) o registrar 95 (y la orden queda eternamente parcial).
+
+### 9.2 Que la entrada quede amarrada a la orden
+
+**El problema hoy.** 768 entradas, ninguna con orden. Son dos huecos distintos:
+
+- La recepción desde la orden llama a `registrar_movimiento` **sin pasar la orden**. Mirando la función en la base, resulta que `registrar_movimiento(p_producto, p_tipo, p_cantidad, p_sede, p_observacion, p_ubicacion)` **no tiene parámetro para la orden de compra**. Por eso `movimientos.oc_id` nunca se llenó: no es que se olvidara, es que no había por dónde.
+- La mayoría de las entradas no pasa por la orden en absoluto: se registran en `/movimientos/nuevo`, la pantalla de carga por lotes de bodega.
+
+**Qué se construye.**
+
+1. **Un RPC nuevo, `oc_registrar_recepcion`**, que hace todo en una sola transacción: crea la entrega, sus ítems, los movimientos de entrada **con `oc_id` y con ubicación**, actualiza el stock, recalcula lo recibido y mueve el estado de la orden a PARCIAL o COMPLETA. Hoy eso son varias idas y vueltas desde el servidor que pueden quedar a medias (el código ya tiene un comentario reconociéndolo). Con un RPC, o pasa todo o no pasa nada.
+
+   No se le agrega un parámetro a `registrar_movimiento`: cambiarle la firma crearía una función sobrecargada y la llamada por nombre quedaría ambigua. Mejor una función propia para este caso, que además puede validar que la orden esté aprobada.
+
+2. **Un campo de origen en las entradas.** Esta es la pieza que permite exigir la orden sin romper nada: `movimientos.origen` con los valores `COMPRA`, `PRODUCCION`, `REEMBASADO`, `TRASLADO_INTERNO`, `AJUSTE` y `OTRO`. La regla es una sola: **si el origen es COMPRA, tiene que haber orden de compra**. Lo demás entra como hoy.
+
+   - Las 768 entradas históricas se marcan `OTRO`, no `COMPRA`. Importante: así ninguna queda contada como compra sin orden, que sería mentir en la otra dirección.
+   - La regla se aplica con una restricción **no validada hacia atrás**, para que el histórico quede quieto y solo lo nuevo tenga que cumplir.
+
+3. **En `/movimientos/nuevo`**, las filas de tipo Entrada piden el origen, y si es COMPRA aparece un selector de orden de compra (aprobada, enviada o parcial). La pantalla ya tiene un selector de órdenes de insumo con ese mismo patrón, así que es el mismo molde.
+
+**Cómo se enciende, que es lo delicado.** Primero avisa, después exige:
+
+- Semana 1: el campo existe, la pantalla lo pide, pero si una entrada de compra viene sin orden solo muestra una advertencia y deja guardar.
+- Cuando se vea que bodega lo está llenando (se mide con una consulta: qué porcentaje de las entradas nuevas trae orden), se pasa a bloquear.
+
+Hacerlo al revés —bloquear desde el día uno— es el camino más corto a que bodega deje de registrar las entradas en el sistema, y entonces el problema pasa de «no sé contra qué orden entró» a «no sé que entró». Eso sería peor que hoy.
+
+### 9.3 Separar quién crea, quién aprueba y quién recibe
+
+**El problema hoy.** Un solo permiso, `crear_ordenes_compra`, autoriza crear, editar, aprobar, marcar como comprada, recibir y anular. Y `Bodeguero` —los 4 usuarios que de verdad reciben la mercancía— tiene `ver_ordenes_compra` en **false**: ingresa mercancía sin poder ver contra qué orden la está ingresando.
+
+**Qué se construye.**
+
+- Dos permisos nuevos en el catálogo (`apps/inventario/lib/permisos.ts`) y en `/roles`: `aprobar_ordenes_compra` y `recibir_ordenes_compra`. `crear_ordenes_compra` se queda con crear, editar, enviar y anular, y su etiqueta deja de decir «Crear / aprobar OC».
+- Reparto sugerido: Coordinador de Compras → crear y aprobar; Gerencia → aprobar; Bodeguero → recibir, **más `ver_ordenes_compra` en true**, que es el arreglo que más se va a notar en el día a día.
+- Las políticas de RLS se parten en consecuencia: hoy `ordenes_compra` y `oc_items` tienen una sola política para todo (`ALL`) contra `crear_ordenes_compra`. Pasan a distinguir el cambio de estado (aprobar) de la edición, y las tablas de entrega nuevas quedan contra `recibir_ordenes_compra`.
+
+**La regla «quien crea no aprueba» va en la base, no en la pantalla.** El guardián de permisos de la app (`lib/permisos-server.ts`) le da paso libre a los roles Super Administrador y Administrador, así que una regla escrita solo en el server action no los cubriría — y los 2 Super Admin son justo quienes más probable es que hagan las dos cosas. Un trigger en `ordenes_compra` que rechace pasar a APROBADA cuando quien aprueba es quien creó la orden aplica para todo el mundo, sin excepción. Hoy la única orden del sistema la creó y aprobó la misma persona, así que esto no es hipotético.
+
+### 9.4 Topes de aprobación
+
+- `compras_niveles_aprobacion` con el corte acordado: hasta 5.000.000 basta `aprobar_ordenes_compra`; por encima se exige el permiso de Gerencia.
+- La verificación va en el mismo trigger de aprobación, contra `valor_total`.
+- **Queda apagado hasta que el rol Gerencia tenga un usuario** (ver 9.0). Mientras no lo tenga, el nivel alto apunta al mismo permiso que el bajo: así la tabla y la pantalla ya existen, los montos ya se pueden editar, y encender el control real es cambiar una fila.
+- Los topes se editan desde la pantalla de parametrización, no con migraciones, porque van a cambiar con la inflación y con el tamaño de la operación.
+
+### 9.5 Pantallas
+
+- **`/ordenes-compra/[id]`**: la casilla de recepción pasa a ser «Registrar entrega» (fecha, remisión, ubicación, y por ítem lo recibido y lo rechazado con motivo), más el historial de entregas anteriores con quién recibió cada una. Los botones de aprobar y recibir se habilitan por los permisos nuevos.
+- **`/movimientos/nuevo`**: columna de origen en las filas de entrada y selector de orden cuando el origen es compra.
+- **`/aprovisionamiento`**: quitar el `const periodo = 'JUNIO 2026'` y el filtro fijo a `2026-06-01`. La pantalla lleva cuatro meses mostrando junio mientras la vista en vivo que tiene al lado está al día. Es de una línea y es la corrección con mejor relación esfuerzo/beneficio de toda la fase.
+
+### 9.6 Qué queda fuera de la fase 1, a propósito
+
+Solicitudes de compra, cotizaciones, facturas de proveedor, histórico de precios y presupuesto por contrato. Todo eso sigue en las fases 2 a 5 y no se toca aquí. La fase 1 no agrega ni un paso nuevo al trabajo de compras: solo hace que lo que ya hacen quede registrado.
+
+### 9.7 Cómo se sabe que la fase 1 sirvió
+
+Tres números medibles contra lo de hoy:
+
+| Indicador | Hoy | Meta |
+|---|---|---|
+| Entradas de compra con orden asociada | 0 de 768 | más del 80% de las entradas nuevas |
+| Órdenes aprobadas por quien no las creó | 0 de 1 | todas |
+| Entregas registradas con fecha y remisión propias | no existe el dato | todas las recepciones nuevas |
+
+Vale dejar la consulta que mide la primera fila guardada en `scripts/`, para poder revisarla cada semana sin volver a armarla.
+
+### 9.8 Orden de trabajo
+
+1. Migración: tablas de entrega, trigger de `cantidad_rec`, campo de origen con el backfill a `OTRO`, permisos nuevos, trigger de «quien crea no aprueba», tabla de topes. Una sola migración, idempotente, aplicada con la rutina de siempre cuando la otra sesión libere la base.
+2. RPC `oc_registrar_recepcion` y ajuste de las políticas de RLS.
+3. Server actions de `/ordenes-compra` partidos por permiso.
+4. Pantalla de entrega y pantalla de movimientos.
+5. El arreglo del período de `/aprovisionamiento`.
+6. Verificación: los dos scripts de permisos que ya existen, más una revisión de las pantallas con sesión en el banco de pruebas.
+
+La migración y el RPC son el bloque que hay que hacer bien; las pantallas son mecánicas. Los pasos 3 a 5 se pueden repartir, el 1 y el 2 no.
