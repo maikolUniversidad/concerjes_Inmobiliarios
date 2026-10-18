@@ -6,6 +6,8 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { MantenimientoMensaje } from '@/lib/types/database'
 import { firmarRutas, subirArchivoMant, tamanoLegible, MAX_ADJUNTO_BYTES } from '@/lib/mantenimiento'
+import { useAdjuntosPegables } from '@/lib/adjuntos-chat'
+import { ArchivosPendientes, VeloSoltar } from '@/components/ui/ArchivosPendientes'
 
 const hora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
 
@@ -67,7 +69,7 @@ export function ChatTicket({ ticketId, maquinariaId, usuarioId, inicial, cerrado
     if (el) el.scrollTop = el.scrollHeight
   }, [mensajes.length, urls])
 
-  function elegir(lista: FileList | null) {
+  function elegir(lista: File[] | FileList | null) {
     if (!lista) return
     const ok = Array.from(lista).filter((f) => {
       if (f.size > MAX_ADJUNTO_BYTES) { toast.error(`"${f.name}" supera 25 MB.`); return false }
@@ -75,6 +77,7 @@ export function ChatTicket({ ticketId, maquinariaId, usuarioId, inicial, cerrado
     })
     setArchivos((prev) => [...prev, ...ok].slice(0, 5))
   }
+  const { arrastrando, zona } = useAdjuntosPegables(elegir, cerrado)
 
   async function enviar() {
     const t = texto.trim()
@@ -105,7 +108,8 @@ export function ChatTicket({ ticketId, maquinariaId, usuarioId, inicial, cerrado
   }
 
   return (
-    <div className="flex flex-col rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden h-[70vh] lg:h-[calc(100vh-9rem)] lg:sticky lg:top-4">
+    <div {...zona} className="relative flex flex-col rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden h-[70vh] lg:h-[calc(100vh-9rem)] lg:sticky lg:top-4">
+      <VeloSoltar visible={arrastrando} />
       <div className="px-4 py-3 border-b border-gray-100 flex items-center gap-2 shrink-0">
         <MessageSquare className="w-4 h-4 text-brand-green" />
         <h2 className="font-heading font-semibold text-sm text-gray-900">Chat de soporte</h2>
@@ -168,22 +172,13 @@ export function ChatTicket({ ticketId, maquinariaId, usuarioId, inicial, cerrado
         <p className="px-4 py-3 text-center text-xs text-gray-400 border-t border-gray-100">El ticket está cerrado: el chat queda como registro.</p>
       ) : (
         <div className="border-t border-gray-100 p-2 shrink-0">
-          {archivos.length > 0 && (
-            <div className="mb-2 flex flex-wrap gap-1.5">
-              {archivos.map((f, i) => (
-                <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
-                  <Paperclip className="w-3 h-3" /> <span className="max-w-[140px] truncate">{f.name}</span>
-                  <button onClick={() => setArchivos((a) => a.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500" aria-label="Quitar">×</button>
-                </span>
-              ))}
-            </div>
-          )}
+          <ArchivosPendientes archivos={archivos} onQuitar={(i) => setArchivos((a) => a.filter((_, j) => j !== i))} />
           <div className="flex items-end gap-1.5">
             <button onClick={() => camRef.current?.click()} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100" title="Tomar foto" aria-label="Tomar foto"><Camera className="w-5 h-5" /></button>
             <button onClick={() => fileRef.current?.click()} className="p-2 rounded-lg text-gray-500 hover:bg-gray-100" title="Adjuntar archivo" aria-label="Adjuntar archivo"><Paperclip className="w-5 h-5" /></button>
             <textarea value={texto} onChange={(e) => setTexto(e.target.value)} rows={1}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar() } }}
-              placeholder="Escribe un mensaje…"
+              placeholder="Escribe un mensaje… (Ctrl+V pega capturas)"
               className="flex-1 max-h-32 resize-none rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-green" />
             <button onClick={enviar} disabled={enviando || (!texto.trim() && archivos.length === 0)}
               className="p-2.5 rounded-xl bg-brand-green text-white hover:bg-brand-green-dark disabled:opacity-40" aria-label="Enviar">

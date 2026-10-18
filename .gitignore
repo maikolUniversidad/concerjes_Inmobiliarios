@@ -60,3 +60,6 @@ fotos-originales/
 
 # Archivos originales de las plantillas de contratación (contienen datos de ejemplo): viven en el bucket privado plantillas-documentos
 supabase/plantillas-documento/originales/
+
+# Manifiesto de las muestras de mantenimiento (ids creados y valores originales de cada maquina): solo local, es lo que permite deshacerlas
+scripts/.muestras-mantenimiento.json

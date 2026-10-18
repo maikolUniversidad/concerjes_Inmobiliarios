@@ -12,6 +12,8 @@ import {
 } from '@/lib/soporte'
 import { construirPrompt } from '@/lib/soporte/prompt'
 import { ChatSoporte } from './ChatSoporte'
+import { useAdjuntosPegables } from '@/lib/adjuntos-chat'
+import { ArchivosPendientes, VeloSoltar } from '@/components/ui/ArchivosPendientes'
 
 type Pestana = 'errores' | 'consola' | 'red' | 'acciones' | 'entorno'
 
@@ -78,7 +80,6 @@ export function TicketSoporteClient({ ticket: inicial, mensajes: mensajesInicial
 
   const c = ticket.contexto ?? {}
   const fallidas = (c.red ?? []).filter((r) => r.estado === null || r.estado >= 400)
-  const cerrado = ticket.estado === 'CERRADO' || ticket.estado === 'CANCELADO'
   const capturaUrl = ticket.captura_path ? urls[ticket.captura_path] : null
 
   const pestanas: { k: Pestana; label: string; icon: typeof Terminal; n?: number; alerta?: boolean }[] = [
@@ -181,7 +182,8 @@ export function TicketSoporteClient({ ticket: inicial, mensajes: mensajesInicial
         </div>
       </div>
 
-      <ChatSoporte sb={sb} ticketId={ticket.id} usuarioId={usuarioId} mensajes={mensajes} urls={urls} cerrado={cerrado} onNuevo={agregar} />
+      <ChatSoporte sb={sb} ticket={ticket} usuarioId={usuarioId} agente={agente} mensajes={mensajes} urls={urls} onNuevo={agregar}
+        onEstado={(t) => { setTicket((prev) => ({ ...prev, ...t })); router.refresh() }} />
     </div>
   )
 }
@@ -239,10 +241,11 @@ function CambioEstado({ ticket, sb, agente, esAutor, agentes, onHecho }: {
   const [enviando, setEnviando] = useState(false)
   const [paso, setPaso] = useState('')
 
-  if (acciones.length === 0 && !agente) return null
   const accion = acciones.find((a) => a.estado === destino)
+  const { arrastrando, zona } = useAdjuntosPegables((f) => elegir(f))
+  if (acciones.length === 0 && !agente) return null
 
-  function elegir(lista: FileList | null) {
+  function elegir(lista: File[] | FileList | null) {
     if (!lista) return
     const ok = Array.from(lista).filter((f) => {
       if (f.size > MAX_ADJUNTO_SOPORTE) { toast.error(`"${f.name}" supera 50 MB.`); return false }
@@ -277,7 +280,8 @@ function CambioEstado({ ticket, sb, agente, esAutor, agentes, onHecho }: {
   }
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-3">
+    <div {...zona} className="relative rounded-2xl border border-gray-100 bg-white p-4 shadow-sm space-y-3">
+      <VeloSoltar visible={arrastrando && !!(destino || asignado || prioridad)} texto="Suelta para adjuntar como evidencia" />
       <h2 className="font-heading text-sm font-semibold text-gray-900">{agente ? 'Atender ticket' : 'Acciones'}</h2>
       <div className="flex flex-wrap gap-1.5">
         {acciones.map((a) => (
@@ -304,6 +308,7 @@ function CambioEstado({ ticket, sb, agente, esAutor, agentes, onHecho }: {
           <textarea value={comentario} onChange={(e) => setComentario(e.target.value)} rows={3}
             placeholder={!accion?.comentario ? 'Comentario (opcional)…' : agente ? 'Comentario obligatorio: qué se hizo / qué cambió / por qué…' : destino === 'ABIERTO' ? 'Cuéntanos qué sigue fallando…' : 'Escribe un comentario (obligatorio)…'}
             className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-green" />
+          {(accion?.evidencia ?? true) && <ArchivosPendientes archivos={archivos} onQuitar={(i) => setArchivos((a) => a.filter((_, j) => j !== i))} />}
           {(accion?.evidencia ?? true) && (
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="text-xs text-gray-500">Evidencia:</span>
@@ -315,12 +320,7 @@ function CambioEstado({ ticket, sb, agente, esAutor, agentes, onHecho }: {
                 <Paperclip className="w-4 h-4" /> Archivos
                 <input type="file" multiple accept="image/*,video/*,application/pdf,.txt,.log,.json,.csv,.xlsx" className="hidden" onChange={(e) => { elegir(e.target.files); e.target.value = '' }} />
               </label>
-              {archivos.map((f, i) => (
-                <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
-                  <span className="max-w-[140px] truncate">{f.name}</span>
-                  <button onClick={() => setArchivos((a) => a.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500" aria-label="Quitar">×</button>
-                </span>
-              ))}
+              <span className="text-[11px] text-gray-400">o pega una captura con Ctrl+V</span>
             </div>
           )}
           <div className="flex items-center gap-2">

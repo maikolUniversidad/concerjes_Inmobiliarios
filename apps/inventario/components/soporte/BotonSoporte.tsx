@@ -14,6 +14,8 @@ import {
   subirArchivoSoporte, copiarTexto, type TipoSoporte, type AdjuntoSubido,
 } from '@/lib/soporte'
 import { construirPrompt } from '@/lib/soporte/prompt'
+import { useAdjuntosPegables } from '@/lib/adjuntos-chat'
+import { ArchivosPendientes, VeloSoltar } from '@/components/ui/ArchivosPendientes'
 
 // La grabadora se instala al cargar el módulo (antes del primer render) para
 // no perder los logs del arranque.
@@ -87,7 +89,7 @@ export function BotonSoporte() {
     setCapturaUrl((prev) => { if (prev) URL.revokeObjectURL(prev); return null })
   }
 
-  function elegir(lista: FileList | null) {
+  function elegir(lista: File[] | FileList | null) {
     if (!lista) return
     const ok = Array.from(lista).filter((f) => {
       if (f.size > MAX_ADJUNTO_SOPORTE) { toast.error(`"${f.name}" supera 50 MB.`); return false }
@@ -95,6 +97,7 @@ export function BotonSoporte() {
     })
     setArchivos((prev) => [...prev, ...ok].slice(0, 6))
   }
+  const { arrastrando, zona } = useAdjuntosPegables(elegir, !abierta)
 
   async function copiarPrompt() {
     if (!contexto) return
@@ -190,6 +193,8 @@ export function BotonSoporte() {
           </div>
         }
       >
+        <div {...zona} className="relative space-y-4">
+        <VeloSoltar visible={arrastrando} />
         {/* Tipo */}
         <div className="grid grid-cols-3 gap-2">
           {(Object.keys(TIPO_SOPORTE_META) as TipoSoporte[]).map((t) => (
@@ -253,13 +258,9 @@ export function BotonSoporte() {
               <Paperclip className="w-4 h-4" /> Archivos
               <input type="file" multiple className="hidden" onChange={(e) => { elegir(e.target.files); e.target.value = '' }} />
             </label>
-            {archivos.map((f, i) => (
-              <span key={`${f.name}-${i}`} className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] text-gray-600">
-                <span className="max-w-[140px] truncate">{f.name}</span>
-                <button onClick={() => setArchivos((a) => a.filter((_, j) => j !== i))} className="text-gray-400 hover:text-red-500" aria-label="Quitar">×</button>
-              </span>
-            ))}
+            <span className="text-[11px] text-gray-400">o pega capturas con Ctrl+V / arrastra archivos aquí</span>
           </div>
+          <div className="mt-2"><ArchivosPendientes archivos={archivos} onQuitar={(i) => setArchivos((a) => a.filter((_, j) => j !== i))} /></div>
         </div>
 
         {/* Lo que se adjunta automáticamente */}
@@ -275,6 +276,7 @@ export function BotonSoporte() {
             <p className="mt-2 text-[11px] text-gray-400">No se envían contraseñas, tokens ni lo que escribiste en los formularios.</p>
           </details>
         )}
+        </div>
       </Hoja>
     </>
   )

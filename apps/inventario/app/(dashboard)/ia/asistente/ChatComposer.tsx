@@ -5,6 +5,7 @@ import { Send, Mic, Square, Loader2, StopCircle, Paperclip, X, FileText, ImageIc
 import { toast } from 'sonner'
 import type { Attachment } from '@/lib/ia/types'
 import { ACCEPT_FILES } from '@/lib/ia/parseFiles'
+import { archivosDelPortapapeles } from '@/lib/adjuntos-chat'
 
 interface Props {
   value: string
@@ -110,6 +111,13 @@ export function ChatComposer({
       onDragOver={(e) => { e.preventDefault(); setDragOver(true) }}
       onDragLeave={() => setDragOver(false)}
       onDrop={(e) => { e.preventDefault(); setDragOver(false); pickFiles(e.dataTransfer.files) }}
+      onPaste={(e) => {
+        // Capturas o archivos copiados → adjuntos; el texto se pega normal.
+        const files = archivosDelPortapapeles(e.clipboardData)
+        if (files.length === 0 || streaming || disabled) return
+        e.preventDefault()
+        onAddFiles(files)
+      }}
     >
       {/* Chips de adjuntos */}
       {(attachments.length > 0 || parsing) && (
@@ -191,7 +199,7 @@ export function ChatComposer({
             placeholder={
               recording ? 'Grabando… toca el cuadrado para terminar'
               : transcribing ? 'Transcribiendo audio…'
-              : 'Escribe, adjunta archivos 📎 o usa el micrófono 🎙️…'
+              : 'Escribe, pega capturas (Ctrl+V), adjunta archivos 📎 o usa el micrófono 🎙️…'
             }
             disabled={disabled}
             className="block w-full resize-none bg-transparent text-sm text-gray-800 outline-none placeholder:text-gray-400 leading-relaxed"
@@ -221,7 +229,7 @@ export function ChatComposer({
         )}
       </div>
       <p className="mx-auto mt-2 max-w-3xl text-center text-[11px] text-gray-400">
-        Adjunta imágenes (las analiza), CSV/Excel o texto. Enter envía · Shift+Enter salto de línea.
+        Adjunta o pega (Ctrl+V) imágenes (las analiza), CSV/Excel o texto. Enter envía · Shift+Enter salto de línea.
       </p>
     </div>
   )

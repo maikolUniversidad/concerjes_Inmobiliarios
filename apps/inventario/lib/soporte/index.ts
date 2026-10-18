@@ -168,3 +168,65 @@ export async function copiarTexto(texto: string): Promise<boolean> {
     return ok
   }
 }
+
+/** 3 h 20 min · 2 d 4 h · 45 s */
+export function duracionLegible(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return '—'
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s} s`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m} min`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h} h${m % 60 ? ` ${m % 60} min` : ''}`
+  const d = Math.floor(h / 24)
+  return `${d} d${h % 24 ? ` ${h % 24} h` : ''}`
+}
+
+export interface FaseSoporte {
+  estado: EstadoSoporte
+  desde: string
+  hasta: string | null
+  /** Quién hizo el cambio que abrió esta fase. */
+  por: string | null
+  /** Mensaje de SISTEMA que abrió la fase (null si es la fase inicial sin mensaje). */
+  mensajeId: string | null
+  comentario: string | null
+}
+
+/**
+ * Recorre el chat y arma las fases por estado (de qué a qué, quién, cuánto duró)
+ * y el estado vigente cuando se escribió cada mensaje. Sirve para las etiquetas
+ * del chat y para el prompt.
+ */
+export function fasesSoporte(mensajes: SoporteMensaje[], creado: string): {
+  fases: FaseSoporte[]
+  estadoDe: Record<string, EstadoSoporte>
+  /** Mensaje de SISTEMA de la última resolución que sigue vigente (no se reabrió después). */
+  solucionVigenteId: string | null
+} {
+  const fases: FaseSoporte[] = [{ estado: 'ABIERTO', desde: creado, hasta: null, por: null, mensajeId: null, comentario: null }]
+  const estadoDe: Record<string, EstadoSoporte> = {}
+  let solucionVigenteId: string | null = null
+  for (const m of mensajes) {
+    const nuevo = m.tipo === 'SISTEMA' ? (m.estado_nuevo as EstadoSoporte | null) : null
+    const actual = fases[fases.length - 1]
+    if (nuevo && ESTADO_SOPORTE_META[nuevo]) {
+      const comentario = (m.mensaje ?? '').split('\n').slice(1).join('\n').trim() || null
+      if (!m.estado_anterior && fases.length === 1 && !actual.mensajeId) {
+        // Mensaje de creación: es la fase inicial.
+        Object.assign(actual, { estado: nuevo, desde: m.created_at, por: m.usuario_nombre, mensajeId: m.id, comentario })
+      } else if (nuevo !== actual.estado) {
+        actual.hasta = m.created_at
+        fases.push({ estado: nuevo, desde: m.created_at, hasta: null, por: m.usuario_nombre, mensajeId: m.id, comentario })
+      }
+      const ultima = fases[fases.length - 1]
+      if (ultima.mensajeId === m.id) {
+        // Solo cuenta un cambio real de estado (no "Actualización" de responsable o prioridad).
+        if (nuevo === 'RESUELTO') solucionVigenteId = m.id
+        else if (nuevo !== 'CERRADO') solucionVigenteId = null
+      }
+    }
+    estadoDe[m.id] = fases[fases.length - 1].estado
+  }
+  return { fases, estadoDe, solucionVigenteId }
+}
