@@ -193,3 +193,48 @@ envía solo). Los pasos que fallan se reintentan hasta 3 veces; los correos, has
 
 Las políticas RLS de las tablas nuevas usan `auth_permiso()` / `auth_permiso_any()`, así que basta
 con otorgar el permiso desde `/roles` (SUPER_ADMIN y ADMIN lo tienen implícito).
+
+## Conectar la cuenta por primera vez (checklist, 18 de octubre de 2026)
+
+Estado verificado ese día: **0 cuentas** en `integraciones_correo`, los 4 flujos del ATS
+activos, **2 correos PENDIENTES** en `correo_saliente` (del 27 de agosto, a una dirección
+`*.demo@`) y **4 pasos de flujo todavía en PROGRAMADO** del 22 de septiembre, con 0 intentos.
+
+Esos 0 intentos eran la pista de que **el cron nunca corrió**: el proyecto de Vercel tiene
+`rootDirectory = apps/inventario`, así que el `vercel.json` de la raíz del monorepo **no se lee**
+y en el proyecto quedaba `crons.definitions: []`. Por eso ahora los dos cron viven en
+`apps/inventario/vercel.json`, que sí es la raíz que Vercel compila. El de la raíz quedó como
+configuración muerta.
+
+Orden que evita que salgan avisos viejos:
+
+1. **Despliega el `apps/inventario/vercel.json`** con los dos cron y confirma en
+   Vercel → Settings → Cron Jobs que aparecen los dos.
+2. **Con la cuenta todavía sin conectar**, entra a `/notificaciones/flujos` y pulsa
+   «Ejecutar pasos pendientes». El worker marca cada paso viejo como **OMITIDO** con el motivo
+   «No hay una cuenta de correo conectada», que es justo el seguro de `correo_envio_configurado()`.
+   Si se conecta la cuenta antes de esto, esos pasos **sí se envían**.
+3. **Resuelve a mano la cola de `correo_saliente`**: `procesarCorreoSaliente()` se devuelve con
+   `sinConfig` sin tocar nada, así que los PENDIENTES no se omiten solos y saldrían con el primer
+   envío. Para anularlos:
+   `UPDATE correo_saliente SET estado = 'ERROR', error = 'Anulado antes de conectar la cuenta' WHERE estado = 'PENDIENTE';`
+4. **Conecta la cuenta** en `/integraciones/correo` (permiso `gestionar_integraciones`).
+   La URL de redirección que hay que registrar en el proveedor se arma con `APP_BASE_URL`:
+   `https://<APP_BASE_URL>/api/integraciones/correo/oauth/callback`
+   — con el dominio de hoy, `https://concerjes-inmobiliarios-inventario.vercel.app/api/integraciones/correo/oauth/callback`.
+   `APP_BASE_URL` y `CRON_SECRET` ya están definidas en *production* (no en preview: el OAuth
+   solo funciona desde producción).
+5. **Prueba**: dispara un evento de prueba desde `/notificaciones/flujos` y confirma que el paso
+   queda EJECUTADO y el correo pasa a ENVIADO.
+
+Lo que pide cada proveedor:
+
+| | Google (Gmail / Workspace) | Microsoft 365 / Outlook |
+|---|---|---|
+| Dónde se crea | Google Cloud → APIs y servicios → Credenciales → ID de cliente OAuth, tipo **Aplicación web** | Entra ID → Registros de aplicaciones → **Web** |
+| Qué se pega en la plataforma | Client ID y Client Secret | Client ID, Client Secret y **Tenant** (el dominio o el GUID del directorio) |
+| Scope que pide el código | `https://mail.google.com/ email` | `offline_access openid email SMTP.Send IMAP.AccessAsUser.All` |
+| Trampa | `https://mail.google.com/` es un scope **restringido**: con una cuenta Workspace se resuelve publicando la app como *Interna*; con un Gmail suelto hay que dejar la app en *Testing* y agregar esa cuenta como usuario de prueba, o Google corta el consentimiento | Hay que habilitar **SMTP AUTH** en el buzón (está apagado por defecto en los tenants nuevos) |
+
+El Client ID y el Secret se guardan **por cuenta** en `integraciones_correo`, no en variables de
+entorno; lo único que depende del entorno es `APP_BASE_URL`.
