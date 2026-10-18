@@ -243,3 +243,41 @@ Lo que pide cada proveedor:
 
 El Client ID y el Secret se guardan **por cuenta** en `integraciones_correo`, no en variables de
 entorno; lo único que depende del entorno es `APP_BASE_URL`.
+
+### Camino de Google, paso a paso (verificado el 18 de octubre de 2026)
+
+El dominio de la empresa está en **Google Workspace** (sus MX apuntan a `aspmx.l.google.com` y el
+SPF incluye `_spf.google.com`). Eso decide todo lo demás, porque el scope que pide la plataforma,
+`https://mail.google.com/`, es **restringido**:
+
+| Si la app queda como… | Qué pasa |
+|---|---|
+| **Interna** (solo usuarios del dominio) | Sin verificación y el `refresh_token` no caduca. **Es la ruta buena.** |
+| Externa en *Pruebas* | El `refresh_token` **muere a los 7 días** y la integración se cae cada semana |
+| Externa en *Producción* | Exige verificación de scope restringido con evaluación de seguridad |
+
+La opción «Interna» solo existe si el proyecto de Google Cloud vive **dentro de la organización**
+de Workspace; un proyecto creado con una cuenta de Gmail personal nunca la ofrece.
+
+1. Elige el buzón que enviará (por ejemplo `notificaciones@` del dominio). Que sea una cuenta
+   dedicada, no la personal de alguien: si esa persona sale, el token se va con ella.
+2. Entra a `console.cloud.google.com` **con una cuenta del dominio** y crea el proyecto dentro de
+   la organización (se elige en el selector de proyecto).
+3. APIs y servicios → Biblioteca → **Gmail API** → Habilitar.
+4. Menú → **Google Auth Platform → Público** (la antigua «pantalla de consentimiento de OAuth»):
+   tipo de usuario **Interno**, nombre de la app y correos de soporte y del desarrollador. Si
+   «Interno» está deshabilitado, el proyecto no quedó en la organización: repite el paso 2.
+5. **Google Auth Platform → Clientes → Crear cliente**, tipo **Aplicación web**. En *URI de
+   redireccionamiento autorizado* va exactamente la URL del callback (sin barra al final):
+   `https://<APP_BASE_URL>/api/integraciones/correo/oauth/callback`. Copia el **Client ID** y el
+   **Client secret**: ese secreto sí se usa, el canje del código lo hace el servidor.
+6. En `/integraciones/correo`: cuenta nueva con `from_email` = el buzón del paso 1, autenticación
+   OAuth, pega Client ID y Secret, guarda y pulsa conectar. Autoriza **con ese buzón**. El callback
+   guarda el `refresh_token` y completa solo `smtp.gmail.com:465` e `imap.gmail.com:993`.
+7. Consola de administración de Workspace → Apps → Google Workspace → Gmail → Acceso de usuario
+   final: que **IMAP** esté habilitado para ese buzón. Apagado, el envío suele funcionar pero la
+   lectura por IMAP no conecta.
+8. Prueba desde `/notificaciones/flujos`: el paso debe quedar EJECUTADO y el correo en ENVIADO.
+
+Si algún día se pone dominio propio, hay que agregar el nuevo URI de redireccionamiento en el
+cliente de Google **y** cambiar `APP_BASE_URL` en Vercel; si no, el vínculo deja de funcionar.
