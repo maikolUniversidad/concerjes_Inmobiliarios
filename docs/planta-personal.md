@@ -190,23 +190,28 @@ node scripts/auditar-permisos.mjs
 node scripts/verificar-permisos.mjs
 ```
 
-### 3. Fichas por revisar (`vw_planta_inconsistencias`) — 459
+### 3. Fichas por revisar (`vw_planta_inconsistencias`) — 275 (eran 459)
 
-| Motivo | Cuántas | Qué pasa |
-|---|---|---|
-| `NOMBRE_DUDOSO` | 350 | los informes traen «Apellidos y Nombres» en un solo campo y sin separador |
-| `DOCUMENTO_SOSPECHOSO` | 74 | fichas viejas cargadas a mano con un celular en el campo del documento (no vienen de este cargue) |
-| `SIN_CIUDAD` | 35 | el informe no trae ciudad para esas filas |
-| `ACTIVO_CON_RETIRO_RECIENTE` | 0 | retiro a menos de 15 días del corte del informe (posible desfase entre los dos exportes) |
+| Motivo | Cuántas | Antes | Qué pasa |
+|---|---|---|---|
+| `NOMBRE_DUDOSO` | 240 | 350 | los informes traen «Apellidos y Nombres» en un solo campo y sin separador |
+| `DOCUMENTO_SOSPECHOSO` | 0 | 74 | fichas viejas cargadas a mano con un celular en el campo del documento (no vienen de este cargue) |
+| `SIN_CIUDAD` | 35 | 35 | el informe no trae ciudad para esas filas |
+| `ACTIVO_CON_RETIRO_RECIENTE` | 0 | 0 | retiro a menos de 15 días del corte del informe (posible desfase entre los dos exportes) |
+
+La limpieza se hizo con tres guiones, cada uno en **simulación por defecto** y con
+`--aplicar` para escribir: `scripts/limpiar-planta-documentos.mjs`,
+`scripts/limpiar-planta-nombres.mjs` y `scripts/limpiar-planta-ciudad.mjs`. Lo
+aplicado y lo que quedó pendiente está más abajo, en «Lo que se limpió».
 
 Sobre el **corte del nombre**: no se adivina por el número de palabras
 («GAMEZ BLANCA INES» es 1 apellido + 2 nombres, «RIVERA PACHECO EDUARDO» es 2 + 1).
 Se aprende del propio archivo: la última palabra de un nombre completo siempre es
 un nombre de pila y la primera siempre es un apellido, así que la frecuencia de
-cada palabra en esas dos posiciones dice de qué lado cae. Salió **ALTA 6.214,
-MEDIA 248, BAJA 102** — las BAJA son casi todas nombres de dos palabras, donde el
-informe mismo viene incompleto. `personas.nombre_completo` guarda siempre el dato
-original, así que ningún corte pierde información.
+cada palabra en esas dos posiciones dice de qué lado cae. El cargue dejó **ALTA
+6.214, MEDIA 248, BAJA 102**; después de la limpieza va en **ALTA 6.324, MEDIA
+240, BAJA 0**. `personas.nombre_completo` guarda siempre el dato original, así que
+ningún corte pierde información.
 
 **Sobre `ACTIVO_CON_RETIRO_RECIENTE` (revisado):** la primera versión de la regla
 usaba una ventana de 60 días contra la fecha de hoy y marcaba 14 fichas. Ninguna
@@ -242,6 +247,129 @@ necesita antigüedad real, hay que pedirle a nómina un exporte con esa columna.
 
 ### 5. Centros de costo sin obra
 
-Los 92 centros están creados pero ninguno apunta todavía a una `obra` ni a un
-cliente (`obras` está vacía). Hasta que se llenen, «personal por contrato» se
-responde por el código del centro de costos, no por el contrato de servicio.
+`centros_costo` tiene **624 filas: 92 activas y 532 históricas**, y ninguna apunta
+todavía a una `obra` ni a un cliente (`obras` está vacía). Hasta que se llenen,
+«personal por contrato» se responde por el código del centro de costos, no por el
+contrato de servicio.
+
+Lo que hay que saber antes de ponerse a llenarlos:
+
+* **Un centro no es un contrato.** El `codigo` es `<contrato>-<CIUDAD>`, así que
+  las 92 activas se reducen a **37 contratos distintos** (`UNAD 2026` son 50
+  centros, uno por ciudad; `FISCALIA` 7) y las 532 históricas a 152. Llenar por
+  contrato y no por centro reduce el trabajo 2,5 veces: una `obra` por contrato y
+  los centros de sus ciudades apuntando a ella.
+* **Primero el maestro de clientes.** `obras` exige `cliente_id` NOT NULL hacia
+  `empresas_usuarias`, que hoy tiene **una sola fila** («vigias de colombia», que
+  es el empleador, no un cliente), más `codigo_contrato_servicio` y
+  `descripcion_detallada` NOT NULL. Sin clientes no se puede crear ninguna obra.
+* **Cuatro centros activos no son contratos** y nunca deberían pedir obra:
+  `DISPONIBLE-BOGOTA` (`es_disponibilidad`), `OPERATIVO ADM-BOGOTA` y
+  `OPERACIONES-BOGOTA` (`es_administrativo`), y `ADMINISTRATIVO-BOGOTA`, **que no
+  tiene la marca puesta** aunque tiene 4 personas. Esa marca hay que corregirla.
+
+Hacen falta las dos cosas, y en este orden:
+
+1. **Un cargue** para el catálogo viejo: una planilla de 37 filas (contrato,
+   cliente, NIT, código del contrato de servicio, fechas) que llene
+   `empresas_usuarias` + `obras` y amarre los centros por `nombre`. Los datos no
+   están en la nómina —los informes no saben de contratos—, así que los tiene que
+   dictar el área administrativa; el guion no se los puede inventar.
+2. **Una pantalla**, porque esto no se arregla una sola vez: cada cargue de
+   nómina crea centros nuevos y llegan sin obra. Lo mínimo es una columna
+   «obra / cliente» con selector en la lista de centros de
+   `/gestion-humana/planta`, dejando fuera del pendiente los centros marcados
+   como disponibilidad o administrativos.
+
+### 6. Lo que se limpió y lo que quedó pendiente
+
+**Tanda 1 · `DOCUMENTO_SOSPECHOSO`, 74 → 0.** Las 74 eran un solo cargue
+(2026-08-11): una ficha por responsable de sede con el celular en el campo del
+documento, `origen = MANUAL`, `telefono = documento`. Ninguna tenía cuenta de
+auth, vinculaciones, `clave_origen`, candidato del ATS ni documentos adjuntos, así
+que las 859 cuentas `<cédula>@conserje.local` nunca estuvieron en juego — y
+`crear-usuarios-empleados.mjs` exige vinculación ACTIVA, que estas fichas no
+tienen, así que tampoco les va a inventar un login más adelante.
+
+Lo que **sí** estaba en juego: `sedes.responsable_id` apunta a esas fichas y **no
+tiene llave foránea**, así que borrar una sin reapuntar la sede dejaba un
+responsable fantasma. Se aplicó:
+
+* **5 fusionadas.** Eran la misma persona que una ficha de nómina (mismo nombre y
+  apellido, coincidencia única, y la ficha de nómina con ese mismo celular). La
+  sede pasó a apuntar a la ficha de nómina, que recibió la sede y el teléfono, y
+  la ficha manual se borró. Quedan **0 sedes con responsable fantasma**.
+* **69 marcadas** como «sin cédula»: `documento` pasó a `SIN-CC-<el mismo
+  celular>` y el celular se quedó en `telefono`, donde siempre debió estar. No es
+  arreglar la cédula: es dejar escrito que falta, de forma única y reversible. Se
+  usó el propio número y no el código de la sede porque `codigo_interno` **no es
+  único** (las 74 sedes comparten `CMM-2026-000029`).
+
+**Pendiente:** las 69 siguen sin cédula real; hay que pedírsela a cada
+responsable de sede. Y 6 de los 11 gemelos se dejaron sin fusionar a propósito —
+1 porque la ficha de nómina no tiene teléfono con que confirmar y 5 porque tiene
+otro teléfono, donde puede tratarse de un tocayo. Para esos 6:
+`--fusionar-dudosos`, pero mirándolos uno por uno.
+
+**Tanda 2 · `NOMBRE_DUDOSO`, 350 → 240.** El hallazgo que cambia la lectura: no
+eran 350 nombres mal cortados, eran **350 fichas donde el algoritmo no tenía con
+qué decidir**. De las 248 de tres o más palabras, **220 tienen la segunda palabra
+con cero apariciones** en posición inequívoca (primera o última) en todo el corpus
+de 6.564 nombres; el suavizado de Laplace le daba 0,5 a una palabra nunca vista y
+eso pasaba el umbral de MEDIA. La marca dice «no sé», no «está mal». Y las 248
+están guardadas **todas** con dos apellidos, que es el default: rellenarlas con
+«la convención colombiana de dos apellidos» no añadiría ninguna información, es
+exactamente lo que ya hay y lo que la vista está pidiendo que alguien confirme con
+un documento en la mano.
+
+La regla nueva solo acepta tres clases de evidencia, y resolvió 110 de 350:
+
+| Regla | Cuántas | Qué dice |
+|---|---|---|
+| 1 · convención de la columna | 102 | con dos palabras no hay nada que decidir: la 1ª es el apellido y la 2ª el nombre. Las 102 ya estaban así y la evidencia las confirma todas, sin contradecir ninguna |
+| 3 · par de apellidos compartido | 7 | las dos primeras palabras encabezan la ficha de ≥2 personas distintas: es un par de apellidos de familia |
+| 2 · evidencia de la palabra | 1 | ≥10 apariciones y ≥90 % de un lado (`JOSE`: 0 veces de primera, 34 de última → un solo apellido) |
+
+Solo **1 ficha cambió de corte**; las otras 109 se confirmaron y pasaron a ALTA.
+
+**Pendiente: 240**, dejadas fuera a propósito — 235 porque la palabra que decide
+se ve muy poco en la nómina y 5 porque se usa de los dos lados. Esas se cierran
+con el documento de identidad a la vista, no con más estadística. Se midieron y se
+descartaron los atajos: bajar el umbral de 20 a 3 apariciones solo sube de 1 a 2
+casos resueltos; contar las posiciones intermedias es circular, porque son justo
+las que se asignaron por default; y `candidatos` del ATS, como segunda fuente,
+tiene 3 filas y ninguna cruza con las 350.
+
+**Tanda 3 · `SIN_CIUDAD`, 35 → 35. No se puede deducir del centro de costo**, y
+la razón es estructural: las 35 están RETIRADAS y vienen solo del informe de
+retiros, que **no trae columna de centro de costos** (encabezado: CentroTrabajo,
+Apellidos y Nombres, Identificacion, Codigo Empleado, Direccion, Telefono, Fecha
+de Ingreso, Periodo Prueba, Fecha Fin Contrato, Fecha de Retiro, Tipo de
+Contrato). 0 de 35 tiene centro de costo, ni en la ficha ni en la vinculación.
+
+La ciudad de ese informe va en el encabezado de grupo `CentroTrabajo` («Ciudad: X
+Depto: Y»), que solo se imprime cuando cambia. Las 35 caen en el primer bloque del
+archivo (filas 5–51) y esa celda **está vacía en el origen**: no es que el cargue
+perdiera el encabezado, es que nómina no lo imprimió. El primer «Ciudad:» aparece
+en la fila 52.
+
+Hay indicios de que el bloque es San Andrés, y ninguno alcanza: de las 47 personas
+del bloque, 12 también salen en el informe de activos y las 12 están en
+`POLICIA-SAN ANDRES`; 2 de las 35 direcciones nombran sectores de la isla; y en
+todo el archivo no hay ningún otro retiro entre 2026-07-31 y 2026-08-22. Pero el
+bloque se agrupa por «sin centro de trabajo» —los retiros recién procesados, a los
+que ya les quitaron el centro—, no por ciudad, así que puede mezclar varias. Por
+eso no se escribió nada.
+
+**Pendiente: las 35.** Lo que de verdad las cierra es un reexporte del informe de
+retiros con el centro de trabajo impreso en todas las filas. Mientras tanto,
+`limpiar-planta-ciudad.mjs --plantilla <archivo.csv>` saca la planilla de los 35
+documentos para llenar la ciudad a mano y `--mapa <archivo.csv>` la aplica. La
+bandera `--hipotesis-san-andres` rellena el bloque entero con `SAN ANDRES
+PROVIDENCIA`, pero hay que pedirla a propósito porque es una inferencia.
+
+**De paso, dos cosas chicas que aparecieron y no se tocaron:** `POLICIA-SAN
+ANDRES` tiene la ciudad escrita de dos formas (`SAN ANDRES PROVIDENCIA` en 16
+fichas y `SAN ANDRÉS` en 1), y 2 fichas de nómina tienen `apellidos + nombres` que
+no reconstruye su `nombre_completo` —las dos de cuatro palabras, sin reingresos—,
+seguramente por cómo quedó el cargue inicial.
