@@ -6,10 +6,10 @@ import Link from 'next/link'
 import {
   Check, Ban, Truck, PackageCheck, Loader2, MessageSquare, Send, FilePlus2,
   GitBranch, Pencil, Plus, Minus, ShoppingCart, ClipboardCheck, Building2, Clock,
-  Save, Trash2, Printer,
+  Save, Trash2, Printer, PackageX, MapPin, Lock,
 } from 'lucide-react'
 import { toast } from 'sonner'
-import { avanzarEstadoOC, registrarRecepcionOC, comentarOC, actualizarItemsOC } from '../actions'
+import { avanzarEstadoOC, registrarEntregaOC, comentarOC, actualizarItemsOC } from '../actions'
 
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
@@ -41,6 +41,30 @@ export interface OCItem {
 }
 export interface ProductoLite { id: string; nombre_estandar: string; presentacion: string | null; precio_lista: number | null; precios: { proveedor_id: string; precio: number | null }[] | null }
 export interface ProveedorLite { id: string; nombre: string }
+export interface UbicacionLite { id: string; codigo: string; nombre: string }
+
+/** Una entrega del proveedor contra la orden (tabla `oc_recepciones`). */
+export interface OCEntrega {
+  id: string
+  consecutivo: number
+  fecha: string
+  remision: string | null
+  observacion: string | null
+  recibido_nombre: string | null
+  created_at: string
+  ubicacion: { codigo: string; nombre: string } | null
+  items: {
+    id: string
+    oc_item_id: string
+    cantidad: number
+    cantidad_rechazada: number
+    motivo_rechazo: string | null
+    producto: { nombre_estandar: string; presentacion: string | null } | null
+  }[] | null
+}
+
+/** Permisos efectivos, ya resueltos en el servidor. */
+export interface PuedeOC { crear: boolean; aprobar: boolean; recibir: boolean }
 export interface OCEvento {
   id: string
   tipo: string
@@ -87,19 +111,40 @@ function fechaHora(iso: string) {
 
 interface EditLinea { key: number; id?: string; producto_id: string; proveedor_id: string; cantidad: string; precio: string }
 
-export function OCDetalleClient({ oc, items, eventos, productos = [], proveedores = [] }: { oc: OCDetalle; items: OCItem[]; eventos: OCEvento[]; productos?: ProductoLite[]; proveedores?: ProveedorLite[] }) {
+/** Lo que el usuario está capturando de la entrega en curso, por ítem. */
+interface LineaCaptura { cantidad: string; rechazada: string; motivo: string }
+const LINEA_VACIA: LineaCaptura = { cantidad: '', rechazada: '', motivo: '' }
+
+const hoyISO = () => new Date().toISOString().slice(0, 10)
+
+export function OCDetalleClient({
+  oc, items, eventos, productos = [], proveedores = [], entregas = [], ubicaciones = [],
+  puede = { crear: true, aprobar: true, recibir: true },
+}: {
+  oc: OCDetalle; items: OCItem[]; eventos: OCEvento[]
+  productos?: ProductoLite[]; proveedores?: ProveedorLite[]
+  entregas?: OCEntrega[]; ubicaciones?: UbicacionLite[]; puede?: PuedeOC
+}) {
   const router = useRouter()
   const [pending, startTransition] = useTransition()
   const [comentario, setComentario] = useState('')
-  const [recepcion, setRecepcion] = useState<Record<string, number>>(
-    () => Object.fromEntries(items.map(it => [it.id, Number(it.cantidad_rec)])),
-  )
+
+  // ── Entrega en curso ──
+  // Se captura lo que llega AHORA, no el acumulado: antes el campo venía
+  // precargado con lo ya recibido y había que calcular la diferencia a mano.
+  const [captura, setCaptura] = useState<Record<string, LineaCaptura>>({})
+  const [entregaAbierta, setEntregaAbierta] = useState(false)
+  const [fecha, setFecha] = useState(hoyISO)
+  const [remision, setRemision] = useState('')
+  const [ubicacionId, setUbicacionId] = useState('')
+  const [notaEntrega, setNotaEntrega] = useState('')
 
   const meta = ESTADO_META[oc.estado] ?? { label: oc.estado, cls: 'bg-gray-100 text-gray-600' }
   const pasoActual = ORDEN[oc.estado] ?? 0
   const anulada = oc.estado === 'ANULADA'
-  const puedeRecibir = oc.estado === 'ENVIADA' || oc.estado === 'PARCIAL'
-  const puedeEditarItems = oc.estado === 'BORRADOR'
+  const estadoRecibible = oc.estado === 'APROBADA' || oc.estado === 'ENVIADA' || oc.estado === 'PARCIAL'
+  const puedeRecibir = estadoRecibible && puede.recibir
+  const puedeEditarItems = oc.estado === 'BORRADOR' && puede.crear
 
   // ── Edición de ítems (solo en borrador) ──
   const prodMap = useMemo(() => new Map(productos.map(p => [p.id, p])), [productos])
@@ -171,12 +216,51 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
     })
   }
 
-  const registrar = () => {
-    const cambios = items
-      .filter(it => (recepcion[it.id] ?? 0) !== Number(it.cantidad_rec))
-      .map(it => ({ itemId: it.id, cantidad: recepcion[it.id] ?? 0 }))
-    if (cambios.length === 0) { toast.message('No hay cambios de recepción.'); return }
-    accion(() => registrarRecepcionOC(oc.id, cambios), 'Recepción registrada.')
+  const lineaDe = (itemId: string) => captura[itemId] ?? LINEA_VACIA
+  const setLinea = (itemId: string, patch: Partial<LineaCaptura>) =>
+    setCaptura(p => ({ ...p, [itemId]: { ...lineaDe(itemId), ...patch } }))
+
+  /** Lo que falta por recibir de un ítem: no se puede pasar del pedido. */
+  const pendienteDe = (it: OCItem) => Math.max(0, Number(it.cantidad_ped) - Number(it.cantidad_rec))
+
+  const lineasEntrega = useMemo(
+    () => items
+      .map(it => ({
+        it,
+        cantidad: Number(lineaDe(it.id).cantidad) || 0,
+        rechazada: Number(lineaDe(it.id).rechazada) || 0,
+        motivo: lineaDe(it.id).motivo.trim(),
+      }))
+      .filter(l => l.cantidad > 0 || l.rechazada > 0),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [items, captura],
+  )
+
+  const excedidos = lineasEntrega.filter(l => l.cantidad > pendienteDe(l.it))
+  const sinMotivo = lineasEntrega.filter(l => l.rechazada > 0 && !l.motivo)
+
+  function limpiarEntrega() {
+    setCaptura({}); setRemision(''); setNotaEntrega(''); setFecha(hoyISO()); setEntregaAbierta(false)
+  }
+
+  const registrarEntrega = () => {
+    if (lineasEntrega.length === 0) { toast.error('Escribe cuánto llegó de al menos un producto.'); return }
+    if (excedidos.length > 0) {
+      toast.error(`Hay ${excedidos.length} ${excedidos.length === 1 ? 'producto' : 'productos'} con más cantidad de la que falta por recibir.`)
+      return
+    }
+    if (sinMotivo.length > 0) { toast.error('Si rechazas cantidad, escribe el motivo del rechazo.'); return }
+    accion(
+      () => registrarEntregaOC(oc.id, {
+        fecha, remision, ubicacionId: ubicacionId || null, observacion: notaEntrega,
+        lineas: lineasEntrega.map(l => ({
+          ocItemId: l.it.id, cantidad: l.cantidad,
+          cantidadRechazada: l.rechazada, motivoRechazo: l.motivo || undefined,
+        })),
+      }),
+      `Entrega ${entregas.length + 1} registrada.`,
+      limpiarEntrega,
+    )
   }
 
   const columnasItems: ColumnaTabla<OCItem>[] = [
@@ -205,17 +289,12 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
       celda: (it) => <>{cop.format(Number(it.subtotal ?? Number(it.cantidad_ped) * Number(it.precio_unit)))}</>,
     },
     {
-      id: 'recibido', header: 'Recibido', align: 'center', ancho: 'w-28', interactiva: puedeRecibir, tarjeta: 'badge',
+      id: 'recibido', header: 'Recibido', align: 'center', ancho: 'w-28', tarjeta: 'badge',
       valor: (it) => Number(it.cantidad_rec),
       copiaTexto: (it) => `${Number(it.cantidad_rec)}/${Number(it.cantidad_ped)}`,
       celda: (it) => {
-        const rec = puedeRecibir ? (recepcion[it.id] ?? 0) : Number(it.cantidad_rec)
         const completo = Number(it.cantidad_rec) >= Number(it.cantidad_ped)
-        return puedeRecibir ? (
-          <input type="number" min={0} max={Number(it.cantidad_ped)} value={rec}
-            onChange={(e) => setRecepcion(p => ({ ...p, [it.id]: Number(e.target.value) }))}
-            className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-sm text-right outline-none focus:border-brand-green" />
-        ) : (
+        return (
           <span className={`font-body text-sm ${completo ? 'text-green-600 font-semibold' : Number(it.cantidad_rec) > 0 ? 'text-amber-600' : 'text-gray-400'}`}>
             {Number(it.cantidad_rec)} / {Number(it.cantidad_ped)}
           </span>
@@ -223,6 +302,120 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
       },
     },
   ]
+
+  // ── Captura de la entrega: una fila por ítem que todavía falta ──
+  const columnasEntrega: ColumnaTabla<OCItem>[] = [
+    {
+      id: 'producto', header: 'Producto', valor: (it) => it.producto?.nombre_estandar ?? '',
+      ancho: 'min-w-[200px]', tarjeta: 'titulo',
+      celda: (it) => (
+        <>
+          <p className="font-body text-sm text-gray-800">{it.producto?.nombre_estandar ?? '—'}</p>
+          <p className="font-body text-xs text-gray-400">{it.producto?.presentacion}</p>
+        </>
+      ),
+    },
+    {
+      id: 'falta', header: 'Falta', align: 'right', ancho: 'w-24', tarjeta: 'meta',
+      valor: (it) => pendienteDe(it),
+      celda: (it) => (
+        <span className="font-body text-sm text-gray-500">
+          {pendienteDe(it)} <span className="text-gray-300">de {Number(it.cantidad_ped)}</span>
+        </span>
+      ),
+    },
+    {
+      id: 'llego', header: 'Llegó ahora', align: 'center', ancho: 'w-28', interactiva: true, tarjeta: 'badge',
+      valor: (it) => Number(lineaDe(it.id).cantidad) || 0,
+      celda: (it) => {
+        const falta = pendienteDe(it)
+        const v = Number(lineaDe(it.id).cantidad) || 0
+        return (
+          <input
+            type="number" min={0} max={falta} step="0.01" value={lineaDe(it.id).cantidad}
+            placeholder="0" disabled={falta === 0}
+            onChange={(e) => setLinea(it.id, { cantidad: e.target.value })}
+            className={`w-20 rounded-lg border px-2 py-1 text-sm text-right outline-none disabled:bg-gray-50 disabled:text-gray-300 ${
+              v > falta ? 'border-red-300 bg-red-50 text-red-700' : 'border-gray-200 focus:border-brand-green'
+            }`}
+          />
+        )
+      },
+    },
+    {
+      id: 'rechazada', header: 'Rechazado', align: 'center', ancho: 'w-24', interactiva: true, tarjeta: 'oculto',
+      valor: (it) => Number(lineaDe(it.id).rechazada) || 0,
+      celda: (it) => (
+        <input
+          type="number" min={0} step="0.01" value={lineaDe(it.id).rechazada} placeholder="0"
+          onChange={(e) => setLinea(it.id, { rechazada: e.target.value })}
+          className="w-20 rounded-lg border border-gray-200 px-2 py-1 text-sm text-right outline-none focus:border-brand-green"
+        />
+      ),
+    },
+    {
+      id: 'motivo', header: 'Motivo del rechazo', ancho: 'min-w-[180px]', interactiva: true, tarjeta: 'oculto',
+      valor: (it) => lineaDe(it.id).motivo,
+      celda: (it) => {
+        const rech = Number(lineaDe(it.id).rechazada) || 0
+        const falta = rech > 0 && !lineaDe(it.id).motivo.trim()
+        return (
+          <input
+            type="text" value={lineaDe(it.id).motivo} disabled={rech === 0}
+            placeholder={rech > 0 ? 'Obligatorio' : '—'}
+            onChange={(e) => setLinea(it.id, { motivo: e.target.value })}
+            className={`w-full rounded-lg border px-2 py-1 text-sm outline-none disabled:bg-gray-50 disabled:text-gray-300 ${
+              falta ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-brand-green'
+            }`}
+          />
+        )
+      },
+    },
+  ]
+
+  // La tarjeta automática esconde las columnas sin valor, y el motivo del
+  // rechazo empieza vacío: en móvil quedaba imposible registrar un rechazo.
+  // Bodega recibe con el celular en la mano, así que la tarjeta es propia.
+  const tarjetaEntrega = (it: OCItem) => {
+    const falta = pendienteDe(it)
+    const l = lineaDe(it.id)
+    const rech = Number(l.rechazada) || 0
+    return (
+      <>
+        <p className="font-heading text-sm font-bold text-gray-900">{it.producto?.nombre_estandar ?? '—'}</p>
+        <p className="mt-0.5 font-body text-xs text-gray-500">
+          {it.producto?.presentacion}
+          <span className="ml-2 text-gray-400">faltan {falta} de {Number(it.cantidad_ped)}</span>
+        </p>
+        <div className="mt-3 grid grid-cols-2 gap-3">
+          <label className="block">
+            <span className="font-body text-[11px] font-semibold uppercase text-gray-500">Llegó ahora</span>
+            <input type="number" min={0} max={falta} step="0.01" value={l.cantidad} placeholder="0" disabled={falta === 0}
+              onChange={(e) => setLinea(it.id, { cantidad: e.target.value })}
+              className={`mt-1 w-full rounded-lg border px-2 py-1.5 text-sm text-right outline-none disabled:bg-gray-50 ${
+                (Number(l.cantidad) || 0) > falta ? 'border-red-300 bg-red-50' : 'border-gray-200 focus:border-brand-green'
+              }`} />
+          </label>
+          <label className="block">
+            <span className="font-body text-[11px] font-semibold uppercase text-gray-500">Rechazado</span>
+            <input type="number" min={0} step="0.01" value={l.rechazada} placeholder="0"
+              onChange={(e) => setLinea(it.id, { rechazada: e.target.value })}
+              className="mt-1 w-full rounded-lg border border-gray-200 px-2 py-1.5 text-sm text-right outline-none focus:border-brand-green" />
+          </label>
+        </div>
+        {rech > 0 && (
+          <label className="mt-2 block">
+            <span className="font-body text-[11px] font-semibold uppercase text-gray-500">Motivo del rechazo</span>
+            <input type="text" value={l.motivo} placeholder="Obligatorio"
+              onChange={(e) => setLinea(it.id, { motivo: e.target.value })}
+              className={`mt-1 w-full rounded-lg border px-2 py-1.5 text-sm outline-none ${
+                l.motivo.trim() ? 'border-gray-200 focus:border-brand-green' : 'border-red-300 bg-red-50'
+              }`} />
+          </label>
+        )}
+      </>
+    )
+  }
 
   return (
     <div className="space-y-5">
@@ -288,19 +481,24 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
 
         {/* Acciones de flujo */}
         <div className="mt-4 flex flex-wrap gap-2">
-          {oc.estado === 'BORRADOR' && (
+          {oc.estado === 'BORRADOR' && (puede.aprobar ? (
             <button onClick={() => accion(() => avanzarEstadoOC(oc.id, 'APROBADA'), 'Orden aprobada.')} disabled={pending}
               className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-50">
               <ClipboardCheck className="w-4 h-4" /> Aprobar
             </button>
-          )}
-          {oc.estado === 'APROBADA' && (
+          ) : (
+            // Quien crea la orden ya no la aprueba: el permiso es de otra mano.
+            <span className="flex items-center gap-2 rounded-lg bg-gray-50 border border-gray-200 px-3 py-2 font-body text-xs text-gray-500">
+              <Lock className="w-3.5 h-3.5" /> La aprobación la da otra persona
+            </span>
+          ))}
+          {oc.estado === 'APROBADA' && puede.crear && (
             <button onClick={() => accion(() => avanzarEstadoOC(oc.id, 'ENVIADA'), 'Marcada como comprada.')} disabled={pending}
               className="flex items-center gap-2 bg-blue-600 text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50">
               <ShoppingCart className="w-4 h-4" /> Marcar como comprada / enviada
             </button>
           )}
-          {!anulada && oc.estado !== 'COMPLETA' && (
+          {!anulada && oc.estado !== 'COMPLETA' && puede.crear && (
             <button onClick={() => { if (confirm('¿Anular esta orden?')) accion(() => avanzarEstadoOC(oc.id, 'ANULADA'), 'Orden anulada.') }} disabled={pending}
               className="flex items-center gap-2 border border-red-200 text-red-600 font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-red-50 disabled:opacity-50">
               <Ban className="w-4 h-4" /> Anular
@@ -415,16 +613,169 @@ export function OCDetalleClient({ oc, items, eventos, productos = [], proveedore
           />
         </div>
         )}
-        {puedeRecibir && (
+        {puedeRecibir && !entregaAbierta && (
           <div className="flex items-center justify-between gap-2 px-5 py-3 border-t border-gray-100 flex-wrap">
-            <p className="font-body text-xs text-gray-400">Lo recibido ingresa al inventario (movimiento de ENTRADA) y actualiza el stock.</p>
-            <button onClick={registrar} disabled={pending}
+            <p className="font-body text-xs text-gray-400">Lo recibido ingresa al inventario (movimiento de ENTRADA) con esta orden y actualiza el stock.</p>
+            <button onClick={() => setEntregaAbierta(true)} disabled={pending}
               className="flex items-center gap-2 bg-emerald-600 text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
-              <PackageCheck className="w-4 h-4" /> Registrar recepción
+              <PackageCheck className="w-4 h-4" /> Registrar entrega
             </button>
           </div>
         )}
+        {estadoRecibible && !puede.recibir && (
+          <div className="flex items-center gap-2 px-5 py-3 border-t border-gray-100 font-body text-xs text-gray-500">
+            <Lock className="w-3.5 h-3.5" /> Las entregas las registra la bodega.
+          </div>
+        )}
       </div>
+
+      {/* ── Entrega en curso ── */}
+      {puedeRecibir && entregaAbierta && (
+        <div className="rounded-2xl border border-emerald-200 bg-white shadow-sm overflow-hidden">
+          <div className="flex items-center justify-between gap-2 bg-emerald-50 px-5 py-3 border-b border-emerald-100">
+            <h2 className="font-heading font-semibold text-sm text-emerald-900 flex items-center gap-2">
+              <PackageCheck className="w-4 h-4" /> Entrega {entregas.length + 1}
+            </h2>
+            <button onClick={limpiarEntrega} disabled={pending}
+              className="font-body text-xs text-emerald-700 hover:text-emerald-900">Cancelar</button>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-4 border-b border-gray-100">
+            <label className="block">
+              <span className="font-body text-xs text-gray-500">Fecha de la entrega</span>
+              <input type="date" value={fecha} max={hoyISO()} onChange={e => setFecha(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-green" />
+            </label>
+            <label className="block">
+              <span className="font-body text-xs text-gray-500">Remisión del proveedor</span>
+              <input type="text" value={remision} onChange={e => setRemision(e.target.value)}
+                placeholder="N.º del documento con que llegó"
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-green" />
+            </label>
+            <label className="block">
+              <span className="font-body text-xs text-gray-500 flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Ubicación en bodega
+              </span>
+              <select value={ubicacionId} onChange={e => setUbicacionId(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-green bg-white">
+                <option value="">— Sin especificar —</option>
+                {ubicaciones.map(u => <option key={u.id} value={u.id}>{u.codigo} · {u.nombre}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="p-4">
+            <TablaEstandar
+              id="oc-entrega"
+              titulo={`Entrega OC ${oc.numero_oc}`}
+              modulo="Compras"
+              entidad="oc_recepcion_items"
+              datos={items}
+              columnas={columnasEntrega}
+              filaId={(it) => it.id}
+              busqueda="Buscar producto…"
+              filasPorPagina={0}
+              renderTarjeta={tarjetaEntrega}
+              vacio={<p className="font-body text-sm text-gray-400">La orden no tiene ítems.</p>}
+            />
+          </div>
+
+          <div className="px-4 pb-4">
+            <label className="block">
+              <span className="font-body text-xs text-gray-500">Observación de la entrega</span>
+              <input type="text" value={notaEntrega} onChange={e => setNotaEntrega(e.target.value)}
+                placeholder="Opcional: algo que valga la pena dejar escrito de esta entrega"
+                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm outline-none focus:border-brand-green" />
+            </label>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-gray-100 flex-wrap">
+            <div className="font-body text-xs">
+              {excedidos.length > 0 ? (
+                <p className="flex items-center gap-1.5 text-red-600">
+                  <Ban className="w-3.5 h-3.5" /> Hay cantidades mayores que lo que falta por recibir.
+                </p>
+              ) : sinMotivo.length > 0 ? (
+                <p className="flex items-center gap-1.5 text-amber-600">
+                  <PackageX className="w-3.5 h-3.5" /> Falta el motivo de un rechazo.
+                </p>
+              ) : (
+                <p className="text-gray-400">
+                  {lineasEntrega.length === 0
+                    ? 'Escribe cuánto llegó de cada producto.'
+                    : `${lineasEntrega.length} ${lineasEntrega.length === 1 ? 'producto' : 'productos'} en esta entrega. Lo rechazado no entra al stock.`}
+                </p>
+              )}
+            </div>
+            <button onClick={registrarEntrega}
+              disabled={pending || lineasEntrega.length === 0 || excedidos.length > 0 || sinMotivo.length > 0}
+              className="flex items-center gap-2 bg-emerald-600 text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-emerald-700 disabled:opacity-50">
+              {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackageCheck className="w-4 h-4" />} Guardar entrega
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Historial de entregas ── */}
+      {entregas.length > 0 && (
+        <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100">
+            <h2 className="font-heading font-semibold text-sm text-gray-900 flex items-center gap-2">
+              <PackageCheck className="w-4 h-4 text-brand-green" /> Entregas ({entregas.length})
+            </h2>
+          </div>
+          <div className="divide-y divide-gray-100">
+            {entregas.map(r => {
+              const recibido = (r.items ?? []).reduce((a, x) => a + Number(x.cantidad), 0)
+              const rechazado = (r.items ?? []).reduce((a, x) => a + Number(x.cantidad_rechazada), 0)
+              return (
+                <div key={r.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="font-body text-sm font-semibold text-gray-800">
+                        Entrega {r.consecutivo}
+                        <span className="ml-2 font-normal text-gray-500">
+                          {new Date(r.fecha + 'T12:00:00').toLocaleDateString('es-CO', { dateStyle: 'medium' })}
+                        </span>
+                      </p>
+                      <p className="mt-0.5 font-body text-xs text-gray-400">
+                        {r.remision ? `Remisión ${r.remision}` : 'Sin remisión'}
+                        {r.ubicacion ? ` · ${r.ubicacion.codigo} ${r.ubicacion.nombre}` : ''}
+                        {r.recibido_nombre ? ` · recibió ${r.recibido_nombre}` : ''}
+                      </p>
+                      {r.observacion && <p className="mt-1 font-body text-xs text-gray-500">{r.observacion}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-body text-sm font-semibold text-emerald-700">{recibido} recibidas</p>
+                      {rechazado > 0 && (
+                        <p className="font-body text-xs text-red-600 flex items-center gap-1 justify-end">
+                          <PackageX className="w-3 h-3" /> {rechazado} rechazadas
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <ul className="mt-2 space-y-1">
+                    {(r.items ?? []).map(x => (
+                      <li key={x.id} className="flex items-baseline justify-between gap-2 font-body text-xs">
+                        <span className="text-gray-600 truncate">
+                          {x.producto?.nombre_estandar ?? '—'}
+                          {x.producto?.presentacion ? <span className="text-gray-400"> · {x.producto.presentacion}</span> : null}
+                        </span>
+                        <span className="shrink-0 text-gray-500">
+                          {Number(x.cantidad)}
+                          {Number(x.cantidad_rechazada) > 0 && (
+                            <span className="text-red-600"> · {Number(x.cantidad_rechazada)} rechazadas{x.motivo_rechazo ? ` (${x.motivo_rechazo})` : ''}</span>
+                          )}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Comentario */}
       <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">

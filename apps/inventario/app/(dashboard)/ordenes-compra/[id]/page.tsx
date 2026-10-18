@@ -5,15 +5,22 @@ import { ArrowLeft } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
-import { OCDetalleClient, type OCDetalle, type OCItem, type OCEvento, type ProductoLite, type ProveedorLite } from './OCDetalleClient'
+import { OCDetalleClient, type OCDetalle, type OCItem, type OCEvento, type ProductoLite, type ProveedorLite, type OCEntrega, type UbicacionLite } from './OCDetalleClient'
 
 export const metadata: Metadata = { title: 'Orden de Compra' }
 export const dynamic = 'force-dynamic'
 
 export default async function OCDetallePage({ params }: { params: Promise<{ id: string }> }) {
-  await requirePermiso('ver_ordenes_compra')
+  const permisos = await requirePermiso('ver_ordenes_compra')
   const { id } = await params
   const supabase = await createClient()
+
+  // Separación de funciones: cada botón se habilita por su propio permiso.
+  const puede = {
+    crear: permisos.puede('crear_ordenes_compra'),
+    aprobar: permisos.puede('aprobar_ordenes_compra') || permisos.puede('aprobar_ordenes_compra_sin_tope'),
+    recibir: permisos.puede('recibir_ordenes_compra'),
+  }
 
   const { data: oc } = await supabase
     .from('ordenes_compra')
@@ -23,7 +30,10 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
   if (!oc) notFound()
 
   const esBorrador = (oc as { estado: string }).estado === 'BORRADOR'
-  const [{ data: items }, { data: eventos }, { data: productos }, { data: proveedores }] = await Promise.all([
+  const [
+    { data: items }, { data: eventos }, { data: productos }, { data: proveedores },
+    { data: entregas }, { data: ubicaciones },
+  ] = await Promise.all([
     supabase.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec, precio_unit, subtotal, producto:productos ( codigo, nombre_estandar, presentacion )').eq('oc_id', id),
     supabase.from('oc_eventos').select('*').eq('oc_id', id).order('created_at', { ascending: false }),
     esBorrador
@@ -36,6 +46,16 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
       : Promise.resolve({ data: [] }),
     esBorrador
       ? supabase.from('proveedores').select('id, nombre').eq('activo', true).order('nombre')
+      : Promise.resolve({ data: [] }),
+    // Historial de entregas: desde la fase 1 cada una tiene su fecha, su
+    // remisión y quién la recibió, en vez de un solo acumulado por ítem.
+    supabase
+      .from('oc_recepciones')
+      .select('id, consecutivo, fecha, remision, observacion, recibido_nombre, created_at, ubicacion:ubicaciones ( codigo, nombre ), items:oc_recepcion_items ( id, oc_item_id, cantidad, cantidad_rechazada, motivo_rechazo, producto:productos ( nombre_estandar, presentacion ) )')
+      .eq('oc_id', id)
+      .order('consecutivo', { ascending: false }),
+    puede.recibir
+      ? supabase.from('ubicaciones').select('id, codigo, nombre').eq('activo', true).order('codigo')
       : Promise.resolve({ data: [] }),
   ])
 
@@ -50,6 +70,9 @@ export default async function OCDetallePage({ params }: { params: Promise<{ id: 
         eventos={(eventos as unknown as OCEvento[]) ?? []}
         productos={(productos as unknown as ProductoLite[]) ?? []}
         proveedores={(proveedores as unknown as ProveedorLite[]) ?? []}
+        entregas={(entregas as unknown as OCEntrega[]) ?? []}
+        ubicaciones={(ubicaciones as unknown as UbicacionLite[]) ?? []}
+        puede={puede}
       />
     </div>
   )

@@ -1,6 +1,6 @@
 # Módulo de Compras — bases
 
-Estado: **decisiones cerradas el 2026-10-18** sobre la propuesta del 2026-09-27. Las cuatro decisiones de la sección 7 están aceptadas y el plan de la fase 1 está en la sección 9. **Nada está migrado ni construido todavía**; quedan tres preguntas de detalle y un paso previo (ver 9.0).
+Estado: **fase 1 construida y aplicada el 2026-10-18**; decisiones cerradas ese mismo día sobre la propuesta del 2026-09-27. Las cuatro decisiones de la sección 7 están aceptadas, el plan de la fase 1 está en la sección 9 y lo que quedó construido está en la 10. Quedan tres preguntas de detalle y un paso previo (ver 9.0); las fases 2 a 5 siguen sin empezar.
 
 ## 1. Qué existe hoy
 
@@ -217,7 +217,7 @@ Y una de coordinación: hay otra sesión trabajando en la base en paralelo, así
 - `oc_recepciones`: una fila por entrega. Consecutivo dentro de la orden, fecha, número de remisión del proveedor, bodega (Central por defecto), ubicación, quién recibió, observación.
 - `oc_recepcion_items`: qué llegó en esa entrega. Ítem de la orden, cantidad recibida, cantidad rechazada y motivo del rechazo.
 - `oc_items.cantidad_rec` **se queda** (la usan la pantalla y los reportes) pero deja de escribirse a mano: pasa a mantenerla un trigger que suma las entregas. Así no puede volver a desincronizarse del stock.
-- Backfill: la única orden del sistema tiene cantidades recibidas. Se le crea una entrega histórica con esos valores para no perder el dato.
+- Backfill: si alguna orden traía cantidades recibidas, se le reconstruye una entrega histórica con esos valores. Al aplicarlo resultó que la única orden del sistema tiene 0 recibido, así que no había nada que reconstruir; el paso queda igual porque es idempotente y protege cualquier recepción que se registre antes de desplegar.
 
 **Por qué importa el rechazo.** Es el campo que hoy no existe y que explica la mitad de los descuadres: si llegan 100 y 5 vienen malos, hoy la única opción es registrar 100 (y el stock queda inflado) o registrar 95 (y la orden queda eternamente parcial).
 
@@ -299,3 +299,47 @@ Vale dejar la consulta que mide la primera fila guardada en `scripts/`, para pod
 6. Verificación: los dos scripts de permisos que ya existen, más una revisión de las pantallas con sesión en el banco de pruebas.
 
 La migración y el RPC son el bloque que hay que hacer bien; las pantallas son mecánicas. Los pasos 3 a 5 se pueden repartir, el 1 y el 2 no.
+
+## 10. Fase 1 construida (2026-10-18)
+
+La migración `supabase/migrations/20261018000000_compras_fase1.sql` **ya está aplicada** en la base. Esto es lo que quedó y lo que cambió respecto del plan.
+
+### Lo que quedó
+
+| Pieza | Dónde |
+|---|---|
+| Entregas con fecha, remisión, ubicación, quién recibió, cantidad rechazada y motivo | `oc_recepciones` + `oc_recepcion_items` |
+| `oc_items.cantidad_rec` mantenido por trigger (ya nadie lo escribe a mano) | `tr_oc_recepcion_items_sync` |
+| Una entrega completa en una sola transacción | `oc_registrar_recepcion()` |
+| Entradas que pueden declarar origen y orden de compra | `registrar_entrada()` |
+| Origen de la entrada, con la regla «si es compra, tiene orden» | `movimientos.origen` + restricción `movimientos_compra_exige_oc` (NOT VALID) |
+| Origen deducido para lo que entra por otras funciones | `tr_movimientos_origen` |
+| «Quien crea no aprueba» + tope por monto | `tr_oc_aprobacion` |
+| Topes editables | `compras_niveles_aprobacion` |
+| Indicador de cobertura | vista `v_compras_cobertura_oc` y `scripts/verificar-compras-fase1.mjs` |
+| Permisos separados | `aprobar_ordenes_compra`, `aprobar_ordenes_compra_sin_tope`, `recibir_ordenes_compra` |
+
+Pantallas: la orden de compra pasó de «Registrar recepción» a «Registrar entrega» con historial; `/movimientos/nuevo` pide el origen de cada entrada y la orden cuando es una compra; `/aprovisionamiento` ya no muestra junio fijo.
+
+### Tres cosas que los datos o el código cambiaron sobre la marcha
+
+1. **La causa raíz no era un olvido.** `registrar_movimiento` nunca tuvo parámetro para la orden de compra, así que `movimientos.oc_id` no se podía llenar. No se le cambió la firma —`ejecutar_reembasado` y las devoluciones de órdenes de insumo la llaman por posición y se habrían roto—, se agregó `registrar_entrada` al lado.
+2. **La orden que existe tiene 0 recibido**, así que no hubo ninguna entrega histórica que reconstruir (ver 9.1).
+3. **La tarjeta de móvil escondía el rechazo.** La tabla estándar oculta en tarjetas las columnas sin valor, y el motivo del rechazo empieza vacío: en el celular era imposible registrar un rechazo. La entrega lleva tarjeta propia. Se encontró probando, no leyendo.
+
+### Verificación hecha
+
+- 11 comportamientos probados contra la base real dentro de una transacción revertida: autoaprobación bloqueada, aprobación sin permiso bloqueada, aprobación válida, entrada de compra sin orden bloqueada, recepción sin permiso bloqueada, entrega registrada con su movimiento y su ubicación, stock que sube lo recibido y no lo rechazado, exceso sobre lo pedido bloqueado, rechazo sin motivo bloqueado, segunda entrega que cierra la orden, y la vista de cobertura.
+- `tsc --noEmit` limpio.
+- `scripts/verificar-permisos.mjs`: «la base de datos concede exactamente lo que dice /roles».
+- Las dos pantallas montadas con datos reales en el banco de pruebas: validaciones y el contenido exacto de lo que se envía al servidor.
+
+### Línea base (al aplicar)
+
+0 de 768 entradas con orden · 1 orden aprobada por quien la creó (de antes del trigger) · 0 entregas registradas. `node --use-system-ca scripts/verificar-compras-fase1.mjs` vuelve a medirlo cuando se quiera.
+
+### Lo que falta para que la fase 1 sirva de verdad
+
+1. **Asignarle el rol Gerencia a alguien** y después encender el tope alto (el script lo recuerda y trae el `UPDATE`).
+2. **Decidir si producción, reembasado y maquinaria son bodegas aparte** (pregunta abierta de 7.3).
+3. **Pasar de avisar a bloquear** en `/movimientos/nuevo` cuando se vea que bodega está marcando el origen. Hoy una entrada sin origen se guarda igual, a propósito.

@@ -49,6 +49,17 @@ export async function registrarMovimiento(_prev: ActionResult, formData: FormDat
   redirect('/movimientos')
 }
 
+/**
+ * De dónde viene una entrada. No toda entrada es una compra: también entra lo
+ * que vuelve de producción, del reembasado o de otra área. Solo COMPRA exige
+ * orden de compra, y eso lo verifica además la restricción
+ * `movimientos_compra_exige_oc` en la base.
+ */
+export const ORIGENES_ENTRADA = [
+  'COMPRA', 'PRODUCCION', 'REEMBASADO', 'TRASLADO_INTERNO', 'DEVOLUCION_SEDE', 'AJUSTE', 'OTRO',
+] as const
+export type OrigenMovimiento = (typeof ORIGENES_ENTRADA)[number]
+
 export interface MovItem {
   tipo: TipoMovimiento
   producto_id: string
@@ -56,6 +67,17 @@ export interface MovItem {
   sede_id: string | null
   ubicacion_id: string | null
   observacion: string | null
+  origen?: OrigenMovimiento | null
+  oc_id?: string | null
+}
+
+/**
+ * Una entrada de compra tiene que decir contra qué orden entró. Es la regla que
+ * cierra el hueco de la fase 1: hasta ahora ninguna de las entradas registradas
+ * tenía orden detrás, así que no había forma de saber qué se compró ni a quién.
+ */
+function faltaOrdenDeCompra(it: MovItem): boolean {
+  return it.tipo === 'ENTRADA' && it.origen === 'COMPRA' && !it.oc_id
 }
 
 /** Registra VARIOS movimientos en lote (uno por fila). */
@@ -74,14 +96,27 @@ export async function registrarMovimientos(items: MovItem[]): Promise<{ error?: 
   )
   if (validos.length === 0) return { error: 'Agrega al menos un movimiento válido (producto y cantidad > 0).' }
 
+  const sinOrden = validos.findIndex(faltaOrdenDeCompra)
+  if (sinOrden >= 0) {
+    return { error: `La fila ${sinOrden + 1} es una entrada de compra: elige la orden de compra contra la que entró.` }
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const sb = supabase as any
   let ok = 0
   for (const it of validos) {
-    const { error } = await sb.rpc('registrar_movimiento', {
-      p_producto: it.producto_id, p_tipo: it.tipo, p_cantidad: it.cantidad,
-      p_sede: it.sede_id, p_observacion: it.observacion, p_ubicacion: it.ubicacion_id,
-    })
+    // Las entradas van por `registrar_entrada`, que sí puede guardar el origen
+    // y la orden de compra. El resto sigue por `registrar_movimiento`.
+    const { error } = it.tipo === 'ENTRADA'
+      ? await sb.rpc('registrar_entrada', {
+          p_producto: it.producto_id, p_cantidad: it.cantidad,
+          p_origen: it.oc_id ? 'COMPRA' : (it.origen || null), p_oc: it.oc_id || null,
+          p_ubicacion: it.ubicacion_id, p_sede: it.sede_id, p_observacion: it.observacion,
+        })
+      : await sb.rpc('registrar_movimiento', {
+          p_producto: it.producto_id, p_tipo: it.tipo, p_cantidad: it.cantidad,
+          p_sede: it.sede_id, p_observacion: it.observacion, p_ubicacion: it.ubicacion_id,
+        })
     if (error) {
       const msg = error.message.includes('row-level security') || error.message.includes('permission')
         ? 'No tienes permisos para registrar movimientos.'

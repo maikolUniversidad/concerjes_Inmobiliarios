@@ -15,7 +15,23 @@ function formatCOP(n: number) {
 export default async function AprovisionamientoPage() {
   await requirePermiso('ver_aprovisionamiento')
   const supabase = await createClient()
-  const periodo = 'JUNIO 2026'
+
+  // El plan de reabastecimiento vive en la tabla `aprovisionamiento`, que se
+  // carga por período. El período estaba fijo en el código ('2026-06-01'), así
+  // que la pantalla llevaba meses mostrando junio mientras la recomendación en
+  // vivo de al lado sí estaba al día. Ahora se toma el último período cargado.
+  const { data: ultimo } = await supabase
+    .from('aprovisionamiento')
+    .select('periodo')
+    .order('periodo', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const periodoISO = String((ultimo as { periodo?: string } | null)?.periodo ?? '').slice(0, 10) || null
+  const periodo = periodoISO
+    ? new Date(`${periodoISO}T12:00:00`)
+        .toLocaleDateString('es-CO', { month: 'long', year: 'numeric' })
+        .toUpperCase()
+    : 'SIN PLAN CARGADO'
 
   // Traer productos activos con su stock y datos de aprovisionamiento
   const [{ data: aprovData }, gruposData] = await Promise.all([
@@ -29,7 +45,7 @@ export default async function AprovisionamientoPage() {
           stock ( cantidad_real, cantidad_disp )
         )
       `)
-      .eq('periodo', '2026-06-01')
+      .eq('periodo', periodoISO ?? '1900-01-01')
       .eq('productos.activo', true)
       .order('producto_id')
       .limit(300),
@@ -41,7 +57,7 @@ export default async function AprovisionamientoPage() {
         producto_id, cantidad,
         sedes!inner ( grupo_id, grupos_contrato!inner ( codigo ) )
       `)
-      .eq('periodo', '2026-06-01')
+      .eq('periodo', periodoISO ?? '1900-01-01')
       .order('id')
       .range(desde, hasta)),
   ])

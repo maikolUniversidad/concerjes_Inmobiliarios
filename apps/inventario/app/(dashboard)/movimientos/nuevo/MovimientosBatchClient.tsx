@@ -7,6 +7,7 @@ import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, F
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarMovimientos, guardarBorrador, eliminarBorrador, registrarDesdeBorrador } from '../actions'
+import type { OrigenMovimiento } from '../actions'
 import { ProductoCombo, type ProductoComboItem } from '@/components/ui/ProductoCombo'
 import { ComboBuscador } from '@/components/ui/ComboBuscador'
 import type { TipoMovimiento } from '@/lib/types/database'
@@ -36,7 +37,30 @@ interface Fila {
   sede_id: string
   ubicacion_id: string
   observacion: string
+  /** Solo para entradas: de dónde viene. Vacío = sin declarar (se avisa). */
+  origen: OrigenMovimiento | ''
+  /** Orden de compra, obligatoria cuando el origen es COMPRA. */
+  oc_id: string
 }
+
+/** Orden de compra abierta, para amarrar la entrada que llegó del proveedor. */
+export interface OCOpt { id: string; numero: string; estado: string; fecha: string; proveedor: string | null }
+
+/**
+ * De dónde viene una entrada. Hasta la fase 1 del módulo de compras todas las
+ * entradas eran iguales, así que no había forma de distinguir una compra a
+ * proveedor de lo que vuelve de producción o del reembasado — y por eso tampoco
+ * se podía exigir la orden de compra sin bloquear las entradas internas.
+ */
+const ORIGENES: { value: OrigenMovimiento; label: string }[] = [
+  { value: 'COMPRA', label: 'Compra a proveedor' },
+  { value: 'PRODUCCION', label: 'Producción' },
+  { value: 'REEMBASADO', label: 'Reembasado' },
+  { value: 'TRASLADO_INTERNO', label: 'Traslado interno' },
+  { value: 'DEVOLUCION_SEDE', label: 'Devolución de sede' },
+  { value: 'AJUSTE', label: 'Ajuste de inventario' },
+  { value: 'OTRO', label: 'Otro' },
+]
 interface OrdenOpt {
   id: string; numero: string; sede_id: string | null; sede_nombre: string | null
   estado?: string; created_at?: string
@@ -57,15 +81,16 @@ const cellInp = 'w-full rounded-lg border border-gray-200 px-2 py-1.5 font-body 
 
 let uid = 1
 const nuevaFila = (tipo: TipoMovimiento = 'ENTRADA', patch: Partial<Fila> = {}): Fila =>
-  ({ key: uid++, tipo, producto_id: '', cantidad: '', sede_id: '', ubicacion_id: '', observacion: '', ...patch })
+  ({ key: uid++, tipo, producto_id: '', cantidad: '', sede_id: '', ubicacion_id: '', observacion: '', origen: '', oc_id: '', ...patch })
 
 export function MovimientosBatchClient({
-  productos, sedes, ubicaciones = [], ordenes = [], usuarios = [], borradores = [], initialProducto, initialTipo,
+  productos, sedes, ubicaciones = [], ordenes = [], ordenesCompra = [], usuarios = [], borradores = [], initialProducto, initialTipo,
 }: {
   productos: ProductoComboItem[]
   sedes: { id: string; nombre: string }[]
   ubicaciones?: { id: string; label: string }[]
   ordenes?: OrdenOpt[]
+  ordenesCompra?: OCOpt[]
   usuarios?: UsuarioOpt[]
   borradores?: Borrador[]
   initialProducto?: string
@@ -132,16 +157,31 @@ export function MovimientosBatchClient({
     } finally { setCargandoOrden(false) }
   }
 
+  // ── Entradas de compra sin orden ──
+  // La fase 1 del módulo de compras arranca avisando, no bloqueando: si se
+  // bloqueara desde el primer día, lo probable es que bodega dejara de
+  // registrar las entradas y el problema pasaría de «no sé contra qué orden
+  // entró» a «no sé que entró», que es peor. Lo único que sí se bloquea es la
+  // contradicción: declararla compra y no decir cuál.
+  const filasConDatos = filas.filter(f => f.producto_id && Number(f.cantidad) > 0)
+  const comprasSinOrden = filasConDatos.filter(f => f.tipo === 'ENTRADA' && f.origen === 'COMPRA' && !f.oc_id)
+  const entradasSinOrigen = filasConDatos.filter(f => f.tipo === 'ENTRADA' && !f.origen)
+
   function registrar() {
     setError(null)
-    const payload = filas
-      .filter(f => f.producto_id && Number(f.cantidad) > 0)
+    const payload = filasConDatos
       .map(f => ({
         tipo: f.tipo, producto_id: f.producto_id, cantidad: Number(f.cantidad),
         sede_id: f.sede_id || null, ubicacion_id: f.ubicacion_id || null,
         observacion: f.observacion.trim() || null,
+        origen: f.tipo === 'ENTRADA' ? (f.origen || null) : null,
+        oc_id: f.tipo === 'ENTRADA' && f.origen === 'COMPRA' ? (f.oc_id || null) : null,
       }))
     if (payload.length === 0) { setError('Agrega al menos una fila con producto y cantidad.'); return }
+    if (comprasSinOrden.length > 0) {
+      setError(`Hay ${comprasSinOrden.length} ${comprasSinOrden.length === 1 ? 'entrada' : 'entradas'} de compra sin orden. Elige la orden de compra contra la que entró la mercancía.`)
+      return
+    }
     start(async () => {
       const r = await registrarMovimientos(payload)
       if (r.error) { setError(r.error); return }
@@ -247,6 +287,45 @@ export function MovimientosBatchClient({
     <input value={f.observacion} onChange={e => set(f.key, { observacion: e.target.value })}
       placeholder="Opcional" className={cellInp} />
   )
+  // Origen: solo tiene sentido en las entradas. Al dejar de ser compra se
+  // limpia la orden, para no guardar una orden con un origen que no la admite.
+  const campoOrigen = (f: Fila) => {
+    if (f.tipo !== 'ENTRADA') return <span className="font-body text-xs text-gray-300">—</span>
+    const avisa = !f.origen
+    return (
+      <select
+        value={f.origen}
+        onChange={e => {
+          const origen = e.target.value as OrigenMovimiento | ''
+          set(f.key, { origen, oc_id: origen === 'COMPRA' ? f.oc_id : '' })
+        }}
+        className={`${cellSel} ${avisa ? 'border-amber-300 bg-amber-50' : ''}`}
+      >
+        <option value="">— ¿De dónde viene? —</option>
+        {ORIGENES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+      </select>
+    )
+  }
+  const campoOrdenCompra = (f: Fila) => {
+    if (f.tipo !== 'ENTRADA' || f.origen !== 'COMPRA') {
+      return <span className="font-body text-xs text-gray-300">—</span>
+    }
+    if (ordenesCompra.length === 0) {
+      return <span className="font-body text-xs text-amber-600">Sin órdenes abiertas</span>
+    }
+    const falta = !f.oc_id
+    return (
+      <select value={f.oc_id} onChange={e => set(f.key, { oc_id: e.target.value })}
+        className={`${cellSel} ${falta ? 'border-red-300 bg-red-50' : ''}`}>
+        <option value="">— Obligatoria —</option>
+        {ordenesCompra.map(o => (
+          <option key={o.id} value={o.id}>
+            {o.numero}{o.proveedor ? ` · ${o.proveedor}` : ''} · {fechaCorta(o.fecha)}
+          </option>
+        ))}
+      </select>
+    )
+  }
   const btnQuitar = (f: Fila) => (
     <button onClick={() => quitar(f.key)} title="Quitar" disabled={filas.length === 1}
       className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-gray-400">
@@ -267,6 +346,16 @@ export function MovimientosBatchClient({
           <p className="mt-0.5 font-body text-[10px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
         </>
       ),
+    },
+    {
+      id: 'origen', header: 'Origen', ancho: 'w-44', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => ORIGENES.find(o => o.value === f.origen)?.label ?? '',
+      celda: (f) => campoOrigen(f),
+    },
+    {
+      id: 'oc', header: 'Orden de compra', ancho: 'w-56', interactiva: true, tarjeta: 'oculto',
+      valor: (f) => ordenesCompra.find(o => o.id === f.oc_id)?.numero ?? '',
+      celda: (f) => campoOrdenCompra(f),
     },
     {
       id: 'producto', header: 'Producto', ancho: 'min-w-[240px]', interactiva: true, tarjeta: 'oculto',
@@ -301,6 +390,20 @@ export function MovimientosBatchClient({
         <div className="flex items-center gap-2 bg-red-50 border border-red-100 rounded-xl px-4 py-3">
           <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
           <p className="font-body text-sm text-red-700">{error}</p>
+        </div>
+      )}
+
+      {/* Aviso, no bloqueo: una entrada sin origen se puede guardar igual. Lo
+          que se bloquea es declararla compra y no decir contra qué orden. */}
+      {entradasSinOrigen.length > 0 && (
+        <div className="flex items-start gap-2 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+          <p className="font-body text-sm text-amber-800">
+            {entradasSinOrigen.length === 1
+              ? 'Hay 1 entrada sin decir de dónde viene.'
+              : `Hay ${entradasSinOrigen.length} entradas sin decir de dónde vienen.`}{' '}
+            Si es una compra, elige «Compra a proveedor» y su orden: es lo que permite saber después qué se compró y a quién.
+          </p>
         </div>
       )}
 
@@ -445,6 +548,18 @@ export function MovimientosBatchClient({
                         {campoTipo(f)}
                         <p className="mt-0.5 font-body text-[11px] text-gray-400">{TIPO_HINT[f.tipo]}</p>
                       </div>
+                      {f.tipo === 'ENTRADA' && (
+                        <div>
+                          <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Origen</label>
+                          {campoOrigen(f)}
+                        </div>
+                      )}
+                      {f.tipo === 'ENTRADA' && f.origen === 'COMPRA' && (
+                        <div>
+                          <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Orden de compra</label>
+                          {campoOrdenCompra(f)}
+                        </div>
+                      )}
                       <div>
                         <label className="font-body font-semibold text-[11px] uppercase text-gray-500 block mb-1">Producto</label>
                         {campoProducto(f)}
