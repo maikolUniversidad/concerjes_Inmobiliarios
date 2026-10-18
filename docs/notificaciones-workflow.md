@@ -208,6 +208,11 @@ configuración muerta.
 
 Orden que evita que salgan avisos viejos:
 
+> **Los pasos 1 a 3 ya se ejecutaron el 18 de octubre de 2026.** El cron quedó registrado y corrió
+> en su primera pasada dejando los 4 pasos viejos en OMITIDO, y los 2 correos de la cola se
+> anularon (quedaron en ERROR, con el motivo escrito). Quien retome esto empieza en el paso 4.
+
+
 1. **Despliega el `apps/inventario/vercel.json`** con los dos cron y confirma en
    Vercel → Settings → Cron Jobs que aparecen los dos.
 2. **Con la cuenta todavía sin conectar**, entra a `/notificaciones/flujos` y pulsa
