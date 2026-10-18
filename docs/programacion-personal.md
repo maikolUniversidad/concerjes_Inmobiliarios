@@ -1,6 +1,7 @@
 # Programación de personal (turnos) — bases
 
-Estado: **propuesta** (2026-10-18). Nada de esto está migrado todavía.
+Estado: **fase 1 en construcción** (2026-10-18). La **decisión 1 ya está tomada:
+se crea el nivel «puesto»** (ver §8). El resto de la propuesta sigue sin migrar.
 
 El módulo responde una sola pregunta, todos los días: **¿quién cubre cada puesto
 mañana, y qué puesto se quedó sin nadie?** Hoy eso vive en WhatsApp y en Excel.
@@ -301,8 +302,21 @@ marcaciones se hacen sin señal y se suben después.
 * **`centros_costo`**: llenar `obra_id`, `cliente_id` y `grupo_id` (hoy vacíos en
   los 624). Sin `grupo_id` no se puede cruzar con las sedes.
 * **`sedes`**: + `centro_costo_id`. Es el puente que falta entre los dos mundos.
-  **80 de los 92 centros con personal tienen una sede con nombre parecido**, así
-  que el 87% se puede proponer automáticamente, pero lo confirma una persona.
+  La dirección correcta es **N sedes → 1 centro de costo** (el centro
+  `UNAD 2026-BOGOTA` cubre varias sedes de la UNAD en Bogotá), no al revés.
+  El cruce automático se midió contra los datos reales y da esto:
+
+  | Resultado del cruce (194 sedes activas) | Sedes |
+  |---|---|
+  | **sugerencia de confianza plena** (todas las palabras del centro aparecen en el nombre de la sede, y la ciudad coincide) | **63** |
+  | sugerencia parcial (coincide parte del nombre) | 5 |
+  | hay centro con gente en esa ciudad, pero **ningún parecido de nombre** | 101 |
+  | no hay ningún centro con gente activa en esa ciudad | 25 |
+
+  Los 101 sin parecido son el caso de las bibliotecas y los colegios: el centro
+  que los paga se llama `UT RED CULTURAL Y LA SCRD 567-2026-BOGOTA` y ninguna
+  comparación de texto va a adivinarlo. **Un tercio se propone solo; los otros
+  dos tercios los tiene que decir alguien de operaciones.**
 * **`vac_listas_opciones`** lista `TURNO`: se queda como la lista que usa la
   requisición, y cada valor apunta a un `turno_patrones.codigo`. Mismo vocabulario
   en selección y en programación.
@@ -349,6 +363,8 @@ política extra para que **cada colaborador vea su propio turno y nada más**.
    `programacion_reglas`, `calendario_festivos`, y `sedes.centro_costo_id` con la
    propuesta automática por nombre + pantalla para confirmarla a mano.
    *Sin esto no hay módulo: es el mapa de la operación.*
+   → **Migración escrita y ensayada**: `supabase/migrations/20261018000000_programacion_fase1.sql`.
+   Falta aplicarla y construir las dos pantallas (ver §9).
 2. **Malla semanal.** `programaciones` + `turnos`, la pantalla de la semana,
    «copiar semana anterior», publicar, y la exclusión de solapes en la base.
    *Con esto ya se reemplaza el Excel.*
@@ -370,22 +386,26 @@ política extra para que **cada colaborador vea su propio turno y nada más**.
 
 Las cuatro primeras **bloquean**: sin ellas no se puede escribir la migración.
 
-### 1. ¿El turno cuelga del puesto, o basta con la sede? — **bloquea**
+### 1. ¿El turno cuelga del puesto, o basta con la sede? — ✅ **RESUELTA: se crea `puestos`**
 
-La propuesta mete `puestos` porque Transmilenio son **302 personas en 2 sedes**:
+Se mete el nivel `puestos` porque Transmilenio son **302 personas en 2 sedes**:
 sin un nivel más fino, la malla de ese contrato es una sola fila con 302 nombres.
-Pero crear los puestos es un trabajo manual de la operación, contrato por
-contrato. La alternativa —turno colgado directo de la sede, y para Transmilenio
-crear 40 sedes nuevas— ensucia `sedes`, que hoy es de inventario y se usa para
-despachar insumos. **Decisión: ¿creamos `puestos`, o partimos las sedes grandes?**
+La alternativa —turno colgado directo de la sede, y para Transmilenio crear 40
+sedes nuevas— ensuciaba `sedes`, que es de inventario y se usa para despachar
+insumos.
+
+Queda el trabajo que esto implica: **crear los puestos es manual, contrato por
+contrato**. La pantalla de parametrización se construye en la fase 1, pero
+llenarla es de la operación.
 
 ### 2. ¿Quién amarra las sedes a los centros de costo, y cuándo? — **bloquea**
 
 197 sedes y 92 centros de costo con personal, y **nada** los une hoy
-(`obra_id`, `cliente_id` y `grupo_id` vacíos en los 624 centros). El cruce
-automático por nombre acierta en 80 de 92, pero los 12 restantes y cada caso
-dudoso los tiene que confirmar alguien de operaciones. **¿Lo hacemos en una
-pantalla de mapeo con la propuesta precargada, o nos pasan un Excel ya cruzado?**
+(`obra_id`, `cliente_id` y `grupo_id` vacíos en los 624 centros).
+`vw_sede_centro_sugerido` (fase 1) propone el cruce, pero solo resuelve **63 de
+194 sedes** con confianza plena: las otras 131 las tiene que decir una persona
+(ver la tabla de §6). **¿Lo hacemos en una pantalla de mapeo con la propuesta
+precargada, o nos pasan un Excel ya cruzado?**
 
 ### 3. ¿Cuáles son los topes? — **bloquea**
 
@@ -443,3 +463,62 @@ sale mal. **¿Confirmamos que en estos contratos los festivos se trabajan?**
 operación mueve gente que figura asignada a un contrato (porque el contrato tiene
 holgura), el banco real es más grande y **`vw_personal_disponible` está contando
 de menos**.
+
+---
+
+## 9. Estado de la fase 1
+
+### Lo que ya está escrito y ensayado
+
+`supabase/migrations/20261018000000_programacion_fase1.sql` — **ensayada contra
+la base real dentro de una transacción que se revirtió**, dos veces seguidas para
+comprobar que es idempotente. **No está aplicada todavía.**
+
+| Pieza | Qué quedó |
+|---|---|
+| `sedes.centro_costo_id` | el puente entre inventario y nómina |
+| `vw_sede_centro_sugerido` | la propuesta de cruce, con confianza ALTA / MEDIA / SIN_CANDIDATO |
+| `puestos` + `vw_puestos` | el nivel nuevo, con cobertura, cargo, requisitos y `turnos_semana` calculado |
+| `turno_patrones` | los 15 patrones del ATS con horas, días y `cruza_medianoche` calculado |
+| `programacion_reglas` + `programacion_reglas_vigentes()` | los topes, con la fila global en `confirmado_por_nomina = false` |
+| `calendario_festivos` + `festivos_colombia(año)` | 2026 y 2027 sembrados (18 festivos cada año) |
+| `vw_programacion_pendientes` | la lista de lo que falta para poder programar |
+| RLS + 8 permisos | en `lib/permisos.ts`, grupo Gestión Humana, y prendidos en los roles evidentes |
+| `btree_gist` | habilitada; es lo que la fase 2 necesita para impedir el solape |
+
+**Dos decisiones de implementación que vale la pena conocer:**
+
+* **Los festivos se calculan, no se transcriben.** `festivos_colombia(año)` saca
+  la Pascua con el algoritmo de Meeus y aplica el traslado al lunes de la Ley
+  Emiliani. Sirve para cualquier año, así que nadie tiene que volver cada
+  diciembre a teclear 18 fechas. Verificado contra el calendario de 2026.
+* **El cruce de sedes se hace por palabras completas, no por parecido de
+  texto.** Se probaron las dos alternativas y fallaron: la similitud por
+  trigramas daba 0,28 a aciertos buenos de la UNAD y 0,30 a un error, y la
+  comparación por subcadena proponía el centro `CAR-BOGOTA` para media Fiscalía
+  porque «CAR» aparece dentro de «CARTAGENA» y «CARRERA».
+
+### Lo que la fase 1 tiene pendiente
+
+1. **Aplicar la migración** (`node scripts/apply-migrations.mjs …`).
+2. **Pantalla de mapeo sede → centro de costo**, con la sugerencia precargada.
+   Son 194 sedes: 63 vienen propuestas, 131 hay que decirlas (decisión 2).
+3. **Pantalla de puestos** (CRUD con `TablaEstandar`) y su entrada en el menú de
+   Gestión Humana.
+4. **Pantalla de parámetros**: topes, patrones y festivos (decisión 3).
+
+### El tamaño real del trabajo manual que queda
+
+`vw_programacion_pendientes`, corrida sobre los datos de hoy:
+
+| Pendiente | Cuántos |
+|---|---|
+| sedes activas sin centro de costo | **194** (todas) |
+| sedes activas sin ningún puesto | **194** (todas) |
+| sedes activas sin responsable | 120 |
+| contratos con gente activa y sin ninguna sede apuntándoles | 91 |
+| la regla global sin confirmar con nómina | 1 |
+
+No es un defecto: es el inventario de lo que la operación tiene que llenar antes
+de que se pueda programar la primera semana. Conviene empezar por **un solo
+contrato** —Transmilenio o Corferias— y no por los 92.
