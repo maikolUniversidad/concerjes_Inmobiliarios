@@ -57,10 +57,16 @@ export async function eliminarPrecio(formData: FormData): Promise<void> {
 }
 
 /**
- * Sincroniza la matriz precios_proveedor con los proveedores/precios que ya
- * están en la ficha de cada producto (proveedor_id/precio_lista y
- * proveedor2_id/precio_lista2). Deja la relación productos↔proveedores poblada
- * de inmediato, sin duplicar (upsert por producto+proveedor).
+ * Completa la matriz precios_proveedor con el proveedor/precio que ya está en
+ * la ficha del producto (proveedor_id/precio_lista y proveedor2_id/precio_lista2),
+ * SOLO para los productos que aquí no tienen ningún proveedor todavía.
+ *
+ * Deliberadamente deja fuera los productos que ya tienen proveedores en la
+ * matriz y cuya ficha nombra otro distinto (78 medidos en oct-2026). Para esos
+ * la ficha y el comparador discrepan: sincronizar no corregiría nada, agregaría
+ * un tercer proveedor más barato que nadie cotizó y que se llevaría la insignia
+ * de "mejor precio" — y nueve de ellos cuelgan de CAJA MENOR, que es una compra
+ * de contado, no un proveedor. Ver docs/modulo-compras.md § 13.
  */
 export async function importarDesdeProductos(): Promise<ActionResult> {
   const falta = await faltaPermiso('editar_proveedores')
@@ -76,7 +82,7 @@ export async function importarDesdeProductos(): Promise<ActionResult> {
   try {
     productos = await traerTodo((desde, hasta) => supabase
       .from('productos')
-      .select('id, proveedor_id, precio_lista, proveedor2_id, precio_lista2')
+      .select('id, proveedor_id, precio_lista, proveedor2_id, precio_lista2, precios_proveedor(proveedor_id)')
       .eq('activo', true)
       .order('id')
       .range(desde, hasta))
@@ -86,24 +92,39 @@ export async function importarDesdeProductos(): Promise<ActionResult> {
 
   // Deduplica por (producto, proveedor); el último gana.
   const mapa = new Map<string, { producto_id: string; proveedor_id: string; precio: number; vigente: boolean }>()
+  let omitidos = 0
   for (const p of productos as {
     id: string; proveedor_id: string | null; precio_lista: number | null
     proveedor2_id: string | null; precio_lista2: number | null
+    precios_proveedor: { proveedor_id: string }[] | null
   }[]) {
-    if (p.proveedor_id && p.precio_lista != null) {
-      mapa.set(`${p.id}:${p.proveedor_id}`, { producto_id: p.id, proveedor_id: p.proveedor_id, precio: p.precio_lista, vigente: true })
+    const tieneFicha = (p.proveedor_id && (p.precio_lista ?? 0) > 0) || (p.proveedor2_id && (p.precio_lista2 ?? 0) > 0)
+    if ((p.precios_proveedor ?? []).length > 0) {
+      // Ya tiene proveedor en el comparador: si la ficha nombra otro, es una
+      // discrepancia por revisar a mano, no un hueco por rellenar.
+      if (tieneFicha && !(p.precios_proveedor ?? []).some((x) => x.proveedor_id === p.proveedor_id)) omitidos++
+      continue
     }
-    if (p.proveedor2_id && p.precio_lista2 != null) {
-      mapa.set(`${p.id}:${p.proveedor2_id}`, { producto_id: p.id, proveedor_id: p.proveedor2_id, precio: p.precio_lista2, vigente: true })
+    // Precio 0 no se importa: ganaría la insignia de "mejor precio" y dejaría
+    // el ahorro potencial sin sentido. Queda para asignarlo a mano.
+    if (p.proveedor_id && (p.precio_lista ?? 0) > 0) {
+      mapa.set(`${p.id}:${p.proveedor_id}`, { producto_id: p.id, proveedor_id: p.proveedor_id, precio: p.precio_lista as number, vigente: true })
+    }
+    if (p.proveedor2_id && (p.precio_lista2 ?? 0) > 0) {
+      mapa.set(`${p.id}:${p.proveedor2_id}`, { producto_id: p.id, proveedor_id: p.proveedor2_id, precio: p.precio_lista2 as number, vigente: true })
     }
   }
+  const nota = omitidos > 0
+    ? ` Se dejaron fuera ${omitidos} productos cuya ficha nombra un proveedor distinto al que ya tienen aquí: revísalos a mano.`
+    : ''
+
   const filas = [...mapa.values()]
-  if (filas.length === 0) return { ok: true, mensaje: 'No hay proveedores/precios en las fichas de productos para importar.' }
+  if (filas.length === 0) return { ok: true, mensaje: 'Ningún producto sin proveedor tiene proveedor y precio en su ficha.' + nota }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { error } = await (supabase as any).from('precios_proveedor').upsert(filas, { onConflict: 'producto_id,proveedor_id' })
   if (error) return { error: traducir(error.message) }
 
   revalidatePath('/comparador-precios')
-  return { ok: true, mensaje: `Se sincronizaron ${filas.length} precios desde las fichas de productos.` }
+  return { ok: true, mensaje: `Se completaron ${filas.length} precios desde las fichas de productos.` + nota }
 }

@@ -34,7 +34,7 @@ export interface ProductoPrecios {
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green bg-white'
 
-type Filtro = 'con-precios' | 'comparables' | 'todos'
+type Filtro = 'con-precios' | 'comparables' | 'sin-proveedor' | 'todos'
 
 // ── Componente principal ──────────────────────────────────────────────────────
 export function ComparadorClient({ productos, proveedores }: { productos: ProductoPrecios[]; proveedores: ProveedorLite[] }) {
@@ -62,26 +62,49 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
       const best = conPrecio[0]?.precio ?? null
       const worst = conPrecio.length ? conPrecio[conPrecio.length - 1].precio : null
       const ahorro = best != null && worst != null ? worst - best : 0
-      return { p, precios, nProv: precios.length, best, worst, ahorro }
+      // Solo para los que no tienen proveedor aquí: el que ya trae la ficha del
+      // producto. La insignia marca exactamente los que "Completar desde fichas"
+      // resuelve, así que exige el mismo precio > 0 que el botón.
+      const fichaNombre = precios.length === 0 && p.proveedor_id && (p.precio_lista ?? 0) > 0
+        ? provNombre(p.proveedor_id)
+        : null
+      return { p, precios, nProv: precios.length, best, worst, ahorro, fichaNombre }
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [productos, provMap])
 
-  // KPIs
-  const kpis = useMemo(() => {
-    const conPrecio = filas.filter((f) => f.nProv > 0).length
-    const comparables = filas.filter((f) => f.nProv >= 2).length
-    const ahorro = filas.reduce((s, f) => s + (f.nProv >= 2 ? f.ahorro : 0), 0)
-    return { conPrecio, comparables, ahorro }
-  }, [filas])
+  const prodMap = useMemo(() => new Map(productos.map((p) => [p.id, p])), [productos])
 
-  // Precios en fichas de producto aún no reflejados en la matriz (para "sincronizar")
+  // Conteo por filtro. Los KPIs salen de aquí mismo para que el número del
+  // botón nunca contradiga el de la tarjeta de arriba (con precio + sin
+  // proveedor = todos).
+  const conteos = useMemo(() => ({
+    'con-precios': filas.filter((f) => f.nProv > 0).length,
+    comparables: filas.filter((f) => f.nProv >= 2).length,
+    'sin-proveedor': filas.filter((f) => f.nProv === 0).length,
+    todos: filas.length,
+  }), [filas])
+
+  // KPIs
+  const kpis = useMemo(() => ({
+    conPrecio: conteos['con-precios'],
+    comparables: conteos.comparables,
+    sinProveedor: conteos['sin-proveedor'],
+    ahorro: filas.reduce((s, f) => s + (f.nProv >= 2 ? f.ahorro : 0), 0),
+  }), [filas, conteos])
+
+  // Productos sin NINGÚN proveedor en el comparador cuya ficha sí trae uno:
+  // "Sincronizar" solo rellena estos huecos. Los productos que ya tienen
+  // proveedores aquí y cuya ficha nombra otro distinto quedan fuera a
+  // propósito: ahí sincronizar agregaría un tercer proveedor sin cotizar, que
+  // además se llevaría la insignia de "mejor precio". Ver docs/modulo-compras.md § 13.
+  // Un precio de 0 tampoco entra: se llevaría la insignia de "mejor precio" y
+  // dejaría el ahorro potencial sin sentido. Esos quedan para asignar a mano.
   const importables = useMemo(() => {
     let n = 0
     for (const p of productos) {
-      const set = new Set((p.precios_proveedor ?? []).map((x) => x.proveedor_id))
-      if (p.proveedor_id && p.precio_lista != null && !set.has(p.proveedor_id)) n++
-      if (p.proveedor2_id && p.precio_lista2 != null && !set.has(p.proveedor2_id)) n++
+      if ((p.precios_proveedor ?? []).length > 0) continue
+      if ((p.proveedor_id && (p.precio_lista ?? 0) > 0) || (p.proveedor2_id && (p.precio_lista2 ?? 0) > 0)) n++
     }
     return n
   }, [productos])
@@ -92,6 +115,7 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
     return filas.filter((f) => {
       if (filtro === 'con-precios' && f.nProv === 0) return false
       if (filtro === 'comparables' && f.nProv < 2) return false
+      if (filtro === 'sin-proveedor' && f.nProv > 0) return false
       if (!t) return true
       return (
         f.p.nombre_estandar.toLowerCase().includes(t) ||
@@ -112,6 +136,43 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
     })
   }
 
+  /** Abre el modal sobre el producto `id` de `cola`, prellenado con su ficha. */
+  function abrirDeCola(cola: string[], idx: number) {
+    const p = prodMap.get(cola[idx])
+    if (!p) return
+    setModal({
+      productoId: p.id,
+      productoNombre: p.nombre_estandar,
+      usados: (p.precios_proveedor ?? []).map((x) => x.proveedor_id),
+      cola,
+      idx,
+      prefill: p.proveedor_id
+        ? { proveedorId: p.proveedor_id, precio: (p.precio_lista ?? 0) > 0 ? p.precio_lista : null }
+        : undefined,
+    })
+  }
+
+  /** Arranca la cadena en el producto `desdeId` de la lista filtrada. */
+  function asignarEnCadena(desdeId?: string) {
+    const cola = filtradas.filter((f) => f.nProv === 0).map((f) => f.p.id)
+    if (cola.length === 0) return
+    const idx = desdeId ? Math.max(0, cola.indexOf(desdeId)) : 0
+    abrirDeCola(cola, idx)
+  }
+
+  /** Tras guardar en cadena: siguiente producto, o cerrar si ya no quedan. */
+  function siguienteDeCola() {
+    const { cola, idx } = modal ?? {}
+    if (!cola || idx == null) return setModal(null)
+    const falta = cola.length - (idx + 1)
+    if (falta <= 0) {
+      setModal(null)
+      toast.success(`Recorriste los ${cola.length} productos sin proveedor de la lista.`)
+      return
+    }
+    abrirDeCola(cola, idx + 1)
+  }
+
   function sincronizar() {
     startImport(async () => {
       const r = await importarDesdeProductos()
@@ -125,9 +186,10 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
   return (
     <div className="space-y-5">
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
         <KpiCard icon={Store} label="Proveedores activos" value={proveedores.length} color="text-blue-600 bg-blue-50 border-blue-100" />
         <KpiCard icon={Tag} label="Productos con precio" value={kpis.conPrecio} color="text-brand-green bg-green-50 border-green-100" />
+        <KpiCard icon={PackageSearch} label="Sin proveedor" value={kpis.sinProveedor} color="text-gray-600 bg-gray-50 border-gray-200" />
         <KpiCard icon={Scale} label="Comparables (2+ prov.)" value={kpis.comparables} color="text-purple-600 bg-purple-50 border-purple-100" />
         <KpiCard icon={PiggyBank} label="Ahorro potencial" value={cop.format(kpis.ahorro)} color="text-amber-600 bg-amber-50 border-amber-100" small />
       </div>
@@ -139,19 +201,37 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Buscar producto, ref o código…"
             className="font-body text-sm flex-1 outline-none placeholder:text-gray-400 bg-transparent" />
         </div>
-        <div className="flex rounded-lg bg-gray-100 p-0.5">
-          {([['con-precios', 'Con precio'], ['comparables', 'Comparables'], ['todos', 'Todos']] as [Filtro, string][]).map(([id, lbl]) => (
+        {/* flex-wrap: con cuatro filtros y su conteo ya no caben en una línea de móvil */}
+        <div className="flex flex-wrap gap-0.5 rounded-lg bg-gray-100 p-0.5">
+          {([
+            ['con-precios', 'Con precio'],
+            ['comparables', 'Comparables'],
+            ['sin-proveedor', 'Sin proveedor'],
+            ['todos', 'Todos'],
+          ] as [Filtro, string][]).map(([id, lbl]) => (
             <button key={id} onClick={() => { setFiltro(id); setLimite(40) }}
-              className={`rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${filtro === id ? 'bg-white text-brand-green shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
+              className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 font-body text-xs font-semibold transition-colors ${filtro === id ? 'bg-white text-brand-green shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}>
               {lbl}
+              <span className={`rounded-full px-1.5 py-px text-[10px] font-bold tabular-nums ${filtro === id ? 'bg-green-50 text-brand-green' : 'bg-gray-200 text-gray-500'}`}>
+                {conteos[id]}
+              </span>
             </button>
           ))}
         </div>
+        {puedeEditar && filtro === 'sin-proveedor' && filtradas.length > 0 && (
+          <button onClick={() => asignarEnCadena()}
+            title="Abre el formulario sobre el primer producto de la lista y, al guardar, pasa al siguiente sin cerrarse"
+            className="flex items-center gap-1.5 bg-brand-green text-white font-body font-semibold text-xs px-3 py-2 rounded-lg hover:bg-brand-green-dark">
+            <Plus className="w-3.5 h-3.5" />
+            Asignar uno por uno
+          </button>
+        )}
         {puedeEditar && importables > 0 && (
           <button onClick={sincronizar} disabled={importando}
+            title="Pasa al comparador el proveedor y precio que ya están en la ficha, solo para los productos que aquí no tienen ninguno"
             className="flex items-center gap-1.5 border border-brand-green text-brand-green font-body font-semibold text-xs px-3 py-2 rounded-lg hover:bg-green-50 disabled:opacity-60">
             {importando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            Sincronizar {importables} de fichas
+            Completar {importables} desde fichas
           </button>
         )}
       </div>
@@ -168,7 +248,7 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
             <button onClick={sincronizar} disabled={importando}
               className="mt-4 inline-flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2.5 rounded-xl hover:bg-brand-green-dark disabled:opacity-60">
               {importando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-              Sincronizar {importables} precios desde fichas
+              Completar {importables} productos desde sus fichas
             </button>
           )}
         </div>
@@ -183,7 +263,12 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
                 onToggle={() => toggle(f.p.id)}
                 puedeEditar={puedeEditar}
                 puedeCrearOC={puedeCrearOC}
-                onAgregar={() => setModal({ productoId: f.p.id, productoNombre: f.p.nombre_estandar, usados: f.precios.map((x) => x.proveedor_id) })}
+                onAgregar={() => {
+                  // Desde "Sin proveedor" el formulario encadena: asignar 282
+                  // no puede ser 282 idas y vueltas.
+                  if (filtro === 'sin-proveedor') return asignarEnCadena(f.p.id)
+                  setModal({ productoId: f.p.id, productoNombre: f.p.nombre_estandar, usados: f.precios.map((x) => x.proveedor_id) })
+                }}
                 onEditar={(pr) => setModal({ productoId: f.p.id, productoNombre: f.p.nombre_estandar, usados: [], editing: pr })}
               />
             ))}
@@ -206,9 +291,11 @@ export function ComparadorClient({ productos, proveedores }: { productos: Produc
       {/* Modal precio */}
       {modal && (
         <PrecioModal
+          key={modal.productoId}
           modal={modal}
           proveedores={proveedores}
           onClose={() => setModal(null)}
+          onSiguiente={siguienteDeCola}
         />
       )}
     </div>
@@ -229,7 +316,15 @@ function KpiCard({ icon: Icon, label, value, color, small }: { icon: typeof Stor
 }
 
 // ── Tarjeta de producto ─────────────────────────────────────────────────────────
-type Fila = { p: ProductoPrecios; precios: (PrecioRow & { nombre: string })[]; nProv: number; best: number | null; worst: number | null; ahorro: number }
+type Fila = {
+  p: ProductoPrecios
+  precios: (PrecioRow & { nombre: string })[]
+  nProv: number
+  best: number | null
+  worst: number | null
+  ahorro: number
+  fichaNombre: string | null
+}
 
 function ProductoCard({ fila, abierto, onToggle, puedeEditar, puedeCrearOC, onAgregar, onEditar }: {
   fila: Fila
@@ -240,7 +335,7 @@ function ProductoCard({ fila, abierto, onToggle, puedeEditar, puedeCrearOC, onAg
   onAgregar: () => void
   onEditar: (pr: PrecioRow) => void
 }) {
-  const { p, precios, nProv, best, ahorro } = fila
+  const { p, precios, nProv, best, ahorro, fichaNombre } = fila
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
       {/* Cabecera */}
@@ -254,6 +349,12 @@ function ProductoCard({ fila, abierto, onToggle, puedeEditar, puedeCrearOC, onAg
         </div>
         {/* Resumen */}
         <div className="flex items-center gap-2 shrink-0">
+          {fichaNombre && (
+            <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-blue-50 text-blue-700 px-2 py-0.5 text-[11px] font-medium"
+              title="La ficha del producto ya trae este proveedor: «Completar desde fichas» lo pasa al comparador sin teclearlo">
+              <Tag className="w-3 h-3" /> En ficha: {fichaNombre}
+            </span>
+          )}
           {nProv >= 2 && ahorro > 0 && (
             <span className="hidden sm:inline-flex items-center gap-1 rounded-full bg-amber-50 text-amber-700 px-2 py-0.5 text-[11px] font-medium" title="Diferencia entre el proveedor más caro y el más barato">
               <TrendingDown className="w-3 h-3" /> {cop.format(ahorro)}
@@ -345,22 +446,50 @@ type ModalState = {
   productoNombre: string
   usados: string[]
   editing?: PrecioRow
+  /**
+   * Asignación en cadena desde el filtro "Sin proveedor": ids de los productos
+   * por recorrer, capturados al empezar para que la lista no se mueva bajo los
+   * pies cuando cada guardado revalida la página y saca al producto del filtro.
+   */
+  cola?: string[]
+  idx?: number
+  /**
+   * Proveedor y precio que ya trae la ficha, para no teclearlos de nuevo.
+   * `precio` va en null cuando la ficha trae 0: ese hay que escribirlo.
+   */
+  prefill?: { proveedorId: string; precio: number | null }
 } | null
 
-function ModalSubmit({ editing }: { editing: boolean }) {
+function ModalSubmit({ etiqueta, ultimo }: { etiqueta: string; ultimo: boolean }) {
   const { pending } = useFormStatus()
   return (
     <button type="submit" disabled={pending}
       className="flex items-center gap-2 bg-brand-green text-white font-body font-semibold text-sm px-4 py-2 rounded-lg hover:bg-brand-green-dark disabled:opacity-60">
-      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-      {editing ? 'Guardar cambios' : 'Agregar precio'}
+      {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : ultimo ? <Plus className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+      {etiqueta}
     </button>
   )
 }
 
-function PrecioModal({ modal, proveedores, onClose }: { modal: NonNullable<ModalState>; proveedores: ProveedorLite[]; onClose: () => void }) {
+function PrecioModal({ modal, proveedores, onClose, onSiguiente }: {
+  modal: NonNullable<ModalState>
+  proveedores: ProveedorLite[]
+  onClose: () => void
+  onSiguiente: () => void
+}) {
   const [state, formAction] = useActionState<ActionResult, FormData>(guardarPrecio, {})
-  useEffect(() => { if (state.ok) onClose() }, [state.ok, onClose])
+
+  // En cadena no se cierra: avanza al siguiente producto sin proveedor.
+  const total = modal.cola?.length ?? 0
+  const pos = modal.idx != null ? modal.idx + 1 : 0
+  const enCadena = total > 0 && !modal.editing
+  const ultimo = !enCadena || pos >= total
+
+  useEffect(() => {
+    if (!state.ok) return
+    if (enCadena) onSiguiente(); else onClose()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.ok])
 
   const editing = modal.editing
   const disponibles = editing
@@ -374,6 +503,11 @@ function PrecioModal({ modal, proveedores, onClose }: { modal: NonNullable<Modal
         <form action={formAction} className="p-5 space-y-4">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
+              {enCadena && (
+                <p className="font-body text-[11px] font-semibold text-brand-green mb-0.5 tabular-nums">
+                  Sin proveedor · {pos} de {total}
+                </p>
+              )}
               <h2 className="font-heading font-bold text-gray-900">{editing ? 'Editar precio' : 'Agregar proveedor'}</h2>
               <p className="font-body text-xs text-gray-400 truncate">{modal.productoNombre}</p>
             </div>
@@ -391,7 +525,7 @@ function PrecioModal({ modal, proveedores, onClose }: { modal: NonNullable<Modal
                 <div className={inputCls + ' text-gray-700'}>{proveedores.find((p) => p.id === editing.proveedor_id)?.nombre ?? 'Proveedor'}</div>
               </>
             ) : (
-              <select name="proveedor_id" required defaultValue="" className={inputCls}>
+              <select name="proveedor_id" required defaultValue={modal.prefill?.proveedorId ?? ''} className={inputCls}>
                 <option value="" disabled>— Selecciona —</option>
                 {disponibles.map((p) => <option key={p.id} value={p.id}>{p.nombre}{p.es_principal ? ' ★' : ''}</option>)}
               </select>
@@ -399,12 +533,16 @@ function PrecioModal({ modal, proveedores, onClose }: { modal: NonNullable<Modal
             {!editing && disponibles.length === 0 && (
               <p className="mt-1 font-body text-xs text-amber-600">Todos los proveedores activos ya tienen precio para este producto.</p>
             )}
+            {modal.prefill && !editing && (
+              <p className="mt-1 font-body text-xs text-blue-600">Tomado de la ficha del producto: revísalo antes de guardar.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Precio (COP) *</label>
-              <input name="precio" type="number" min="0" step="0.01" required defaultValue={editing?.precio ?? ''} placeholder="0" className={inputCls} />
+              <input name="precio" type="number" min="0" step="0.01" required
+                defaultValue={editing?.precio ?? modal.prefill?.precio ?? ''} placeholder="0" className={inputCls} />
             </div>
             <div>
               <label className="font-body font-semibold text-xs text-gray-600 block mb-1">Fecha cotización</label>
@@ -416,9 +554,20 @@ function PrecioModal({ modal, proveedores, onClose }: { modal: NonNullable<Modal
             <input name="vigente" type="checkbox" defaultChecked={editing ? editing.vigente : true} className="w-4 h-4 accent-brand-green" /> Precio vigente
           </label>
 
-          <div className="flex items-center justify-end gap-3 pt-1">
-            <button type="button" onClick={onClose} className="font-body text-sm text-gray-500 hover:text-gray-700 px-3 py-2">Cancelar</button>
-            <ModalSubmit editing={!!editing} />
+          <div className="flex items-center justify-between gap-3 pt-1">
+            {enCadena && !ultimo ? (
+              <button type="button" onClick={() => onSiguiente()}
+                className="font-body text-sm text-gray-500 hover:text-gray-700 px-3 py-2">Saltar este</button>
+            ) : <span />}
+            <div className="flex items-center gap-3">
+              <button type="button" onClick={onClose} className="font-body text-sm text-gray-500 hover:text-gray-700 px-3 py-2">
+                {enCadena ? 'Terminar' : 'Cancelar'}
+              </button>
+              <ModalSubmit
+                ultimo={ultimo}
+                etiqueta={editing ? 'Guardar cambios' : enCadena && !ultimo ? 'Guardar y siguiente' : 'Agregar precio'}
+              />
+            </div>
           </div>
         </form>
       </div>
