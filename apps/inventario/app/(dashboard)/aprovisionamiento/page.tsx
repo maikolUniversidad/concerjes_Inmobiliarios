@@ -2,8 +2,9 @@ import type { Metadata } from 'next'
 import { RefreshCw, FileText, Download, ChevronRight, Sparkles, TrendingUp } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
-import { requirePermiso } from '@/lib/permisos-server'
+import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import { PlanReabastecimientoTabla, RecomendacionTabla, type RecFila } from './AprovisionamientoTablas'
+import { GenerarSolicitud } from './GenerarSolicitud'
 
 export const metadata: Metadata = { title: 'Aprovisionamiento' }
 export const dynamic = 'force-dynamic'
@@ -14,6 +15,7 @@ function formatCOP(n: number) {
 
 export default async function AprovisionamientoPage() {
   await requirePermiso('ver_aprovisionamiento')
+  const perm = await getPermisosUsuario()
   const supabase = await createClient()
 
   // El plan de reabastecimiento vive en la tabla `aprovisionamiento`, que se
@@ -65,15 +67,36 @@ export default async function AprovisionamientoPage() {
   // Recomendación de compra EN VIVO (no depende de la tabla CMI): qué comprar
   // para cubrir la demanda comprometida en órdenes de insumo que el stock actual
   // más lo ya pedido en OC no alcanzan a cubrir.
+  // `v_recomendacion_compra_proveedor` es la misma vista más el proveedor y el
+  // precio sugeridos (comparador vigente, o ficha del producto). La solicitud de
+  // compra se agrupa por ese proveedor, y la conversión a OC usa el mismo
+  // precio: una sola fuente de verdad para lo que se promete y lo que se pide.
   const { data: recData } = await supabase
-    .from('v_recomendacion_compra')
-    .select('producto_id, codigo, nombre_estandar, presentacion, cat_rotacion, precio_lista, stock_real, comprometido, oc_pendiente, recomendado')
+    .from('v_recomendacion_compra_proveedor')
+    .select(`
+      producto_id, codigo, nombre_estandar, presentacion, cat_rotacion, precio_lista,
+      stock_real, comprometido, oc_pendiente, recomendado,
+      proveedor_sugerido_id, proveedor_sugerido, precio_sugerido, fuente_precio, valor_estimado
+    `)
     .gt('recomendado', 0)
     .order('recomendado', { ascending: false })
     .limit(300)
-  const recs = (recData as unknown as RecFila[]) ?? []
-  const recUnidades = recs.reduce((s, r) => s + Number(r.recomendado), 0)
-  const recValor = recs.reduce((s, r) => s + Number(r.recomendado) * Number(r.precio_lista ?? 0), 0)
+  // numeric → Number: PostgREST devuelve los numeric como texto.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const recs: RecFila[] = ((recData ?? []) as any[]).map((r) => ({
+    ...r,
+    precio_lista: r.precio_lista == null ? null : Number(r.precio_lista),
+    stock_real: Number(r.stock_real ?? 0),
+    comprometido: Number(r.comprometido ?? 0),
+    oc_pendiente: Number(r.oc_pendiente ?? 0),
+    recomendado: Number(r.recomendado ?? 0),
+    precio_sugerido: r.precio_sugerido == null ? null : Number(r.precio_sugerido),
+    valor_estimado: Number(r.valor_estimado ?? 0),
+  }))
+  const recUnidades = recs.reduce((s, r) => s + r.recomendado, 0)
+  const recValor = recs.reduce((s, r) => s + r.valor_estimado, 0)
+  const recProveedores = new Set(recs.map((r) => r.proveedor_sugerido_id ?? '__sin__')).size
+  const recSinProveedor = recs.filter((r) => !r.proveedor_sugerido_id).length
 
   // Agrupar pedidos por producto_id + grupo
   type PedidosPorProducto = Record<string, Record<string, number>>
@@ -163,10 +186,13 @@ export default async function AprovisionamientoPage() {
         </div>
         <p className="px-4 pt-2 font-body text-xs text-gray-400">
           Qué comprar para cubrir la demanda de las órdenes de insumo en cola que el stock actual y lo ya pedido en OC no alcanzan a cubrir.
+          {' '}Reparte en {recProveedores} proveedor(es)
+          {recSinProveedor > 0 && <> · {recSinProveedor} producto(s) sin proveedor en el comparador ni en su ficha</>}.
         </p>
         <div className="p-4">
           <RecomendacionTabla recs={recs} />
         </div>
+        <GenerarSolicitud recs={recs} puedeSolicitar={perm.puede('solicitar_compras')} />
       </div>
 
       {/* KPIs (plan CMI importado) */}

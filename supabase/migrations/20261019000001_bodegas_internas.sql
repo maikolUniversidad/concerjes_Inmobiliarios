@@ -75,11 +75,20 @@ SELECT 'Maquinaria', 'MAQUINARIA',
        FALSE, 'TRASLADO_INTERNO', TRUE
  WHERE NOT EXISTS (SELECT 1 FROM bodegas WHERE codigo = 'MAQUINARIA');
 
--- Las que ya existían y no son internas siguen despachando.
+-- Si ya existían con otro valor (o se re-aplica la migración), las tres
+-- internas quedan marcadas como que no despachan. Las demás no se tocan.
 UPDATE bodegas
    SET despacha_a_sedes = FALSE
  WHERE codigo IN ('PRODUCCION', 'REEMBASADO', 'MAQUINARIA')
    AND despacha_a_sedes IS DISTINCT FROM FALSE;
+
+-- Un origen de entrada lo representa UNA sola bodega. Sin esto, dos bodegas
+-- con el mismo origen hacen que `v_entradas_por_origen` cuente cada entrada
+-- una vez por bodega: con dos sitios marcados PRODUCCION, 22 entradas reales
+-- se reportaban como 44.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bodegas_origen_movimiento
+    ON bodegas (origen_movimiento)
+ WHERE origen_movimiento IS NOT NULL;
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 3. La bodega que recibe las compras sigue siendo la Central
@@ -96,13 +105,23 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
   SELECT id FROM bodegas
-   WHERE activo
-   ORDER BY (codigo = 'CENTRAL') DESC, despacha_a_sedes DESC, created_at
+   -- El filtro, no el orden, es lo que garantiza que una bodega interna nunca
+   -- quede como destino de una compra: ordenando, bastaba con que no hubiera
+   -- ninguna que despachara para que cayera en Producción. Si no hay ninguna,
+   -- devuelve NULL y la orden queda sin destino (la columna lo admite), que es
+   -- un problema visible en vez de stock entrando al sitio equivocado.
+   WHERE activo AND despacha_a_sedes
+   -- `NULLS LAST` no es decoración: el campo `codigo` es nullable y el
+   -- formulario de /bodegas no lo exige, así que una bodega guardada sin
+   -- código deja `(codigo = 'CENTRAL')` en NULL. Con el NULLS FIRST que
+   -- Postgres aplica por defecto en DESC, esa bodega ganaba sobre la Central
+   -- y se volvía el destino de TODAS las compras, sin aviso.
+   ORDER BY (codigo = 'CENTRAL') DESC NULLS LAST, created_at
    LIMIT 1
 $$;
 
 COMMENT ON FUNCTION public.compras_bodega_central() IS
-  'Bodega de destino por defecto de las compras: la de código CENTRAL; si no la hay, la más antigua que despacha a sedes. Nunca una bodega interna.';
+  'Bodega de destino por defecto de las compras: la activa de codigo CENTRAL; si no hay, la mas antigua que despacha a sedes. Nunca una interna: si ninguna despacha, devuelve NULL.';
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- 4. De dónde viene lo que entra, por sitio

@@ -13,6 +13,8 @@ import { UrgenciaEditor } from './UrgenciaEditor'
 import { SedeEditor } from './SedeEditor'
 import { DevolucionOrden } from './DevolucionOrden'
 import { EnvioRestante } from './EnvioRestante'
+import { SolicitudCompraPendiente } from './SolicitudCompraPendiente'
+import { ESTADOS_PENDIENTE_SOLICITABLE } from '@/lib/solicitudes-compra'
 
 export const metadata: Metadata = { title: 'Orden de insumo' }
 export const dynamic = 'force-dynamic'
@@ -72,6 +74,30 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     origenRaizNumero = a.numero
     actual = a.orden_origen_id
   }
+
+  // Solicitudes de compra que salieron de esta orden pendiente (fase 2 de
+  // compras). Se leen por los ítems, que son los que guardan el enlace.
+  //
+  // `puedeVerSolicitudes` son los mismos tres permisos de la política
+  // `sc_items_read`. Sin ellos la consulta vuelve VACÍA por RLS, sin error: hay
+  // que distinguir «no hay solicitud» de «no puedes verla», porque si no la
+  // pantalla le jura a un conserje que nadie pidió su insumo y lo reclama otra
+  // vez.
+  const puedeVerSolicitudes = perm.puede('solicitar_compras')
+    || perm.puede('ver_ordenes_compra')
+    || perm.puede('crear_ordenes_compra')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: solCompraData } = await (supabase as any)
+    .from('solicitud_compra_items')
+    .select('solicitud:solicitudes_compra ( id, numero, estado )')
+    .eq('orden_insumo_id', id)
+  const solicitudesCompra = [...new Map(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ((solCompraData ?? []) as any[])
+      .map((r) => r.solicitud)
+      .filter((x) => x && x.estado !== 'ANULADA')
+      .map((x) => [x.id as string, { id: x.id as string, numero: x.numero as string, estado: x.estado as string }]),
+  ).values()]
 
   const { data: eventosData } = await supabase.from('orden_insumo_eventos')
     .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
@@ -195,6 +221,16 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
               {' '}({h.estado.replace(/_/g, ' ').toLowerCase()}).
             </p>
           ))}
+          {/* La pendiente nace porque faltó stock: de aquí sale la solicitud de compra. */}
+          {o.origen && (
+            <SolicitudCompraPendiente
+              ordenId={id}
+              solicitudes={solicitudesCompra}
+              puedeVerSolicitudes={puedeVerSolicitudes}
+              puedeSolicitar={perm.puede('solicitar_compras')
+                && (ESTADOS_PENDIENTE_SOLICITABLE as readonly string[]).includes(estado)}
+            />
+          )}
           {hijas.length > 0 && (
             <p className="font-body text-xs text-orange-900/70">
               {itemsMovidos > 0 ? `${itemsMovidos} producto(s) que no salieron ya no se listan en esta orden; ` : 'Aquí solo queda lo que salió en el despacho; '}

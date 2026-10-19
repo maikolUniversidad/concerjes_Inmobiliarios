@@ -1,6 +1,6 @@
 # Módulo de Compras — bases
 
-Estado: **fase 1 construida y aplicada el 2026-10-18**; decisiones cerradas ese mismo día sobre la propuesta del 2026-09-27. Las cuatro decisiones de la sección 7 están aceptadas, el plan de la fase 1 está en la sección 9 y lo que quedó construido está en la 10. Quedan tres preguntas de detalle y un paso previo (ver 9.0); las fases 2 a 5 siguen sin empezar.
+Estado: **fase 1 construida y aplicada el 2026-10-18** (sección 10) y **fase 2 —la solicitud de compra— construida y aplicada el 2026-10-19** (sección 11). Las cuatro decisiones de la sección 7 están aceptadas; quedan tres preguntas de detalle y un paso previo (ver 9.0). Las fases 3 a 5 (cotizaciones, facturas de proveedor, presupuesto por contrato) siguen sin empezar.
 
 ## 1. Qué existe hoy
 
@@ -62,7 +62,7 @@ Regla: quien crea una OC no puede aprobarla.
 ## 5. Fases
 
 1. **Recepciones por entrega** (`oc_recepciones`), `movimientos.oc_id`, y separación de permisos crear/aprobar/recibir. *Arregla lo que hoy ya se usa.*
-2. **Solicitud de compra** + botón «Generar solicitud» desde Aprovisionamiento y desde las órdenes pendientes por falta de stock; conversión de solicitud → OC agrupando por proveedor con el precio del comparador.
+2. **Solicitud de compra** + botón «Generar solicitud» desde Aprovisionamiento y desde las órdenes pendientes por falta de stock; conversión de solicitud → OC agrupando por proveedor con el precio del comparador. ✅ *Construida el 2026-10-19 (sección 11).*
 3. **Cotizaciones** y aprobación por niveles de monto; histórico de precios.
 4. **Facturas de proveedor** y cruce OC × recepción × factura; indicadores de proveedor (cumplimiento de plazo y de cantidad).
 5. Presupuesto por contrato/sede (requiere que el módulo de contratos llene `contrato_id`).
@@ -344,7 +344,68 @@ Pantallas: la orden de compra pasó de «Registrar recepción» a «Registrar en
 2. **Decidir si producción, reembasado y maquinaria son bodegas aparte** (pregunta abierta de 7.3).
 3. **Pasar de avisar a bloquear** en `/movimientos/nuevo` cuando se vea que bodega está marcando el origen. Hoy una entrada sin origen se guarda igual, a propósito.
 
-## 11. Bodegas internas (2026-10-19)
+## 11. Fase 2 construida (2026-10-19)
+
+La migración `supabase/migrations/20261019000000_compras_fase2_solicitudes.sql` **ya está aplicada** en la base. Esto es lo que quedó, y lo que los datos o el código cambiaron sobre la marcha.
+
+La decisión que manda sobre toda la fase sigue siendo la 7.1: **la solicitud no es obligatoria**. `ordenes_compra.solicitud_id` nace nullable y ningún camino la exige; compras sigue pudiendo crear la orden directo. Lo que la fase agrega es la vía opcional, y la automática donde sale gratis.
+
+### Lo que quedó
+
+| Pieza | Dónde |
+|---|---|
+| Requisición con origen, prioridad, sede y quién la pidió | `solicitudes_compra` (numeración `SC-YYYYMM-NNN`) |
+| Qué se pide, con el enlace a la orden pendiente que lo originó | `solicitud_compra_items` (`orden_insumo_id`, `justificacion`) |
+| La orden de compra puede venir de una solicitud — o no | `ordenes_compra.solicitud_id`, **nullable** |
+| De dónde sale el proveedor y el precio, en un solo sitio | `compras_precio_sugerido()` |
+| La recomendación, ya con proveedor y precio | vista `v_recomendacion_compra_proveedor` |
+| Qué órdenes pendientes siguen sin pedirse | vista `v_sc_pendientes_sin_solicitud` |
+| Generar desde la recomendación, una solicitud por proveedor | `sc_generar_desde_recomendacion()` |
+| Generar desde una orden pendiente, sin duplicar | `sc_generar_desde_pendiente()` |
+| Convertir en **una orden de compra por proveedor** | `sc_convertir_a_oc()` |
+| Enviar, rechazar y anular | `sc_cambiar_estado()` |
+| Permiso nuevo | `solicitar_compras` (Coordinador, Coordinador de Compras, Bodeguero) |
+
+Pantallas: `/solicitudes-compra` (listado con filtros, KPIs y el panel de órdenes pendientes sin solicitud) y `/solicitudes-compra/[id]` (detalle con los ítems, las órdenes generadas y los botones de estado); `/aprovisionamiento` gana «Generar solicitud de compra» sobre la recomendación en vivo, agrupada por proveedor; y el detalle de una orden pendiente de `/ordenes-insumo` gana su botón y el enlace a la solicitud que ya tenga.
+
+Las dos tablas nacen cerradas por `auth_permiso` y **sin política de escritura a propósito**: la única vía son los RPC `sc_*`, que son SECURITY DEFINER y validan el permiso. Es el mismo criterio de las tablas de entrega de la fase 1.
+
+### Cinco cosas que los datos o el código cambiaron sobre la marcha
+
+1. **`v_recomendacion_compra` no tiene proveedor.** La sección 1 ya decía que «no elige proveedor», pero el plan de la fase 2 daba por hecho que se podía agrupar por él. Hubo que deducirlo: precio vigente más barato del comparador y, si no hay, el proveedor de la ficha del producto. Esa regla vive en `compras_precio_sugerido()` y la usan la pantalla *y* la conversión, para que la solicitud no prometa un precio que la orden no vaya a usar.
+
+2. **Un tercio de lo que el sistema recomienda comprar no tiene proveedor.** De los 109 productos recomendados, 55 tienen precio en el comparador y 43 tienen proveedor en su ficha; combinando las dos fuentes quedan **73 con proveedor y 36 sin ninguno**, y esos 36 son **83 de los 264 millones**. La conversión **no les inventa proveedor**: los deja en la solicitud, los cuenta en el resultado y la solicitud queda en `PARCIAL`. Es la diferencia entre un dato que falta y un dato inventado.
+
+3. **Valorar la compra al precio que de verdad se paga la sube 37%.** La recomendación valorada a `precio_lista` da 264 millones; valorada con el precio del comparador cuando existe, **362,5 millones**. De los 54 productos que tienen los dos precios, en **36 el comparador está por encima** del precio de lista y en 12 por debajo. La pantalla de `/aprovisionamiento` pasó a mostrar el segundo número, que es el que se va a pagar. El primero venía siendo optimista en cien millones.
+
+4. **«Pendiente» no quiere decir «falta comprar».** Hay 32 órdenes pendientes por falta de stock, pero 5 ya se despacharon (apareció el stock) y 3 están anuladas. Solo tiene sentido comprar para las que **todavía no salieron de la bodega**: quedan **23 órdenes, 54 ítems, 1.560 unidades, unos 6,9 millones**. La vista y la función comparten esa lista de estados, y el filtro de «ya tiene solicitud» va **por producto y no por orden**: si fuera por orden, una solicitud parcial escondería la orden y el resto de sus productos no se pediría nunca.
+
+5. **La tarjeta de móvil volvió a esconder un dato.** Es la misma trampa de la fase 1: la tabla estándar oculta en tarjetas las columnas cuyo valor sale vacío, así que la solicitud *sin proveedor* —justo la que hay que mirar— no mostraba la fila del proveedor en el celular y parecía un dato perdido. Se arregló haciendo que «Por definir» sea un **valor** y no solo un texto de la celda. Se encontró probando, no leyendo.
+
+### Cómo se decidió agrupar
+
+- **Desde la recomendación: una solicitud por proveedor.** Así cada una se convierte después en exactamente una orden, que es lo que compras necesita. Los 36 sin proveedor van en una solicitud aparte, marcada, para que se vean.
+- **Desde una orden pendiente: una sola solicitud, aunque toque varios proveedores.** Lo que une esos ítems es la sede que se quedó sin su insumo, no el proveedor; y la conversión ya sabe partirlos. En la prueba real, una pendiente de 3 productos salió en 2 órdenes (dos productos de un proveedor, uno de otro).
+- **Prioridad.** La recomendación nace en `NORMAL`; una pendiente nace en `ALTA`, y en `URGENTE` si la orden de insumo venía marcada urgente. Una sede sin su insumo no es una compra de rutina.
+
+### Verificación hecha
+
+- **36 comportamientos probados contra la base real dentro de una transacción revertida** (`node --use-system-ca scripts/probar-compras-fase2.mjs`): quién puede solicitar y quién no, la RLS de lectura, la generación por proveedor, la solicitud aparte de los productos sin proveedor, la numeración `SC-YYYYMM-NNN` sin huecos ni repetidos **y que tras borrar la 003 la siguiente sea la 009** (máximo del período, no conteo), que una cantidad mayor que la recomendada se recorte, la generación desde una pendiente con su sede y su prioridad, que no se duplique, que una pendiente ya despachada no genere nada, que bodega no pueda convertir, la orden por proveedor en BORRADOR con `solicitud_id`, que el precio salga del comparador y si no de la lista, el `valor_total` contra los subtotales generados, la mezcla con y sin proveedor que deja la solicitud en `PARCIAL`, que no se convierta dos veces, los estados (enviar, rechazar, anular con motivo) y **que una orden de compra siga pudiendo nacer sin solicitud**.
+- `tsc --noEmit` limpio.
+- `scripts/verificar-permisos.mjs`: «la base de datos concede exactamente lo que dice /roles». `scripts/auditar-permisos.mjs` no reporta ninguna incoherencia nueva: `solicitar_compras` queda en el catálogo, en la app, en la RLS y en la base.
+- Las tres pantallas montadas con datos reales en el banco de pruebas, en tabla y en tarjetas y a 375 px de ancho: los ocho grupos de proveedor con sus totales, el recorte al deseleccionar, el detalle con sus dos órdenes generadas y lo que exactamente se le envía al servidor en cada botón.
+
+### Línea base (al aplicar)
+
+0 solicitudes de compra · 23 órdenes pendientes esperando que alguien las pida · 109 productos recomendados por 362,5 millones, repartidos en 7 proveedores más 36 productos sin proveedor.
+
+### Lo que falta para que la fase 2 sirva de verdad
+
+1. **Asignarle proveedor a los 36 productos recomendados que no lo tienen**, en el comparador o en su ficha. Mientras no lo tengan, un tercio de la compra recomendada no se puede convertir en orden sola.
+2. **Decidir si la solicitud se vuelve obligatoria alguna vez.** Hoy no lo es, a propósito. El interruptor es poner `ordenes_compra.solicitud_id` en NOT NULL; conviene mirar antes cuántas órdenes están naciendo con solicitud.
+3. Sigue abierto lo de la fase 1: el rol Gerencia sin usuarios, y si producción / reembasado / maquinaria son bodegas aparte.
+
+## 12. Bodegas internas (2026-10-19)
 
 La última pregunta abierta de la decisión 7.3 quedó respondida: producción, reembasado y maquinaria **sí** son sitios físicos distintos de la Central. Migración `20261019000001_bodegas_internas.sql`, ya aplicada.
 
@@ -375,3 +436,4 @@ Por lo mismo, `compras_bodega_central()` dejó de resolver el respaldo como «la
 `compras_bodega_central()` sigue devolviendo la Central y la orden de compra existente conserva su destino; el selector de despacho ofrece 1 bodega y no 4; la vista nueva `v_entradas_por_origen` cruza origen y sitio (ya muestra la entrada de reembasado de septiembre en su bodega); las tres bodegas nuevas quedaron con 0 ubicaciones, sin filas inventadas; `tsc --noEmit` limpio.
 
 La etiqueta «Interna» de `/bodegas` no se verificó en el navegador: esa pantalla es un componente de servidor y el banco de pruebas monta componentes de cliente. El cambio es un `span` condicional sobre un campo ya comprobado en la base.
+
