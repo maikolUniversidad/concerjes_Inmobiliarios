@@ -168,7 +168,7 @@ Qué pasa con cada opción:
 
 ✅ **Aceptada el 2026-10-18.** Todo entra a la Central; no se construye multi-bodega, pero el campo de bodega de destino queda puesto con la Central por defecto y la recepción pide la ubicación.
 
-✅ **Respondida el 2026-10-19.** Sí son sitios físicos distintos. Producción, Reembasado y Maquinaria quedaron registradas como bodegas (migración `20261019000001_bodegas_internas.sql`), marcadas como **internas**: no despachan a sedes y no reparten stock — el stock sigue siendo uno solo por producto, en la Central. Cada una declara qué origen de entrada representa (`bodegas.origen_movimiento`), que es lo que conecta este registro con el `movimientos.origen` de la fase 1. Detalle en la sección 11.
+✅ **Respondida el 2026-10-19.** Sí son sitios físicos distintos. Producción, Reembasado y Maquinaria quedaron registradas como bodegas (migración `20261019000003_bodegas_internas.sql`), marcadas como **internas**: no despachan a sedes y no reparten stock — el stock sigue siendo uno solo por producto, en la Central. Cada una declara qué origen de entrada representa (`bodegas.origen_movimiento`), que es lo que conecta este registro con el `movimientos.origen` de la fase 1. Detalle en la sección 12.
 
 ### 7.4 ¿Las facturas se registran aquí o viven en el sistema contable?
 
@@ -407,7 +407,7 @@ Las dos tablas nacen cerradas por `auth_permiso` y **sin política de escritura 
 
 ## 12. Bodegas internas (2026-10-19)
 
-La última pregunta abierta de la decisión 7.3 quedó respondida: producción, reembasado y maquinaria **sí** son sitios físicos distintos de la Central. Migración `20261019000001_bodegas_internas.sql`, ya aplicada.
+La última pregunta abierta de la decisión 7.3 quedó respondida: producción, reembasado y maquinaria **sí** son sitios físicos distintos de la Central. Migración `20261019000003_bodegas_internas.sql`, ya aplicada.
 
 ### Qué cambió y qué no
 
