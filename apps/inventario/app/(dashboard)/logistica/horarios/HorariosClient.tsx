@@ -3,7 +3,13 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Clock, Plus, Search, Edit2, Phone, User } from 'lucide-react'
-import { upsertHorarioSede } from '../actions'
+import {
+  upsertHorarioSede as upsertHorarioSedeAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const upsertHorarioSede = conError(upsertHorarioSedeAccion)
 
 interface HorarioSede {
   id: string

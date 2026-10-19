@@ -4,9 +4,15 @@ import { useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Phone, Mail, MapPin, Clock, RefreshCw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
 import { toast } from 'sonner'
-import { updateEstadoSolicitud } from '../actions'
+import {
+  updateEstadoSolicitud as updateEstadoSolicitudAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
 import { mensajeDeError } from '@/lib/errores'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const updateEstadoSolicitud = conError(updateEstadoSolicitudAccion)
 
 const ESTADOS = [
   { value: 'TODOS',       label: 'Todas' },

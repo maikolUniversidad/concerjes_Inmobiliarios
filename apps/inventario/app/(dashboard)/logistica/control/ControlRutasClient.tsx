@@ -6,8 +6,14 @@ import {
   ClipboardList, Plus, Truck, MapPin, CheckCircle2, AlertTriangle,
   Clock, Package, ChevronDown, ChevronUp, Calendar, User, GripVertical
 } from 'lucide-react'
-import { crearRuta } from '../actions'
+import {
+  crearRuta as crearRutaAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
 import Link from 'next/link'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const crearRuta = conError(crearRutaAccion)
 
 interface OrdenDisponible {
   id: string; numero: string; estado: string; conductor_id: string | null

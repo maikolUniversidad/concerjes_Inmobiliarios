@@ -4,9 +4,16 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Save, Loader2, DollarSign } from 'lucide-react'
 import { toast } from 'sonner'
-import { upsertTarifa, deleteTarifa } from '../actions'
+import {
+  upsertTarifa as upsertTarifaAccion, deleteTarifa as deleteTarifaAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
 import { mensajeDeError } from '@/lib/errores'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const upsertTarifa = conError(upsertTarifaAccion)
+const deleteTarifa = conError(deleteTarifaAccion)
 
 function fmt(v?: number | null) {
   if (!v) return '—'

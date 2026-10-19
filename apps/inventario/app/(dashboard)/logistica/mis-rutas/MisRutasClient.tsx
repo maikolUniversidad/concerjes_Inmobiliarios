@@ -9,9 +9,18 @@ import {
   Wifi, WifiOff, Play, Package, FileText, Map as MapIcon
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { iniciarRuta, llegarParada, confirmarEntrega, reportarNovedad } from '../actions'
+import {
+  iniciarRuta as iniciarRutaAccion, llegarParada as llegarParadaAccion, confirmarEntrega as confirmarEntregaAccion, reportarNovedad as reportarNovedadAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
 import FirmaDigital from '@/components/logistica/FirmaDigital'
 import type { PuntoMapa } from '@/components/logistica/MapaLeaflet'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const iniciarRuta = conError(iniciarRutaAccion)
+const llegarParada = conError(llegarParadaAccion)
+const confirmarEntrega = conError(confirmarEntregaAccion)
+const reportarNovedad = conError(reportarNovedadAccion)
 
 const MapaLeaflet = dynamic(() => import('@/components/logistica/MapaLeaflet'), {
   ssr: false,

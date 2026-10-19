@@ -8,9 +8,19 @@ import {
   XCircle, Send, Ban, Paperclip, FileText, Link2, ChevronDown, Trash2,
 } from 'lucide-react'
 import {
-  crearCobro, emitirCobro, anularCobro, actualizarLinkPago,
-  registrarPagoManual, verificarPago, rechazarPago, urlComprobante,
+  crearCobro as crearCobroAccion, emitirCobro as emitirCobroAccion, anularCobro as anularCobroAccion, actualizarLinkPago as actualizarLinkPagoAccion, registrarPagoManual as registrarPagoManualAccion, verificarPago as verificarPagoAccion, rechazarPago as rechazarPagoAccion, urlComprobante as urlComprobanteAccion,
 } from '../pagos-actions'
+import { conError } from '@/lib/resultado'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const crearCobro = conError(crearCobroAccion)
+const emitirCobro = conError(emitirCobroAccion)
+const anularCobro = conError(anularCobroAccion)
+const actualizarLinkPago = conError(actualizarLinkPagoAccion)
+const registrarPagoManual = conError(registrarPagoManualAccion)
+const verificarPago = conError(verificarPagoAccion)
+const rechazarPago = conError(rechazarPagoAccion)
+const urlComprobante = conError(urlComprobanteAccion)
 
 const ESTADOS: Record<string, { label: string; cls: string }> = {
   BORRADOR: { label: 'Borrador', cls: 'bg-gray-100 text-gray-600' },

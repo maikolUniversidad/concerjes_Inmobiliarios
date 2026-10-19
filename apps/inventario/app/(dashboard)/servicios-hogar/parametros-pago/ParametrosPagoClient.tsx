@@ -6,7 +6,15 @@ import { useRouter } from 'next/navigation'
 import {
   Save, Loader2, Plus, Pencil, Trash2, X, CheckCircle2, CreditCard, SlidersHorizontal, Eye, EyeOff,
 } from 'lucide-react'
-import { guardarParametrosPago, upsertMetodoPago, eliminarMetodoPago } from '../pagos-actions'
+import {
+  guardarParametrosPago as guardarParametrosPagoAccion, upsertMetodoPago as upsertMetodoPagoAccion, eliminarMetodoPago as eliminarMetodoPagoAccion,
+} from '../pagos-actions'
+import { conError } from '@/lib/resultado'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const guardarParametrosPago = conError(guardarParametrosPagoAccion)
+const upsertMetodoPago = conError(upsertMetodoPagoAccion)
+const eliminarMetodoPago = conError(eliminarMetodoPagoAccion)
 
 const TIPOS = [
   { value: 'TRANSFERENCIA', label: 'Transferencia bancaria' },

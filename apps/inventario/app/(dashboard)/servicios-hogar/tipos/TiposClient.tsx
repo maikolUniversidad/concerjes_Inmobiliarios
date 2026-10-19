@@ -4,8 +4,15 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, ToggleLeft, ToggleRight, X, Save, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { upsertTipoServicio, toggleTipoServicioActivo } from '../actions'
+import {
+  upsertTipoServicio as upsertTipoServicioAccion, toggleTipoServicioActivo as toggleTipoServicioActivoAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
 import { mensajeDeError } from '@/lib/errores'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const upsertTipoServicio = conError(upsertTipoServicioAccion)
+const toggleTipoServicioActivo = conError(toggleTipoServicioActivoAccion)
 
 const ICONOS = ['🧹', '✨', '🏗️', '🎉', '🍳', '🌿', '🚗', '🏠', '🛁', '👶']
 const COLORES = ['green', 'blue', 'orange', 'purple', 'amber', 'emerald', 'red', 'pink']

@@ -3,7 +3,15 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { Users, Plus, Truck, Phone, MapPin, Edit2, CheckCircle, XCircle, UserPlus, Link2, AlertCircle } from 'lucide-react'
-import { crearConductor, actualizarConductor, crearUsuarioConductor } from '../actions'
+import {
+  crearConductor as crearConductorAccion, actualizarConductor as actualizarConductorAccion, crearUsuarioConductor as crearUsuarioConductorAccion,
+} from '../actions'
+import { conError } from '@/lib/resultado'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const crearConductor = conError(crearConductorAccion)
+const actualizarConductor = conError(actualizarConductorAccion)
+const crearUsuarioConductor = conError(crearUsuarioConductorAccion)
 
 interface ConductorRow {
   id: string

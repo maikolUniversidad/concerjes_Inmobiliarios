@@ -8,9 +8,18 @@ import {
   Eye, EyeOff, CheckCircle2, Ban, Search, Sparkles,
 } from 'lucide-react'
 import {
-  guardarParametrosPuntos, upsertRecompensa, archivarRecompensa,
-  marcarRedencion, anularRedencion, ajustarPuntos, buscarClientes,
+  guardarParametrosPuntos as guardarParametrosPuntosAccion, upsertRecompensa as upsertRecompensaAccion, archivarRecompensa as archivarRecompensaAccion, marcarRedencion as marcarRedencionAccion, anularRedencion as anularRedencionAccion, ajustarPuntos as ajustarPuntosAccion, buscarClientes as buscarClientesAccion,
 } from '../puntos-actions'
+import { conError } from '@/lib/resultado'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const guardarParametrosPuntos = conError(guardarParametrosPuntosAccion)
+const upsertRecompensa = conError(upsertRecompensaAccion)
+const archivarRecompensa = conError(archivarRecompensaAccion)
+const marcarRedencion = conError(marcarRedencionAccion)
+const anularRedencion = conError(anularRedencionAccion)
+const ajustarPuntos = conError(ajustarPuntosAccion)
+const buscarClientes = conError(buscarClientesAccion)
 
 const TIPOS_RECOMPENSA = [
   { value: 'DESCUENTO_FIJO',  label: 'Descuento en pesos',  ayuda: 'El valor es el monto del descuento.' },

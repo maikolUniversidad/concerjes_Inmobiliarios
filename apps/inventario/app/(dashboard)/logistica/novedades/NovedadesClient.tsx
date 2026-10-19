@@ -3,8 +3,14 @@
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { AlertTriangle, CheckCircle2, Clock, Filter } from 'lucide-react'
-import { resolverNovedad, getNovedades } from '../actions'
+import {
+  resolverNovedad as resolverNovedadAccion, getNovedades,
+} from '../actions'
+import { conError } from '@/lib/resultado'
 import { TIPO_NOVEDAD_LABELS } from '@/lib/types/database'
+
+// Acciones que, si fallan, lanzan aquí el motivo real (ver lib/resultado.ts).
+const resolverNovedad = conError(resolverNovedadAccion)
 
 type TipoNovedad = keyof typeof TIPO_NOVEDAD_LABELS
 
