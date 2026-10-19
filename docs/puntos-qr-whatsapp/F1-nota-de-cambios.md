@@ -122,8 +122,11 @@ node --use-system-ca scripts/probar-puntos-qr-f1.mjs
   vista —un contrato «Vencido» con una prórroga muestra días por delante— y sin
   el motivo nadie entiende por qué sus QR no abren; e `insigniaEstado()`, porque
   `/contratos` da de baja un contrato poniéndole `activo = false` y ese
-  contrato lucía un «Vigente» en verde. Reverificado: los 7 escenarios pasan en
-  1280 y 375 px, sin desbordes.
+  contrato lucía un «Vigente» en verde.
+  El aviso con el motivo se reverificó en el banco: 7 escenarios × 1280 y 375
+  px, con el motivo correcto en cada rama y sin desbordes. La insignia de
+  inactivo **no** pasó por el banco: es una etiqueta en los dos únicos sitios
+  que la pintan, y hoy no hay ningún contrato inactivo con el que se vea.
 
 ## Pendientes que esta fase deja anotados
 
