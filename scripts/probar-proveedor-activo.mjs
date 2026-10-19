@@ -64,11 +64,27 @@ try {
     check('La recomendación deja de proponerlo', rec.n==='0')
   }
 
-  // 3. El proveedor que pide quien llama sigue mandando
+  // 3. Ni siquiera el proveedor que pide quien llama vale si está desactivado.
+  //
+  // Esta prueba comprobaba lo CONTRARIO y estaba mal. La primera versión de la
+  // función respetaba a propósito el `p_proveedor` recibido, con el argumento
+  // de que manda quien llama. Pero quien llama es `sc_convertir_a_oc()`, y lo
+  // que pasa no es una elección de alguien en ese momento: es el
+  // `proveedor_sugerido_id` que la solicitud guardó semanas atrás. Si ese
+  // proveedor se dio de baja entre tanto, honrarlo creaba la orden de compra
+  // contra un proveedor retirado. Lo cerró la migración
+  // `20261019000005_precio_sugerido_ignora_proveedor_inactivo.sql`; ahora el
+  // ítem se queda sin proveedor y `sc_convertir_a_oc()` lo reporta en
+  // `sin_proveedor` para que alguien le asigne uno.
   const { rows: sol } = await c.query(`
     SELECT producto_id FROM precios_proveedor WHERE COALESCE(vigente,true) AND precio>0 LIMIT 1`)
-  const forzado = (await c.query(`SELECT proveedor_id FROM compras_precio_sugerido($1, $2)`, [sol[0].producto_id, p.id])).rows[0]
-  check('Si quien llama pasa un proveedor, se respeta aunque esté desactivado', forzado.proveedor_id === p.id)
+  const forzado = (await c.query(`
+    SELECT s.proveedor_id, (SELECT activo FROM proveedores WHERE id = s.proveedor_id) AS activo
+      FROM compras_precio_sugerido($1, $2) s`, [sol[0].producto_id, p.id])).rows[0]
+  check('El proveedor que pasa quien llama se ignora si está desactivado',
+    forzado.proveedor_id !== p.id, `devolvió ${forzado.proveedor_id ?? 'ninguno'}`)
+  check('Y si devuelve alguno, está activo',
+    forzado.proveedor_id === null || forzado.activo === true)
 } finally { await c.query('ROLLBACK') }
 
 const fin = (await c.query(`SELECT COUNT(*) n FROM proveedores WHERE activo`)).rows[0]
