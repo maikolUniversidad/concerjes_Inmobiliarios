@@ -20,7 +20,13 @@ function campos(formData: FormData) {
 
 function traducir(msg: string): string {
   if (msg.includes('row-level security')) return 'No tienes permisos (requiere Admin o Coord. Compras).'
-  if (msg.includes('duplicate')) return 'Ya existe un proveedor con ese NIT.'
+  // La base no deja dos proveedores activos con el mismo nombre: los duplicados
+  // partían el comparador de precios en cuatro entradas idénticas.
+  if (msg.includes('proveedores_nombre_activo_key')) {
+    return 'Ya existe un proveedor activo con ese nombre. Busca el que ya está en la lista en vez de crear otro.'
+  }
+  if (msg.includes('proveedores_nit_key')) return 'Ya existe un proveedor con ese NIT.'
+  if (msg.includes('duplicate')) return 'Ya existe un proveedor con esos datos.'
   return 'Operación fallida: ' + msg
 }
 
