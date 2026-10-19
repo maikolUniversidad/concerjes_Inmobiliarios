@@ -513,7 +513,7 @@ Los duplicados nacieron en tres tandas vacías —29-jun 04:57, 14-jul 21:24 y 1
 
 ### Tres cosas que los datos o el código cambiaron sobre la marcha
 
-1. **`compras_precio_sugerido()` no filtra por `proveedores.activo`.** Toma el precio vigente más barato del comparador sea de quien sea, así que desactivar un duplicado **no** impide que un precio colgado de él siga ganando. Hoy no ocurre porque ningún duplicado tenía precios, pero eso significa que lo que de verdad evita el problema no es la desactivación sino el índice único. Queda anotado porque es la clase de cosa que muerde si algún día se reactiva un proveedor viejo.
+1. **`compras_precio_sugerido()` no filtraba por `proveedores.activo`.** Tomaba el precio vigente más barato del comparador sea de quien sea, así que desactivar un duplicado **no** impedía que un precio colgado de él siguiera ganando: lo que de verdad evita el problema no es la desactivación sino el índice único. El día de la fusión no muerde todavía, porque ningún duplicado tenía precios, pero dejó de ser teórico en cuanto quedaron 20 proveedores desactivados. **Ya está cerrado**, en los tres caminos de la función y en la vista de los productos sin proveedor: `20261019000004_proveedor_sugerido_solo_activos.sql` tapó el comparador y la ficha, y `20261019000005_precio_sugerido_ignora_proveedor_inactivo.sql` el del medio, el proveedor que trae la solicitud al convertirse en orden. La historia está en la §11.
 
 2. **No hubo ni una colisión en `precios_proveedor`**, aunque la restricción `UNIQUE (producto_id, proveedor_id)` la hacía probable: todos los precios de cada grupo ya colgaban del registro bueno. La migración igual trae el desempate —gana el vigente y, entre vigentes, el más reciente por `fecha_cotiz`— porque sin él una base con otros datos la haría fallar en vez de decidir.
 
@@ -535,6 +535,6 @@ Los duplicados nacieron en tres tandas vacías —29-jun 04:57, 14-jul 21:24 y 1
 
 ### Lo que esto habilita
 
-Asignarles proveedor a los 273 productos activos que no lo tienen —y a los 36 de la recomendación, que es el punto 1 de lo que le falta a la fase 2— ya se puede hacer sobre una lista de 12 nombres sin repetidos: antes, cada asignación tenía tres de cada cuatro probabilidades de quedar colgada del registro equivocado.
+Asignarles proveedor a los 273 productos activos que no lo tienen —y a los 36 que la recomendación pide hoy, que es lo que la §11 dejó anotado como pendiente— ya se puede hacer sobre una lista de 12 nombres sin repetidos: antes, cada asignación tenía tres de cada cuatro probabilidades de quedar colgada del registro equivocado.
 
-Lo que **no** existe, aunque el encargo lo daba por construido, es un filtro «Sin proveedor» en `/comparador-precios`: los filtros de `ComparadorClient.tsx` son «Con precio / Comparables / Todos», y el equivalente funcional es «Todos», que muestra los 282 productos sin precio con su insignia «0 prov.». Para hacer las 273 asignaciones cómodamente hay que agregarlo.
+El filtro «Sin proveedor» de `/comparador-precios` **no existía** cuando se hizo esta limpieza, aunque el plan lo daba por construido: los filtros eran «Con precio / Comparables / Todos». Ya está, y es el cuarto botón de esa barra. Las dos piezas iban juntas: el filtro sin la lista limpia habría hecho que cada asignación tuviera tres de cada cuatro probabilidades de colgarse del registro equivocado.
