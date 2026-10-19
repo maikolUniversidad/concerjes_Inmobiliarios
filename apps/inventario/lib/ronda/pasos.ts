@@ -1,24 +1,31 @@
-// Contrato de los pasos de una plantilla de tarea (F3 del módulo de Puntos QR).
+// Etiquetas, iconos y textos de los pasos de una plantilla, para la CONSOLA
+// (F3 del módulo de Puntos QR).
 //
-// Es el espejo en TypeScript de `ronda_paso_config_valida()` de la migración
-// 20261019000030_puntos_qr_f3_catalogo.sql, que es un CHECK de la tabla
-// `ronda_plantilla_pasos`. Se duplica a propósito, como ya se hizo en
-// lib/contratos-conserjeria.ts con `grupo_vigente()`: la base es la que manda
-// —la respetan la PWA, el bot y la cola offline—, y esto es para que la consola
-// avise antes de mandar la fila y no después, con un error de constraint.
-// Si cambia una, cambia la otra.
+// El CONTRATO de los pasos —qué tipos hay, qué `config` acepta cada uno y qué
+// respuesta es válida— se movió en F4 a `packages/ronda-core/src/pasos.ts`,
+// porque la PWA del trabajador (React 19) y el módulo de `apps/movil` (React
+// 18) tienen que validar IGUAL que la consola: es la decisión §1.1 del
+// complemento 2. Aquí se reexporta, así que todo lo que ya importaba de
+// `@/lib/ronda/pasos` sigue funcionando; lo que queda en este archivo es lo que
+// sí es de la consola (labels, iconos, badges, textos de resumen).
 //
-// Lógica pura, sin Supabase ni React: así es testeable (ADR-E).
+// El núcleo sigue siendo el espejo en TypeScript de
+// `ronda_paso_config_valida()` de la migración
+// 20261019000030_puntos_qr_f3_catalogo.sql y de las validaciones de
+// `ronda_responder_paso()` de la 20261019000040: la base es la que manda y esto
+// es para avisar antes de mandar la fila. Si cambia una, cambia la otra.
 //
-// NO hay un tipo de paso para el reto aleatorio del complemento 1, que no ha
-// llegado. La §7 de docs/puntos-qr-whatsapp/02-complemento-2-integracion.md
-// explica por qué no se nombra: fijar ahora el formato obligaría a adivinar.
+// La importación es RELATIVA y no por el alias del paquete por la misma razón
+// que en lib/puntos-qr.ts: los scripts de prueba importan estos archivos por
+// ruta y resuelven relativo, no el alias.
+export * from '../../../../packages/ronda-core/src/pasos'
+// Y lo que este archivo usa, importado del mismo sitio (un `export *` no
+// mete los nombres en el alcance del módulo).
+import {
+  RESPUESTAS_CASILLA,
+  type ConfigPaso, type OpcionSeleccion, type RespuestaCasilla, type TipoPaso,
+} from '../../../../packages/ronda-core/src/pasos'
 
-export type TipoPaso =
-  | 'CASILLA' | 'FOTO' | 'VIDEO' | 'TEXTO' | 'NOTA_VOZ'
-  | 'NUMERO' | 'SELECCION' | 'ESCANEO' | 'FIRMA'
-
-export type MomentoInstructivo = 'ANTES' | 'DURANTE'
 export type TipoInstructivo = 'FOTO' | 'VIDEO' | 'PDF' | 'AUDIO'
 export type EstadoPlantilla = 'BORRADOR' | 'PUBLICADA' | 'ARCHIVADA'
 export type EstadoInstructivo = 'BORRADOR' | 'PUBLICADO' | 'ARCHIVADO'
@@ -30,45 +37,10 @@ export type FrecuenciaAsignacion =
   | 'CADA_N_HORAS' | 'POR_TURNO' | 'DIARIA' | 'SEMANAL' | 'MENSUAL' | 'POR_EVENTO'
 export type PrioridadAsignacion = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA'
 
-/** Las tres respuestas de una casilla. Un NO puede exigir motivo. */
-export const RESPUESTAS_CASILLA = ['SI', 'NO', 'NO_APLICA'] as const
-export type RespuestaCasilla = (typeof RESPUESTAS_CASILLA)[number]
-
 export const RESPUESTA_CASILLA_LABEL: Record<RespuestaCasilla, string> = {
   SI: 'Sí',
   NO: 'No',
   NO_APLICA: 'No aplica',
-}
-
-export interface OpcionSeleccion { valor: string; etiqueta: string }
-
-/** `config` de un paso. Todas las claves son opcionales salvo donde se diga. */
-export interface ConfigPaso {
-  // CASILLA
-  motivo_obligatorio_si_no?: boolean
-  // FOTO
-  min?: number
-  max?: number
-  solo_camara_vivo?: boolean
-  exige_qr_en_encuadre?: boolean
-  // VIDEO y NOTA_VOZ
-  segundos_max?: number
-  transcribir?: boolean
-  // TEXTO
-  min_caracteres?: number
-  max_caracteres?: number
-  // NUMERO (min y max se comparten con FOTO)
-  decimales?: number
-  unidad?: string
-  // SELECCION
-  multiple?: boolean
-  opciones?: OpcionSeleccion[]
-  // ESCANEO (entidad obligatoria)
-  entidad?: 'producto' | 'maquinaria'
-  exige_existente?: boolean
-  // FIRMA (quien obligatorio)
-  quien?: 'trabajador' | 'cliente'
-  permite_facial?: boolean
 }
 
 export interface MetaPaso {
@@ -205,93 +177,6 @@ export function textoVentana(desde: string | null, hasta: string | null): string
   const corta = (t: string) => t.slice(0, 5)
   const cruza = hasta <= desde
   return `${corta(desde)} a ${corta(hasta)}${cruza ? ' (del día siguiente)' : ''}`
-}
-
-/**
- * Valida la `config` de un paso igual que el CHECK de la base. Devuelve el
- * primer problema en español, o `null` si está bien.
- */
-export function validarConfigPaso(tipo: TipoPaso, config: ConfigPaso): string | null {
-  const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : undefined)
-  const presente = (k: keyof ConfigPaso) => config[k] !== undefined && config[k] !== null
-
-  switch (tipo) {
-    case 'CASILLA':
-      return null
-
-    case 'FOTO': {
-      const min = num(config.min) ?? 1
-      const max = num(config.max) ?? 1
-      if (presente('min') && num(config.min) === undefined) return 'El mínimo de fotos tiene que ser un número.'
-      if (presente('max') && num(config.max) === undefined) return 'El máximo de fotos tiene que ser un número.'
-      if (min < 0 || min > 20) return 'El mínimo de fotos va de 0 a 20.'
-      if (max < 1 || max > 20) return 'El máximo de fotos va de 1 a 20.'
-      if (presente('min') && presente('max') && max < min) {
-        return 'El máximo de fotos no puede ser menor que el mínimo.'
-      }
-      return null
-    }
-
-    case 'VIDEO': {
-      const s = num(config.segundos_max) ?? 15
-      if (s < 3 || s > 300) return 'La duración máxima del video va de 3 a 300 segundos.'
-      return null
-    }
-
-    case 'TEXTO': {
-      const min = num(config.min_caracteres) ?? 0
-      const max = num(config.max_caracteres) ?? 500
-      if (min < 0 || min > 4000) return 'El mínimo de caracteres va de 0 a 4.000.'
-      if (max < 1 || max > 4000) return 'El máximo de caracteres va de 1 a 4.000.'
-      if (presente('min_caracteres') && presente('max_caracteres') && max < min) {
-        return 'El máximo de caracteres no puede ser menor que el mínimo.'
-      }
-      return null
-    }
-
-    case 'NOTA_VOZ': {
-      const s = num(config.segundos_max) ?? 60
-      if (s < 3 || s > 600) return 'La duración máxima de la nota de voz va de 3 a 600 segundos.'
-      return null
-    }
-
-    case 'NUMERO': {
-      const dec = num(config.decimales) ?? 0
-      if (dec < 0 || dec > 4) return 'Los decimales van de 0 a 4.'
-      if (presente('min') && presente('max') && (num(config.max) ?? 0) < (num(config.min) ?? 0)) {
-        return 'El máximo no puede ser menor que el mínimo.'
-      }
-      return null
-    }
-
-    case 'SELECCION': {
-      const ops = config.opciones
-      if (!Array.isArray(ops) || ops.length === 0) return 'Hay que dar al menos una opción.'
-      if (ops.some((o) => !o || typeof o.valor !== 'string' || typeof o.etiqueta !== 'string'
-                          || o.valor.trim() === '' || o.etiqueta.trim() === '')) {
-        return 'Cada opción necesita un valor y una etiqueta.'
-      }
-      if (new Set(ops.map((o) => o.valor)).size !== ops.length) {
-        return 'Hay dos opciones con el mismo valor.'
-      }
-      return null
-    }
-
-    case 'ESCANEO':
-      if (config.entidad !== 'producto' && config.entidad !== 'maquinaria') {
-        return 'Hay que decir si se escanea un insumo o un equipo.'
-      }
-      return null
-
-    case 'FIRMA':
-      if (config.quien !== 'trabajador' && config.quien !== 'cliente') {
-        return 'Hay que decir quién firma.'
-      }
-      return null
-
-    default:
-      return 'Tipo de paso desconocido.'
-  }
 }
 
 /** Resumen de la `config` para el listado de pasos del editor. */

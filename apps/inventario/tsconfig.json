@@ -25,6 +25,9 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@conserjes/ronda-core": [
+        "../../packages/ronda-core/src/index.ts"
       ]
     }
   },

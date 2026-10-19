@@ -1,0 +1,12 @@
+{
+  "name": "@conserjes/ronda-core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Nucleo de ejecucion de una visita de ronda, sin React: pasos, geocerca, relojes, maquina de estados y payloads de las RPC. Lo comparten la PWA de apps/inventario (React 19) y el modulo de apps/movil (React 18)",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  }
+}
