@@ -2,7 +2,8 @@
 -- COMPRAS — no sugerir un proveedor desactivado
 -- =============================================================================
 -- Sale de revisar juntas la fase 2 y la fusión de proveedores duplicados
--- (migración 20261019000001). Hasta ahora **nada filtraba por
+-- (migración `…_proveedores_fusionar_duplicados`, que corre antes que esta).
+-- Hasta ahora **nada filtraba por
 -- `proveedores.activo`**:
 --
 --   · `compras_precio_sugerido()` tomaba el precio vigente más barato del

@@ -415,7 +415,7 @@ La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en or
 
 Los 81 restantes llevan medio año quietos: pueden esperar, o es señal de que sobran en el catálogo. Los 16 productos de EPP del sistema **no tienen proveedor ninguno**, y de los 43 de MAQUINARIA solo 5 lo tienen — pero buena parte de eso son activos (greca, hidrolavadora, escaleras, balanza), no compra de rutina.
 
-**Qué se construyó.** La vista `v_productos_sin_proveedor` (migración `20261019000002_productos_sin_proveedor.sql`, aplicada) y, sobre ella, un filtro **«Sin proveedor»** en `/comparador-precios` con su KPI. La lista va ordenada por lo que la recomendación pide hoy y después por lo que las sedes pidieron en 6 meses, no alfabéticamente: arriba quedan los que desbloquean plata. Cada fila lleva un botón «Asignar» que abre directo el formulario de proveedor y precio.
+**Qué se construyó.** La vista `v_productos_sin_proveedor` (migración `20261019000003_productos_sin_proveedor.sql`, aplicada) y, sobre ella, un filtro **«Sin proveedor»** en `/comparador-precios` con su KPI. La lista va ordenada por lo que la recomendación pide hoy y después por lo que las sedes pidieron en 6 meses, no alfabéticamente: arriba quedan los que desbloquean plata. Cada fila lleva un botón «Asignar» que abre directo el formulario de proveedor y precio.
 
 Se asigna **en el comparador y no en la ficha del producto** por una razón concreta: 21 de los 36 recomendados tampoco tienen precio de lista, así que llenar solo `productos.proveedor_id` deja la orden de compra en $ 0. El comparador resuelve proveedor y precio de una.
 
@@ -425,7 +425,7 @@ El selector igual quedó **ordenando los proveedores por cuántos productos usan
 
 Nota aparte: el botón «Sincronizar N de fichas» que ya existía en esa pantalla tiene hoy **182 precios por pasar** de las fichas de producto al comparador. Eso no toca a los 178 (que no tienen ni ficha), pero es trabajo hecho que no está rindiendo.
 
-### Un proveedor desactivado ya no se sugiere (migración `20261019000003`)
+### Un proveedor desactivado ya no se sugiere (migración `20261019000004`)
 
 Al revisar juntas esta sección y la fusión de proveedores duplicados apareció que **nada filtraba por `proveedores.activo`**: `compras_precio_sugerido()` tomaba el precio vigente más barato fuera de quien fuera, y `v_productos_sin_proveedor` daba por resuelto un producto cuyo único proveedor estuviera desactivado. Hasta ese día daba igual, porque los 32 proveedores estaban activos.
 
