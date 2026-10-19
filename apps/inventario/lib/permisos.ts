@@ -173,6 +173,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería (vigencia, servicios, reglas)' },
       { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería: vigencia, prórrogas, servicios y reglas' },
       { key: 'ver_panel_gerencia',             label: 'Ver panel de gerencia' },
+      // Puntos de control y códigos QR (F2). `ver_puntos_ronda` no se confunde
+      // con `ver_puntos_hogar`, que es el programa de recompensas; y el QR va
+      // en su propia clave porque emitir un código es lo que manda a imprimir
+      // placas que hay que ir a pegar a una pared.
+      { key: 'ver_puntos_ronda',               label: 'Ver zonas, puntos de control y sus códigos QR' },
+      { key: 'gestionar_puntos_ronda',         label: 'Crear / editar zonas y puntos de control' },
+      { key: 'gestionar_qr_ronda',             label: 'Generar, imprimir y revocar códigos QR de puntos' },
     ],
   },
   {
