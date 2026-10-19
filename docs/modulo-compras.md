@@ -538,3 +538,43 @@ Los duplicados nacieron en tres tandas vacías —29-jun 04:57, 14-jul 21:24 y 1
 Asignarles proveedor a los 273 productos activos que no lo tienen —y a los 36 que la recomendación pide hoy, que es lo que la §11 dejó anotado como pendiente— ya se puede hacer sobre una lista de 12 nombres sin repetidos: antes, cada asignación tenía tres de cada cuatro probabilidades de quedar colgada del registro equivocado.
 
 El filtro «Sin proveedor» de `/comparador-precios` **no existía** cuando se hizo esta limpieza, aunque el plan lo daba por construido: los filtros eran «Con precio / Comparables / Todos». Ya está, y es el cuarto botón de esa barra. Las dos piezas iban juntas: el filtro sin la lista limpia habría hecho que cada asignación tuviera tres de cada cuatro probabilidades de colgarse del registro equivocado.
+---
+
+## 14. Asignar los que no tienen proveedor: la cadena y el botón «Completar» (2026-10-19)
+
+La sección 11 dejó el filtro «Sin proveedor» con la lista ordenada por lo que pesa. Faltaban dos cosas para que la lista se pueda **trabajar**, y al medirlas apareció que el botón de sincronizar estaba haciendo algo distinto de lo que dice.
+
+### Asignar en cadena, no de a una ida y vuelta
+
+Son 178 productos. Con el formulario cerrándose en cada guardado, asignarlos es 178 veces «buscar la fila, abrir, llenar, guardar, volver a buscar». Ahora, **desde el filtro «Sin proveedor»**, el formulario encadena: al guardar no se cierra, pasa al siguiente de la lista, con un «*X* de 178» arriba para saber por dónde va. Hay «Saltar este» para el que no se sepa y «Terminar» para salir cuando sea. Se entra por el botón «Asignar uno por uno» de la barra (empieza por el primero, el más urgente) o por el «Asignar» de cualquier fila (empieza por esa).
+
+**La cola se captura al empezar y no se recalcula.** Cada guardado revalida la página y saca al producto del filtro, así que una lista viva correría los índices bajo los pies y la cadena saltaría productos. Fuera del filtro «Sin proveedor» el formulario sigue comportándose como siempre: guarda y cierra.
+
+### El botón «Sincronizar N de fichas» estaba contando tres cosas distintas
+
+Decía «Sincronizar 182 de fichas» y sonaba a rellenar huecos. Midiendo los 182 contra la base, solo 104 lo eran:
+
+| Qué son los 182 | Cuántos | Qué haría sincronizarlos |
+|---|---|---|
+| Productos sin ningún proveedor en el comparador | 104 | Rellenar el hueco — lo que el botón promete |
+| Productos que ya tienen proveedores aquí y cuya ficha nombra **otro distinto** | 78 | Agregar un tercer proveedor que nadie cotizó |
+| De esos 104, los que traen **precio 0** en la ficha | 6 | Meter un precio de $ 0 |
+
+Los 78 no son un hueco sino una **discrepancia**: la ficha y el comparador no coinciden en quién es el proveedor. Y el precio de la ficha suele ser bastante más bajo que los del comparador, así que al entrar se llevarían la insignia de **«Mejor precio»** sin que nadie los haya cotizado. Ejemplos medidos: AMBIENTADOR ESPRAY, ficha $ 6.500 contra MONTERREY $ 9.292 y BEAUTE $ 8.900; AZUCAR MORENA, ficha $ 1.700 contra $ 4.001 y $ 5.600. Peor: **9 de los 78 cuelgan de CAJA MENOR**, que no es un proveedor sino una compra de contado en la tienda de la esquina. Los 6 con precio 0 son lo mismo en grande: un $ 0 gana siempre el «mejor precio» y deja el KPI de ahorro potencial sin sentido.
+
+**Qué hace ahora.** El botón dice «**Completar 98 desde fichas**» y solo toca productos que aquí no tienen **ningún** proveedor y cuya ficha trae precio **mayor que 0**. Si al correrlo quedan discrepancias fuera, el aviso las nombra: «Se dejaron fuera N productos cuya ficha nombra un proveedor distinto al que ya tienen aquí». Nada se corrige en silencio.
+
+**Por qué no se arreglaron los 78 aquí.** Decidir entre el proveedor de la ficha y el del comparador es producto por producto y no hay con qué deducirlo: es la misma deuda de datos de la sección 11 (el sistema nunca guardó a quién se le compra). Queda pendiente, con la lista medible de una consulta. Lo urgente era que el botón no los empeorara de un clic.
+
+De paso quedó medido que **`proveedor2_id` está vacío en los 498 productos activos**: la mitad de `importarDesdeProductos()` que mira el segundo proveedor es código que hoy no hace nada. Se dejó por si el campo se usa más adelante.
+
+### Verificación hecha
+
+Banco de pruebas con los datos reales de la base (498 productos, 12 proveedores, la vista `v_productos_sin_proveedor`): los conteos de la pantalla cuadran con la base (216 con precio, 174 comparables, 178 sin proveedor, 98 completables), la cadena recorre 1 → 2 → 3 guardando el producto correcto, «Saltar este» avanza sin guardar, «Terminar» cierra, sin errores de consola y sin desbordes a 375 px. `tsc --noEmit` limpio.
+
+### Lo que sigue pendiente
+
+- Los **78 productos** cuya ficha y comparador discrepan en el proveedor, uno por uno.
+- Los **6 con precio 0** en la ficha (ALCOHOL GLICERINADO AL 70%, AMONIO CUATERNARIO, JABON PARA ROPA, SUAVIZANTE PARA ROPA, THINER A GRANEL, VARSOL INDUSTRIAL), que ahora hay que asignar a mano.
+
+  **Y ahí hay un agujero del filtro, medido y sin arreglar:** los 6 **no aparecen en los 178**, porque `v_productos_sin_proveedor` los da por resueltos — tienen proveedor en la ficha. Pero su precio de lista es 0 y no tienen fila en el comparador, así que son exactamente el caso que el propio aviso del filtro advierte: *«llenar solo la ficha del producto deja la orden en $ 0»*. Hoy solo se ven en «Todos», con su insignia «0 prov.», entre los otros 498. Arreglarlo es cambiar la vista (que la ficha cuente como proveedor **solo si trae precio > 0**), o sea tocar la migración `20261019000003`; se deja fuera de este cambio a propósito porque mueve el número 178 que toda la sección 11 explica.
