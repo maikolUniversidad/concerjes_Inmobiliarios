@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import type { TipoMovimiento } from '@/lib/types/database'
 import { faltaPermiso } from '@/lib/permisos-server'
+import type { OrigenMovimiento } from './origenes'
 
 export interface ActionResult { error?: string }
 
@@ -49,16 +50,6 @@ export async function registrarMovimiento(_prev: ActionResult, formData: FormDat
   redirect('/movimientos')
 }
 
-/**
- * De dónde viene una entrada. No toda entrada es una compra: también entra lo
- * que vuelve de producción, del reembasado o de otra área. Solo COMPRA exige
- * orden de compra, y eso lo verifica además la restricción
- * `movimientos_compra_exige_oc` en la base.
- */
-export const ORIGENES_ENTRADA = [
-  'COMPRA', 'PRODUCCION', 'REEMBASADO', 'TRASLADO_INTERNO', 'DEVOLUCION_SEDE', 'AJUSTE', 'OTRO',
-] as const
-export type OrigenMovimiento = (typeof ORIGENES_ENTRADA)[number]
 
 export interface MovItem {
   tipo: TipoMovimiento

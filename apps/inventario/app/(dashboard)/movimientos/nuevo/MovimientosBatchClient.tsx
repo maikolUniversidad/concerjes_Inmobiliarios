@@ -7,7 +7,7 @@ import { AlertCircle, Loader2, Save, Plus, Trash2, RotateCcw, ArrowDownToLine, F
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarMovimientos, guardarBorrador, eliminarBorrador, registrarDesdeBorrador } from '../actions'
-import type { OrigenMovimiento } from '../actions'
+import type { OrigenMovimiento } from '../origenes'
 import { ProductoCombo, type ProductoComboItem } from '@/components/ui/ProductoCombo'
 import { ComboBuscador } from '@/components/ui/ComboBuscador'
 import type { TipoMovimiento } from '@/lib/types/database'
