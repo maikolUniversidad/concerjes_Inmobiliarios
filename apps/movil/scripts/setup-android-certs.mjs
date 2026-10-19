@@ -1,52 +1,53 @@
-// Prepara el entorno Android en Windows con proxy/TLS corporativo.
+// Construye el truststore que necesita Gradle en una red con proxy/TLS corporativo.
 //
-// Qué hace:
-//  1) Localiza el JDK (JBR de Android Studio) y el Android SDK.
-//  2) Construye un truststore propio = cacerts del JBR + los CA raíz de Windows
-//     (incluye el CA del proxy corporativo) en ~/.gradle/ci-cacerts.jks.
-//  3) Escribe android/local.properties (sdk.dir) y añade a android/gradle.properties
-//     los systemProp del truststore para que Gradle descargue sin errores de
-//     "unable to find valid certification path".
+// El problema: el proxy de la empresa reemplaza los certificados, y el JDK no
+// conoce su CA raíz, así que Gradle falla con "unable to find valid certification
+// path to requested target" al bajar dependencias.
 //
-// Uso:  cd apps/movil && node scripts/setup-android-certs.mjs
-// Luego: npm run build:android && cd android && ./gradlew assembleDebug
+// La solución: un truststore propio = los cacerts del JDK + todos los CA raíz e
+// intermedios que Windows ya tiene instalados (entre ellos el del proxy).
+// Queda en ~/.gradle/ci-cacerts.jks y scripts/android.mjs lo deja apuntado en
+// android/gradle.properties.
+//
+// Normalmente no hace falta llamarlo a mano: scripts/android.mjs lo corre solo
+// la primera vez. Para reconstruirlo (por ejemplo si cambió el CA del proxy):
+//   cd apps/movil && node scripts/setup-android-certs.mjs
 import { execFileSync } from 'node:child_process'
-import { existsSync, copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, copyFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import os from 'node:os'
 
 const HOME = os.homedir()
 const LOCALAPPDATA = process.env.LOCALAPPDATA || join(HOME, 'AppData', 'Local')
 
-// 1) JDK (JBR) y SDK
-const jbrCandidates = [
+// Cualquier JDK sirve para esto: solo se usan su keytool y sus cacerts.
+const candidatos = [
+  process.env.JAVA_HOME,
   'C:/Program Files/Android/Android Studio/jbr',
   join(LOCALAPPDATA, 'Programs/Android Studio/jbr'),
-  process.env.JAVA_HOME,
-].filter(Boolean)
-const jbr = jbrCandidates.find((p) => p && existsSync(join(p, 'bin', 'keytool.exe')))
-if (!jbr) throw new Error('No encontré el JDK de Android Studio (JBR). Instala Android Studio.')
+]
+for (const base of [join(HOME, '.gradle', 'jdks'), join(HOME, '.jdks'), 'C:/Program Files/Eclipse Adoptium']) {
+  try {
+    const { readdirSync } = await import('node:fs')
+    for (const d of readdirSync(base)) candidatos.push(join(base, d))
+  } catch {}
+}
+const jdk = candidatos.filter(Boolean).find((p) => existsSync(join(p, 'bin', 'keytool.exe')))
+if (!jdk) {
+  console.error('✗ No encontré ningún JDK (necesito su keytool). Instala Temurin 17 o Android Studio.')
+  process.exit(1)
+}
 
-const sdkCandidates = [
-  process.env.ANDROID_HOME,
-  process.env.ANDROID_SDK_ROOT,
-  join(LOCALAPPDATA, 'Android/Sdk'),
-].filter(Boolean)
-const sdk = sdkCandidates.find((p) => p && existsSync(p))
-if (!sdk) throw new Error('No encontré el Android SDK. Ábrelo una vez en Android Studio para instalarlo.')
+const keytool = join(jdk, 'bin', 'keytool.exe')
+const cacerts = join(jdk, 'lib', 'security', 'cacerts')
+console.log('› JDK:', jdk)
 
-const keytool = join(jbr, 'bin', 'keytool.exe')
-const cacerts = join(jbr, 'lib', 'security', 'cacerts')
-console.log('› JDK (JBR):', jbr)
-console.log('› Android SDK:', sdk)
-
-// 2) Truststore = cacerts + CA de Windows
 const gradleHome = join(HOME, '.gradle')
 mkdirSync(gradleHome, { recursive: true })
 const truststore = join(gradleHome, 'ci-cacerts.jks')
 copyFileSync(cacerts, truststore)
 
-// Exporta los CA raíz/intermedios de Windows a DER e impórtalos al truststore.
+// Exporta a DER los CA que tiene Windows y los importa al truststore.
 const ps = `
 $stores=@('Cert:\\LocalMachine\\Root','Cert:\\CurrentUser\\Root','Cert:\\LocalMachine\\CA','Cert:\\CurrentUser\\CA')
 $tmp=Join-Path $env:TEMP ('winroots_'+[guid]::NewGuid().ToString('N')); New-Item -ItemType Directory -Force $tmp | Out-Null
@@ -54,27 +55,9 @@ $i=0
 foreach($s in $stores){ try{$cs=Get-ChildItem $s -ErrorAction Stop}catch{continue}
   foreach($c in $cs){ $i++; [IO.File]::WriteAllBytes((Join-Path $tmp "c$i.cer"),$c.RawData)
     $null = & '${keytool.replace(/\\/g, '\\\\')}' -importcert -noprompt -trustcacerts -keystore '${truststore.replace(/\\/g, '\\\\')}' -storepass changeit -alias "winca$i" -file (Join-Path $tmp "c$i.cer") 2>&1 } }
+Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 Write-Output "CA de Windows importados: $i"
 `
 const out = execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { encoding: 'utf8' })
 console.log('› ' + out.trim())
-console.log('› Truststore:', truststore)
-
-// 3) local.properties + gradle.properties del proyecto android/
-const androidDir = join(process.cwd(), 'android')
-if (!existsSync(androidDir)) {
-  console.log('\n⚠  No existe android/. Corre primero:  npm run build && npx cap add android')
-  process.exit(0)
-}
-const sdkForProps = sdk.replace(/\\/g, '\\\\').replace(/^([A-Za-z]):/, '$1\\:')
-writeFileSync(join(androidDir, 'local.properties'),
-  `## Generado por setup-android-certs.mjs\nsdk.dir=${sdkForProps}\n`)
-
-const gpPath = join(androidDir, 'gradle.properties')
-let gp = existsSync(gpPath) ? readFileSync(gpPath, 'utf8') : ''
-const tsForProps = truststore.replace(/\\/g, '/')
-if (!gp.includes('javax.net.ssl.trustStore')) {
-  gp += `\n# TLS corporativo (setup-android-certs.mjs)\nsystemProp.javax.net.ssl.trustStore=${tsForProps}\nsystemProp.javax.net.ssl.trustStorePassword=changeit\n`
-  writeFileSync(gpPath, gp)
-}
-console.log('\n✅ Listo. Ahora:  npm run build:android  &&  cd android && ./gradlew assembleDebug')
+console.log('✅ Truststore listo:', truststore)

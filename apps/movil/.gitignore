@@ -11,3 +11,8 @@ desktop-stage/dist/
 android/
 ios/
 .gradle/
+
+# Firma de release: el keystore y sus contraseñas NO van al repositorio
+.keystore.properties
+*.keystore
+*.jks
