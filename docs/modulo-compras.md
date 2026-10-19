@@ -437,3 +437,67 @@ Por lo mismo, `compras_bodega_central()` dejó de resolver el respaldo como «la
 
 La etiqueta «Interna» de `/bodegas` no se verificó en el navegador: esa pantalla es un componente de servidor y el banco de pruebas monta componentes de cliente. El cambio es un `span` condicional sobre un campo ya comprobado en la base.
 
+## 13. Proveedores duplicados, fusionados (2026-10-19)
+
+La migración `supabase/migrations/20261019000002_proveedores_fusionar_duplicados.sql` **ya está aplicada** en la base. No cambia ninguna decisión de compras: es la limpieza de datos que la fase 2 dejó al descubierto.
+
+**El problema.** La tabla tenía **32 proveedores activos para solo 12 nombres distintos**. Cada proveedor real estaba repetido hasta cuatro veces, y en cada grupo solo UNO tenía los datos. En `/comparador-precios` y en cualquier pantalla que deje elegir proveedor la lista mostraba cuatro entradas idénticas, así que quien asignaba un precio escogía al azar: el precio quedaba colgado de un registro que nadie consulta, y `compras_precio_sugerido()` podía terminar armando la orden contra un duplicado vacío. Con 273 productos activos sin proveedor por asignar a mano, eso se iba a ensuciar más cada semana.
+
+### Lo que se midió primero (solo lectura)
+
+**Las columnas que referencian `proveedores.id` son siete, no cuatro.** Salieron de `pg_constraint`, no de una lista escrita a mano, y tres no estaban en el inventario inicial:
+
+| Tabla.columna | |
+|---|---|
+| `precios_proveedor.proveedor_id` | el comparador |
+| `productos.proveedor_id` · `productos.proveedor2_id` | la ficha |
+| `ordenes_compra.proveedor_id` | la orden |
+| `aprovisionamiento.proveedor_sug_id` | **no estaba en el inventario inicial** |
+| `solicitudes_compra.proveedor_sugerido_id` | **la trajo la fase 2** |
+| `solicitud_compra_items.proveedor_sugerido_id` | **la trajo la fase 2** |
+
+No hay ninguna otra columna que guarde un proveedor sin FK: `clientes.proveedor` es texto libre de otra cosa, y `v_recomendacion_compra_proveedor` deriva el proveedor de `productos`, así que se corrigió sola.
+
+### Qué se fusionó
+
+Los duplicados nacieron en tres tandas vacías —29-jun 04:57, 14-jul 21:24 y 14-jul 22:22, que parecen tres reimportaciones— y en **todos los grupos el bueno es el más antiguo**, el del 29-jun 04:54.
+
+| Nombre | Se conservó | Lo que tenía | Desactivados |
+|---|---|---|---|
+| MONTERREY | el del 29-jun 04:54 | 226 precios · 32 fichas activas | 3 |
+| BEAUTE | el del 29-jun 04:54 | 235 precios · 11 fichas · **+ la orden que estaba en otro** | 3 |
+| CAJA MENOR | el del 29-jun 04:54 | 19 fichas activas | 3 |
+| DETALGRAF | el del 29-jun 04:54 | 11 fichas activas · principal | 3 |
+| SCOPA | el del 29-jun 04:54 | 18 fichas activas · principal | 3 |
+| SUMICORP | el del 29-jun 04:54 | 1 precio · 1 ficha | 3 |
+| PROVEEDOR GENERAL | el más antiguo de los 3 | vacío en todos | 2 |
+
+**Se movió exactamente una fila**: la única orden de compra de BEAUTE, que había quedado colgada de un registro distinto al que tiene los 235 precios. Los otros 20 duplicados no tenían ni una referencia; solo se desactivaron. **Nada se borró**: los 32 registros siguen en la tabla, 20 de ellos con `activo = false`, así que el rastro de quién fue quién no se perdió.
+
+### Tres cosas que los datos o el código cambiaron sobre la marcha
+
+1. **`compras_precio_sugerido()` no filtra por `proveedores.activo`.** Toma el precio vigente más barato del comparador sea de quien sea, así que desactivar un duplicado **no** impide que un precio colgado de él siga ganando. Hoy no ocurre porque ningún duplicado tenía precios, pero eso significa que lo que de verdad evita el problema no es la desactivación sino el índice único. Queda anotado porque es la clase de cosa que muerde si algún día se reactiva un proveedor viejo.
+
+2. **No hubo ni una colisión en `precios_proveedor`**, aunque la restricción `UNIQUE (producto_id, proveedor_id)` la hacía probable: todos los precios de cada grupo ya colgaban del registro bueno. La migración igual trae el desempate —gana el vigente y, entre vigentes, el más reciente por `fecha_cotiz`— porque sin él una base con otros datos la haría fallar en vez de decidir.
+
+3. **El NIT hay que moverlo, no copiarlo.** `proveedores_nit_key` es UNIQUE sobre **toda** la tabla, activos e inactivos, así que heredarle al bueno el NIT de un duplicado sin quitárselo al duplicado revienta la restricción. Hoy los 32 registros tienen el NIT en NULL y el caso no se da, pero la migración lo mueve en dos pasos por si se corre en otra base.
+
+### Que no vuelva a pasar
+
+- **Índice único `proveedores_nombre_activo_key`**, por `upper(btrim(nombre))` y **solo entre los activos**. Bloquea de raíz la reimportación, que es lo que creó estas tres tandas, y deja que un proveedor retirado conserve su nombre.
+- **El mensaje de `/proveedores` quedaba mintiendo**: `traducir()` convertía cualquier «duplicate» en «Ya existe un proveedor con ese NIT», que para un nombre repetido es la pista equivocada. Ahora distingue por el nombre de la restricción y dice qué hacer: buscar el que ya está en la lista.
+
+### Verificación hecha
+
+- **23 comprobaciones contra la base real dentro de una transacción revertida** (`node --use-system-ca scripts/probar-proveedores-fusion.mjs`): que quede un activo por nombre sin perder ninguno de los 12, que no se borre ningún registro, que **ninguna de las siete columnas** —recorridas leyendo `pg_constraint`, no una lista a mano— quede apuntando a un desactivado, que BEAUTE termine con sus precios y su orden juntos, que no se pierda cobertura de precios ni queden duplicados por (producto, proveedor), que ningún precio cuelgue de un inactivo, que ningún producto quede con el mismo proveedor como principal y como segundo, que `compras_precio_sugerido()` no sugiera un desactivado en ninguno de los 498 productos activos, que **correrla dos veces no cambie nada**, y que el índice rechace el duplicado también con otras mayúsculas y con espacios alrededor pero deje el nombre libre en un retirado.
+- Al aplicarla: **12 activos para 12 nombres**, 20 desactivados, 32 filas en total, los **462 precios intactos** cubriendo los mismos 256 productos, y cero referencias a un proveedor desactivado en las siete columnas.
+
+### Línea base (al aplicar)
+
+12 proveedores activos (eran 32) · 462 precios en el comparador sobre 256 productos · 273 productos activos todavía sin proveedor.
+
+### Lo que esto habilita
+
+Asignarles proveedor a los 273 productos activos que no lo tienen —y a los 36 de la recomendación, que es el punto 1 de lo que le falta a la fase 2— ya se puede hacer sobre una lista de 12 nombres sin repetidos: antes, cada asignación tenía tres de cada cuatro probabilidades de quedar colgada del registro equivocado.
+
+Lo que **no** existe, aunque el encargo lo daba por construido, es un filtro «Sin proveedor» en `/comparador-precios`: los filtros de `ComparadorClient.tsx` son «Con precio / Comparables / Todos», y el equivalente funcional es «Todos», que muestra los 282 productos sin precio con su insignia «0 prov.». Para hacer las 273 asignaciones cómodamente hay que agregarlo.
