@@ -100,6 +100,10 @@ export const navigation: NavModule[] = [
     icon: MessageSquareWarning,
     items: [
       { label: 'PQRS', href: '/pqrs', icon: MessageSquareWarning, permiso: 'ver_pqrs' },
+      // El contrato es el eje del módulo de Puntos QR: de su vigencia y sus
+      // reglas dependen los puntos, los QR y las tareas. Va aparte de
+      // /contratos, que clasifica sedes para inventario.
+      { label: 'Contratos', href: '/rondas/contratos', icon: FileSignature, permiso: 'ver_contratos_conserjeria' },
     ],
   },
   {
