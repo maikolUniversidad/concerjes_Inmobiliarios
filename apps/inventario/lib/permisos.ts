@@ -59,7 +59,12 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_proveedores',          label: 'Ver proveedores' },
       { key: 'editar_proveedores',       label: 'Editar proveedores' },
       { key: 'ver_ordenes_compra',       label: 'Ver órdenes de compra' },
-      { key: 'crear_ordenes_compra',     label: 'Crear / aprobar OC' },
+      // Separación de funciones: crear, aprobar y recibir son tres manos
+      // distintas. Quien crea una orden no puede aprobarla (lo frena la BD).
+      { key: 'crear_ordenes_compra',     label: 'Crear OC (crear, editar, enviar, anular)' },
+      { key: 'aprobar_ordenes_compra',   label: 'Aprobar OC hasta el tope de monto' },
+      { key: 'aprobar_ordenes_compra_sin_tope', label: 'Aprobar OC de cualquier monto (gerencia)' },
+      { key: 'recibir_ordenes_compra',   label: 'Registrar entregas del proveedor (bodega)' },
       { key: 'ver_ordenes_insumo',       label: 'Ver órdenes de insumo' },
       { key: 'crear_ordenes_insumo',     label: 'Crear/proponer órdenes de insumo (sede)' },
       { key: 'aprobar_ordenes_insumo',   label: 'Aprobar órdenes de insumo (central)' },

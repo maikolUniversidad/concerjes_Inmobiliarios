@@ -3,9 +3,40 @@
 import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { faltaPermiso } from '@/lib/permisos-server'
+import { faltaPermiso, SIN_PERMISO } from '@/lib/permisos-server'
 
 export interface ActionResult { error?: string }
+
+/**
+ * Separación de funciones (fase 1 del módulo de compras).
+ *
+ * Antes un solo permiso, `crear_ordenes_compra`, autorizaba crear, aprobar,
+ * enviar, recibir y anular. Ahora son tres manos distintas:
+ *
+ *   crear_ordenes_compra     crear, editar ítems, marcar como comprada, anular
+ *   aprobar_ordenes_compra   aprobar (con tope de monto)
+ *   recibir_ordenes_compra   registrar las entregas del proveedor
+ *
+ * Lo que NO se valida aquí: la regla «quien crea no aprueba» y el tope por
+ * monto. Esos dos viven en el trigger `tr_oc_aprobacion` de la base, porque
+ * `getPermisosUsuario()` y los helpers `auth_permiso*` le dan paso libre a los
+ * roles base SUPER_ADMIN y ADMIN, y la regla no admite excepción para nadie.
+ */
+const PERM_APROBAR = ['aprobar_ordenes_compra', 'aprobar_ordenes_compra_sin_tope'] as const
+const PERM_RECIBIR = 'recibir_ordenes_compra'
+
+/** Traduce al español los errores que vienen de la BD en una recepción o aprobación. */
+function traducirError(msg: string): string {
+  if (msg.includes('row-level security')) return SIN_PERMISO
+  // Las excepciones del trigger y del RPC ya vienen con un texto para el usuario.
+  if (msg.includes('no puede aprobarla')) return msg
+  if (msg.includes('requiere el permiso')) return msg
+  if (msg.includes('se pasa del pedido')) return msg
+  if (msg.includes('oc_recepcion_items_motivo')) return 'Si rechazas cantidad, escribe el motivo del rechazo.'
+  if (msg.includes('oc_recepcion_items_algo')) return 'Cada línea debe traer cantidad recibida o cantidad rechazada.'
+  if (msg.includes('movimientos_compra_exige_oc')) return 'Una entrada marcada como compra necesita su orden de compra.'
+  return msg
+}
 
 export async function crearOC(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
   const falta = await faltaPermiso('crear_ordenes_compra')
@@ -105,7 +136,10 @@ const TRANSICIONES: Record<string, string[]> = {
 
 /** Avanza el estado de la OC (aprobar, marcar comprada/enviada, anular). */
 export async function avanzarEstadoOC(id: string, nuevoEstado: string, comentario?: string): Promise<ActionResult> {
-  const falta = await faltaPermiso('crear_ordenes_compra')
+  // Aprobar es la única transición que no le corresponde a compras.
+  const falta = nuevoEstado === 'APROBADA'
+    ? await faltaPermiso(...PERM_APROBAR)
+    : await faltaPermiso('crear_ordenes_compra')
   if (falta) return { error: falta }
 
   const supabase = await createClient()
@@ -126,10 +160,7 @@ export async function avanzarEstadoOC(id: string, nuevoEstado: string, comentari
   if (nuevoEstado === 'ENVIADA') patch.fecha_envio = ahora
 
   const { error } = await sb.from('ordenes_compra').update(patch).eq('id', id)
-  if (error) {
-    if (error.message.includes('row-level security')) return { error: 'No tienes permisos (requiere Admin o Coord. Compras).' }
-    return { error: error.message }
-  }
+  if (error) return { error: traducirError(error.message) }
   if (comentario?.trim()) await insertarComentario(sb, id, user.id, comentario.trim())
 
   revalidatePath('/ordenes-compra')
@@ -137,82 +168,79 @@ export async function avanzarEstadoOC(id: string, nuevoEstado: string, comentari
   return {}
 }
 
-/** Registra recepción de ítems y ajusta el estado (PARCIAL/COMPLETA). */
-export async function registrarRecepcionOC(
-  id: string,
-  recepciones: { itemId: string; cantidad: number }[],
-  comentario?: string,
-): Promise<ActionResult> {
-  const falta = await faltaPermiso('crear_ordenes_compra')
+/** Una línea de la entrega: lo que llegó y lo que se rechazó de un ítem. */
+export interface LineaEntrega {
+  ocItemId: string
+  cantidad: number
+  cantidadRechazada?: number
+  motivoRechazo?: string
+}
+
+export interface EntregaInput {
+  fecha?: string | null
+  remision?: string | null
+  ubicacionId?: string | null
+  observacion?: string | null
+  lineas: LineaEntrega[]
+}
+
+/**
+ * Registra UNA ENTREGA del proveedor contra la orden.
+ *
+ * Antes (`registrarRecepcionOC`) esto pisaba `oc_items.cantidad_rec` como un
+ * acumulado: si llegaban 50 y después 30, el campo quedaba en 80 sin rastro de
+ * que fueran dos entregas en dos fechas, y el movimiento de inventario se
+ * registraba en una llamada aparte que podía fallar y dejar el stock desalineado.
+ *
+ * Ahora todo lo hace `oc_registrar_recepcion` en una sola transacción: crea la
+ * entrega, sus líneas, los movimientos de ENTRADA con `oc_id` y ubicación, suma
+ * el stock y recalcula el estado. O pasa todo, o no pasa nada.
+ */
+export async function registrarEntregaOC(id: string, entrada: EntregaInput): Promise<ActionResult> {
+  const falta = await faltaPermiso(PERM_RECIBIR)
   if (falta) return { error: falta }
 
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Debes iniciar sesión.' }
+
+  const lineas = (entrada.lineas ?? [])
+    .map(l => ({
+      oc_item_id: l.ocItemId,
+      cantidad: Number(l.cantidad) || 0,
+      cantidad_rechazada: Number(l.cantidadRechazada) || 0,
+      motivo_rechazo: l.motivoRechazo?.trim() || null,
+    }))
+    .filter(l => l.oc_item_id && (l.cantidad > 0 || l.cantidad_rechazada > 0))
+
+  if (lineas.length === 0) return { error: 'Indica al menos un producto con cantidad recibida o rechazada.' }
+
+  const sinMotivo = lineas.find(l => l.cantidad_rechazada > 0 && !l.motivo_rechazo)
+  if (sinMotivo) return { error: 'Si rechazas cantidad, escribe el motivo del rechazo.' }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const sb = supabase as any
-
-  const { data: oc } = await sb.from('ordenes_compra').select('numero_oc').eq('id', id).single()
-  const numeroOC = oc?.numero_oc ?? ''
-
-  const { data: items } = await sb.from('oc_items').select('id, producto_id, cantidad_ped, cantidad_rec').eq('oc_id', id)
-  if (!items || items.length === 0) return { error: 'La orden no tiene ítems.' }
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const mapItems = new Map((items as any[]).map(it => [it.id, it]))
-  for (const r of recepciones) {
-    const it = mapItems.get(r.itemId)
-    if (!it) continue
-    const nuevo = Math.max(0, Math.min(Number(it.cantidad_ped), Number(r.cantidad)))
-    const anterior = Number(it.cantidad_rec)
-    if (nuevo === anterior) continue
-    const delta = nuevo - anterior
-    // Lo recibido entra al inventario como ENTRADA (actualiza stock vía RPC).
-    // Se registra ANTES de marcar la recepción para que stock y cantidad_rec no
-    // se desincronicen si el movimiento falla (p. ej. por permisos). Sólo deltas
-    // positivos: una corrección a la baja no retira stock automáticamente.
-    if (delta > 0) {
-      const { error: movErr } = await sb.rpc('registrar_movimiento', {
-        p_producto: it.producto_id, p_tipo: 'ENTRADA', p_cantidad: delta,
-        p_observacion: `Recepción OC ${numeroOC}`,
-      })
-      if (movErr) {
-        return { error: movErr.message.includes('row-level security')
-          ? 'No tienes permiso para ingresar mercancía al inventario (se requiere un rol que registre movimientos).'
-          : 'No se pudo actualizar el inventario: ' + movErr.message }
-      }
-    }
-    const { error } = await sb.from('oc_items').update({ cantidad_rec: nuevo }).eq('id', r.itemId)
-    if (error) return { error: error.message }
-    it.cantidad_rec = nuevo
-  }
-
-  // Recalcular estado
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const arr = Array.from(mapItems.values()) as any[]
-  const algo = arr.some(it => Number(it.cantidad_rec) > 0)
-  const todo = arr.every(it => Number(it.cantidad_rec) >= Number(it.cantidad_ped))
-  const { data: ocAct } = await sb.from('ordenes_compra').select('estado').eq('id', id).single()
-  const estadoActual = ocAct?.estado
-  let nuevoEstado: string | null = null
-  if (todo && estadoActual !== 'COMPLETA') nuevoEstado = 'COMPLETA'
-  else if (algo && !todo && !['PARCIAL', 'COMPLETA'].includes(estadoActual)) nuevoEstado = 'PARCIAL'
-
-  if (nuevoEstado) {
-    const patch: Record<string, unknown> = { estado: nuevoEstado }
-    if (nuevoEstado === 'COMPLETA') patch.fecha_recepcion = new Date().toISOString()
-    await sb.from('ordenes_compra').update(patch).eq('id', id)
-  }
-  if (comentario?.trim()) await insertarComentario(sb, id, user.id, comentario.trim())
+  const { error } = await (supabase as any).rpc('oc_registrar_recepcion', {
+    p_oc: id,
+    p_items: lineas,
+    p_fecha: entrada.fecha || null,
+    p_remision: entrada.remision?.trim() || null,
+    p_ubicacion: entrada.ubicacionId || null,
+    p_observacion: entrada.observacion?.trim() || null,
+  })
+  if (error) return { error: traducirError(error.message) }
 
   revalidatePath('/ordenes-compra')
   revalidatePath(`/ordenes-compra/${id}`)
+  revalidatePath('/stock')
+  revalidatePath('/movimientos')
   return {}
 }
 
 /** Agrega un comentario a la trazabilidad de la OC. */
 export async function comentarOC(id: string, texto: string): Promise<ActionResult> {
-  const falta = await faltaPermiso('crear_ordenes_compra', 'ver_ordenes_compra')
+  // Comentar lo puede hacer cualquiera que participe en la orden, incluida la
+  // bodega que la recibe: la RLS de `oc_eventos` acepta los cuatro permisos.
+  const falta = await faltaPermiso('crear_ordenes_compra', 'ver_ordenes_compra', ...PERM_APROBAR, PERM_RECIBIR)
   if (falta) return { error: falta }
 
   const supabase = await createClient()

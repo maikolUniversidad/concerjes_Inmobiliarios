@@ -18,7 +18,10 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
   const { producto, tipo } = await searchParams
   const supabase = await createClient()
 
-  const [productos, { data: sedes }, { data: ubicData }, { data: ordData }, { data: usuData }, { data: borrData }] = await Promise.all([
+  const [
+    productos, { data: sedes }, { data: ubicData }, { data: ordData },
+    { data: usuData }, { data: borrData }, { data: ocData },
+  ] = await Promise.all([
     // `.limit(5000)` NO sirve: PostgREST corta en 1.000 filas. Hay que paginar.
     traerTodo((desde, hasta) => supabase
       .from('productos').select('id, nombre_estandar, presentacion, codigo, imagen_url')
@@ -32,6 +35,13 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
     supabase.from('movimiento_borradores')
       .select('id, nombre, created_at, items:movimiento_borrador_items ( tipo, producto_id, cantidad, sede_id, ubicacion_id, observacion, orden ), responsables:movimiento_borrador_responsables ( usuario_id )')
       .order('created_at', { ascending: false }).limit(50),
+    // Órdenes de COMPRA abiertas: una entrada que venga de un proveedor tiene
+    // que decir contra cuál entró. Solo las que pueden recibir mercancía.
+    supabase.from('ordenes_compra')
+      .select('id, numero_oc, estado, fecha_emision, valor_total, proveedor:proveedores ( nombre )')
+      .in('estado', ['APROBADA', 'ENVIADA', 'PARCIAL'])
+      .order('fecha_emision', { ascending: false })
+      .limit(300),
   ])
 
   const ubicaciones = ((ubicData as unknown as { id: string; codigo: string; nombre: string | null; bodega: { nombre: string } | null }[]) ?? [])
@@ -59,6 +69,14 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
     responsableIds: (b.responsables ?? []).map((r: any) => r.usuario_id),
   }))
 
+  const ordenesCompra = ((ocData as unknown as {
+    id: string; numero_oc: string; estado: string; fecha_emision: string
+    valor_total: number | null; proveedor: { nombre: string } | null
+  }[]) ?? []).map(o => ({
+    id: o.id, numero: o.numero_oc, estado: o.estado, fecha: o.fecha_emision,
+    proveedor: o.proveedor?.nombre ?? null,
+  }))
+
   const initialTipo = tipo && TIPOS_VALIDOS.includes(tipo as TipoMovimiento) ? (tipo as TipoMovimiento) : undefined
 
   return (
@@ -73,7 +91,7 @@ export default async function NuevoMovimientoPage({ searchParams }: Props) {
         </p>
       </div>
 
-      <MovimientosBatchClient productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} ordenes={ordenes} usuarios={usuarios} borradores={borradores} initialProducto={producto} initialTipo={initialTipo} />
+      <MovimientosBatchClient productos={productos ?? []} sedes={sedes ?? []} ubicaciones={ubicaciones} ordenes={ordenes} ordenesCompra={ordenesCompra} usuarios={usuarios} borradores={borradores} initialProducto={producto} initialTipo={initialTipo} />
     </div>
   )
 }
