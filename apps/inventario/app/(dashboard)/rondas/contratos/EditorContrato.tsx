@@ -7,7 +7,8 @@ import { toast } from 'sonner'
 import { DeleteButton } from '@/components/ui/DeleteButton'
 import {
   ESTADO_META, ESTADOS_CONTRATO, SERVICIO_LABEL, SERVICIOS_CONTRATO,
-  TIPO_VIGENCIA_LABEL, TIPOS_VIGENCIA, diasParaVencer, estaVigente, fechaCorta, textoVigencia,
+  TIPO_VIGENCIA_LABEL, TIPOS_VIGENCIA, diasParaVencer, estaVigente, fechaCorta,
+  motivoNoVigente, textoVigencia,
   type ContratoFila, type ReglasContrato, type VigenciaFila,
 } from '@/lib/contratos-conserjeria'
 import {
@@ -60,6 +61,7 @@ export function EditorContrato({
   useAviso(estVig, 'Periodo agregado')
 
   const vigente = estaVigente(contrato, periodos)
+  const motivo = motivoNoVigente(contrato, periodos)
   const dias = diasParaVencer(contrato, periodos)
   const meta = ESTADO_META[contrato.estado]
   const soloLectura = !puedeGestionar
@@ -90,9 +92,12 @@ export function EditorContrato({
       {!vigente && (
         <p className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 font-body text-sm text-amber-800">
           <ShieldAlert className="w-4 h-4 mt-0.5 shrink-0" />
-          Mientras el contrato no esté vigente, sus QR no abren visitas y sus puntos se ven en gris.
-          No se apaga ningún QR: la vigencia se calcula al escanear, así que al renovar vuelven a
-          servir sin tocar nada.
+          <span>
+            <strong>Hoy no está vigente{motivo ? `: ${motivo}` : ''}.</strong>{' '}
+            Mientras no lo esté, sus QR no abren visitas y sus puntos se ven en gris. No se apaga
+            ningún QR: la vigencia se calcula al escanear, así que al renovar vuelven a servir sin
+            tocar nada.
+          </span>
         </p>
       )}
 
@@ -118,7 +123,9 @@ export function EditorContrato({
               disabled={soloLectura}>
               <option value="">Sin cliente</option>
               {clientes.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}
-              {soloLectura && contrato.cliente_id && (
+              {/* En solo lectura no llega el catálogo: se pinta el cliente que
+                  tiene, y solo si no vino ya en la lista. */}
+              {contrato.cliente_id && !clientes.some((c) => c.id === contrato.cliente_id) && (
                 <option value={contrato.cliente_id}>{contrato.cliente_nombre}</option>
               )}
             </select>
@@ -146,8 +153,17 @@ export function EditorContrato({
           </label>
           <label className="space-y-1 sm:col-span-2">
             <span className={etiqueta}>Objeto del contrato</span>
-            <textarea name="objeto" defaultValue={contrato.objeto ?? ''} rows={2}
-              className={campo} disabled={soloLectura} />
+            {/* Un textarea deshabilitado recorta el objeto sin avisar (en móvil
+                caben dos líneas) y no se puede enfocar para desplazarlo, así
+                que en solo lectura se pinta el texto entero. */}
+            {soloLectura ? (
+              <p className="whitespace-pre-wrap rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-body text-sm text-gray-500">
+                {contrato.objeto || 'Sin objeto registrado'}
+              </p>
+            ) : (
+              <textarea name="objeto" defaultValue={contrato.objeto ?? ''} rows={3}
+                className={campo} />
+            )}
           </label>
           <label className="space-y-1">
             <span className={etiqueta}>Color del arte</span>

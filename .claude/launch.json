@@ -4,14 +4,38 @@
     {
       "name": "inventario",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace=inventario"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace=inventario"
+      ],
       "port": 3001
     },
     {
       "name": "web",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "../Concerjes_Web", "run", "dev", "--", "--port", "3002"],
+      "runtimeArgs": [
+        "--prefix",
+        "../Concerjes_Web",
+        "run",
+        "dev",
+        "--",
+        "--port",
+        "3002"
+      ],
       "port": 3002
+    },
+    {
+      "name": "banco-contrato",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "8791",
+        "--directory",
+        "C:/Users/maiko/AppData/Local/Temp/claude/C--Users-maiko-OneDrive-Documentos-Desarrollos-conserjes-inmobiliarios--claude-worktrees-f1-contrato-3172bc/7d78c3c6-3f18-46a8-89af-c457086f2e1a/scratchpad/banco"
+      ],
+      "port": 8791
     }
   ]
 }

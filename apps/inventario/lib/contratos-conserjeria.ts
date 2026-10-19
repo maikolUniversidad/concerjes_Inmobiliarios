@@ -8,7 +8,8 @@
 // 20261019000010_puntos_qr_f1_contrato.sql. Se duplican a propósito: la base es
 // la que manda (la consultan los QR y las visitas), y esto es solo para pintar
 // el estado en la pantalla sin una consulta por fila. Si una cambia, cambian
-// las dos.
+// las dos, y lo vigila `scripts/probar-vigencia-paridad.mjs`, que corre los
+// mismos 11 casos contra la base y contra estas funciones.
 
 export type EstadoContrato = 'BORRADOR' | 'VIGENTE' | 'SUSPENDIDO' | 'VENCIDO' | 'TERMINADO'
 export type ServicioContrato = 'ASEO' | 'CONSERJERIA' | 'MANTENIMIENTO' | 'SEGURIDAD'
@@ -123,23 +124,61 @@ export function estaVigente(
   hoy: string = new Date().toISOString().slice(0, 10),
 ): boolean {
   if (contrato.estado !== 'VIGENTE' || !contrato.activo) return false
-  const inicios = [contrato.vigencia_desde, ...periodos.map((p) => p.desde)].filter(Boolean) as string[]
-  const inicio = inicios.length ? inicios.reduce((a, b) => (a <= b ? a : b)) : null
+  const inicio = vigenciaInicio(contrato, periodos)
   if (inicio && inicio > hoy) return false
   const fin = vigenciaFin(contrato, periodos)
   if (fin && fin < hoy) return false
   return true
 }
 
+/**
+ * Inicio de la vigencia efectiva: el más temprano entre la fecha del contrato y
+ * el `desde` de sus periodos. `null` = sin fecha de inicio pactada. Es el mismo
+ * `LEAST(...)` que usa `grupo_vigente()`, así que un periodo con fecha de
+ * inicio cuenta aunque la fila del contrato no tenga ninguna.
+ */
+export function vigenciaInicio(
+  contrato: Pick<ContratoFila, 'vigencia_desde'>,
+  periodos: Pick<VigenciaFila, 'desde'>[] = [],
+): string | null {
+  const inicios = [contrato.vigencia_desde, ...periodos.map((p) => p.desde)].filter(Boolean) as string[]
+  return inicios.length ? inicios.reduce((a, b) => (a <= b ? a : b)) : null
+}
+
 /** Texto corto de la vigencia para el listado. */
 export function textoVigencia(
   contrato: Pick<ContratoFila, 'vigencia_desde' | 'vigencia_hasta'>,
-  periodos: Pick<VigenciaFila, 'hasta'>[] = [],
+  periodos: Pick<VigenciaFila, 'desde' | 'hasta'>[] = [],
 ): string {
+  const inicio = vigenciaInicio(contrato, periodos)
   const fin = vigenciaFin(contrato, periodos)
-  if (!contrato.vigencia_desde && !fin) return 'Sin fechas'
-  const desde = contrato.vigencia_desde ? fechaCorta(contrato.vigencia_desde) : 'sin inicio'
-  return `${desde} → ${fin ? fechaCorta(fin) : 'sin fin'}`
+  if (!inicio && !fin) return 'Sin fechas'
+  return `${inicio ? fechaCorta(inicio) : 'sin inicio'} → ${fin ? fechaCorta(fin) : 'sin fin'}`
+}
+
+/**
+ * Por qué un contrato NO está vigente hoy, en una frase, o `null` si sí lo
+ * está. Existe porque las dos insignias pueden contradecirse a la vista: el
+ * `estado` es la etiqueta administrativa y la vigencia se CALCULA, así que un
+ * contrato puede decir «Vigente» y no estar vigente (o decir «Vencido» y
+ * mostrar días por delante gracias a una prórroga). Nombrar la condición que
+ * falló evita que alguien lea «faltan 163 días» y no entienda por qué sus QR no
+ * abren.
+ */
+export function motivoNoVigente(
+  contrato: Pick<ContratoFila, 'estado' | 'activo' | 'vigencia_desde' | 'vigencia_hasta'>,
+  periodos: Pick<VigenciaFila, 'desde' | 'hasta'>[] = [],
+  hoy: string = new Date().toISOString().slice(0, 10),
+): string | null {
+  if (!contrato.activo) return 'el contrato está marcado como inactivo'
+  if (contrato.estado !== 'VIGENTE') {
+    return `su estado es «${ESTADO_META[contrato.estado].label}», y solo opera en «Vigente»`
+  }
+  const inicio = vigenciaInicio(contrato, periodos)
+  if (inicio && inicio > hoy) return `su vigencia empieza el ${fechaCorta(inicio)}`
+  const fin = vigenciaFin(contrato, periodos)
+  if (fin && fin < hoy) return `su vigencia terminó el ${fechaCorta(fin)}`
+  return null
 }
 
 /** Fecha ISO a `dd/mm/aaaa`, sin pasar por Date para no correr el día por zona. */

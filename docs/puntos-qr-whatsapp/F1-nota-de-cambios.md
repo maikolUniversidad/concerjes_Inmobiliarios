@@ -58,24 +58,35 @@ Operación Conserjería y la lógica pura en
 que es el espejo en TypeScript de `grupo_vigente()` (si cambia una, cambian las
 dos).
 
-## La migración está verificada pero **SIN aplicar**
+## La migración ya está aplicada
 
-Es una base real y esta migración cambia el alcance de la RLS. Se verificó con
+Se verificó primero en seco y se aplicó después, a pedido del usuario.
+
+**Verificación en transacción**, con
 [scripts/probar-puntos-qr-f1.mjs](scripts/probar-puntos-qr-f1.mjs), que corre
 **dentro de `BEGIN … ROLLBACK`**: pasa el archivo completo dos veces seguidas en
 la misma transacción (idempotencia de verdad, no de lectura) y prueba el alcance
-con `set_config('request.jwt.claims', …)`. **28 pruebas, 0 fallas**: un usuario
-de un contrato no lee los satélites de otro, un `ADMIN` sí los ve y sí escribe,
-quien solo tiene `ver_*` no escribe, la prórroga extiende la vigencia y
-`SUSPENDIDO` no está vigente aunque las fechas alcancen. Al final, `ROLLBACK`
-—comprobado después: en la base no existe ninguna de las tablas nuevas ni
-`auth_grupos()`—.
+con `set_config('request.jwt.claims', …)`. **28 pruebas, 0 fallas**, antes y
+después de aplicar: un usuario de un contrato no lee los satélites de otro, un
+`ADMIN` sí los ve y sí escribe, quien solo tiene `ver_*` no escribe, la prórroga
+extiende la vigencia y `SUSPENDIDO` no está vigente aunque las fechas alcancen.
 
-**Queda pendiente que el usuario decida cuándo aplicarla:**
+**Aplicación** con el script del repo:
 
 ```bash
 NODE_OPTIONS=--use-system-ca node scripts/apply-migrations.mjs supabase/migrations/20261019000010_puntos_qr_f1_contrato.sql
 ```
+
+Estado de la base después de aplicar: las 6 tablas nuevas, las 7 funciones
+(`auth_grupos`, `auth_ve_grupo`, `auth_papel_grupo`, `grupo_vigente`,
+`grupo_vigencia_fin`, `grupo_acceso`, `grupo_gestiona`) y 12 políticas. Los **7
+contratos quedaron en `VIGENTE` y los 7 están vigentes hoy**: no se apagó nada.
+Los satélites nacen vacíos a propósito —no se inventó ni una fila de servicios,
+reglas o papeles—, así que hasta que alguien los llene la pantalla muestra los
+contratos sin fechas, sin cliente y sin servicios, con las reglas en sus valores
+por defecto. Es el estado esperado, pero conviene saberlo antes de mostrarla.
+
+Para repetir las pruebas cuando haga falta (no deja nada escrito):
 
 ```bash
 node --use-system-ca scripts/probar-puntos-qr-f1.mjs
@@ -88,9 +99,27 @@ node --use-system-ca scripts/probar-puntos-qr-f1.mjs
   sin incoherencias nuevas (las 14 que reporta el auditor son las de antes, de
   programación de personal y servicios del hogar; `verificar-permisos` dice
   "sin discrepancias").
-- **Sin revisión visual de la pantalla**, y es a propósito: `/rondas/contratos`
-  lee columnas que solo existen cuando la migración se aplique. En cuanto se
-  aplique, vale la pena pasarla por la skill `banco-pruebas`.
+- [scripts/probar-vigencia-paridad.mjs](scripts/probar-vigencia-paridad.mjs):
+  **11 de 11** casos coinciden entre `grupo_vigente()` en la base y
+  `estaVigente()` en TypeScript (prórroga que extiende, prórroga sin fin, otrosí
+  sobre un contrato sin fechas, periodo anterior al inicio, y los estados que no
+  operan). La lógica está duplicada a propósito y este script es lo que vigila
+  que no se separen.
+- Revisión visual con la skill `banco-pruebas`: el componente real del detalle
+  montado con datos reales, en 5 escenarios × 2 anchos (1280 y 375 px), sin
+  desbordes ni scroll horizontal, con el contraste medido. Destapó y se
+  arreglaron dos defectos:
+  1. `textoVigencia()` ignoraba el `desde` de los periodos, así que un contrato
+     sin fechas propias pero con un otrosí decía «Sin fechas» y justo debajo
+     listaba el periodo. Ahora usa `vigenciaInicio()`, que es el mismo
+     `LEAST(g.vigencia_desde, MIN(v.desde))` de `grupo_vigente()` — era una
+     incoherencia real con el SQL, no un detalle de texto.
+  2. El objeto del contrato se recortaba sin aviso en un `textarea` deshabilitado
+     en móvil; en solo lectura ahora se pinta el texto entero.
+  Y se agregó `motivoNoVigente()`: el aviso ámbar dice **cuál** condición falló
+  (el estado o las fechas), porque las dos insignias pueden contradecirse a la
+  vista —un contrato «Vencido» con una prórroga muestra días por delante— y sin
+  el motivo nadie entiende por qué sus QR no abren.
 
 ## Pendientes que esta fase deja anotados
 
