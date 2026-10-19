@@ -3,7 +3,9 @@
 import { useState, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Search, Phone, Mail, MapPin, Clock, RefreshCw, ChevronLeft, ChevronRight, Calendar } from 'lucide-react'
+import { toast } from 'sonner'
 import { updateEstadoSolicitud } from '../actions'
+import { mensajeDeError } from '@/lib/errores'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 const ESTADOS = [
@@ -58,8 +60,12 @@ export default function SolicitudesClient({ solicitudes, total, page, pageSize }
     if (estado === 'CANCELADA') {
       motivo = prompt('Motivo de cancelación (opcional):') ?? undefined
     }
-    await updateEstadoSolicitud(id, estado, motivo)
-    startTransition(() => router.refresh())
+    try {
+      await updateEstadoSolicitud(id, estado, motivo)
+      startTransition(() => router.refresh())
+    } catch (e) {
+      toast.error(mensajeDeError(e, 'No se pudo cambiar el estado de la solicitud.'))
+    }
   }
 
   const totalPages = Math.ceil(total / pageSize)

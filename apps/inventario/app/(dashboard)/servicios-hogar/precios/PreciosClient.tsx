@@ -3,7 +3,9 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, Trash2, X, Save, Loader2, DollarSign } from 'lucide-react'
+import { toast } from 'sonner'
 import { upsertTarifa, deleteTarifa } from '../actions'
+import { mensajeDeError } from '@/lib/errores'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 
 function fmt(v?: number | null) {
@@ -39,6 +41,8 @@ export default function PreciosClient({ tarifas, tipos }: { tarifas: any[]; tipo
       await upsertTarifa(modal)
       cerrar()
       startTransition(() => router.refresh())
+    } catch (e) {
+      toast.error(mensajeDeError(e, 'No se pudo guardar la tarifa.'))
     } finally {
       setSaving(false)
     }
@@ -46,8 +50,12 @@ export default function PreciosClient({ tarifas, tipos }: { tarifas: any[]; tipo
 
   async function eliminar(id: string) {
     if (!confirm('¿Eliminar esta tarifa?')) return
-    await deleteTarifa(id)
-    startTransition(() => router.refresh())
+    try {
+      await deleteTarifa(id)
+      startTransition(() => router.refresh())
+    } catch (e) {
+      toast.error(mensajeDeError(e, 'No se pudo eliminar la tarifa.'))
+    }
   }
 
   const filtradas = filtroTipo ? tarifas.filter((t: any) => t.tipo_id === filtroTipo) : tarifas

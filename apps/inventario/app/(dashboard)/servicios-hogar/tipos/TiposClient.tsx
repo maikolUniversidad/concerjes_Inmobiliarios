@@ -3,7 +3,9 @@
 import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Pencil, ToggleLeft, ToggleRight, X, Save, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
 import { upsertTipoServicio, toggleTipoServicioActivo } from '../actions'
+import { mensajeDeError } from '@/lib/errores'
 
 const ICONOS = ['🧹', '✨', '🏗️', '🎉', '🍳', '🌿', '🚗', '🏠', '🛁', '👶']
 const COLORES = ['green', 'blue', 'orange', 'purple', 'amber', 'emerald', 'red', 'pink']
@@ -46,14 +48,20 @@ export default function TiposClient({ tipos }: { tipos: any[] }) {
       await upsertTipoServicio(modal)
       cerrar()
       startTransition(() => router.refresh())
+    } catch (e) {
+      toast.error(mensajeDeError(e, 'No se pudo guardar el tipo de servicio.'))
     } finally {
       setSaving(false)
     }
   }
 
   async function toggle(id: string, activo: boolean) {
-    await toggleTipoServicioActivo(id, !activo)
-    startTransition(() => router.refresh())
+    try {
+      await toggleTipoServicioActivo(id, !activo)
+      startTransition(() => router.refresh())
+    } catch (e) {
+      toast.error(mensajeDeError(e, 'No se pudo cambiar el estado del tipo de servicio.'))
+    }
   }
 
   return (
