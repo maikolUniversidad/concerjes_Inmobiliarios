@@ -9,27 +9,36 @@ import {
 } from 'lucide-react'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { useEnVivo } from '@/lib/supabase/useEnVivo'
-import { CLASE_TONO, etapaAlistamiento, etapaDespacho, flujoItem, textoEtapa, type EtapaOrden } from '@/lib/stock-flujo'
+import { CLASE_TONO, etapaAlistamiento, etapaDespacho, textoEtapa, type EtapaOrden } from '@/lib/stock-flujo'
 
+/**
+ * Una fila de `v_alistamiento_lista`: la vista ya trae los contadores contados
+ * en SQL, así que aquí no hay ítems que recorrer (eran ~6.300 por carga).
+ */
 export interface Fila {
   id: string; numero: string; estado: string; created_at: string; aprobado_at: string | null
   despachado_at?: string | null
   alistado_at?: string | null
   tomado_ruta_at?: string | null
   recibido_at?: string | null
-  sede: { nombre: string } | null
-  items: {
-    alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number
-    producto?: { stock?: { cantidad_real: number; cantidad_disp: number } | null } | null
-  }[]
+  sede: string | null
+  total_items: number
+  alistados: number
+  /**
+   * Ítems por despachar cuyo stock FÍSICO no alcanza para lo pedido (pedido >
+   * stock real en bodega). Las órdenes que ya salieron llegan en 0.
+   */
+  sin_stock: number
+  /** Lo que quedó sin enviar: solicitado − alistado (mínimo 0). */
+  pend_items: number
+  pend_unidades: number
+  und_pedido: number
+  und_alistado: number
+  und_despachado: number
+  responsables: string[]
 }
 
-/**
- * Ítems de una orden por despachar cuyo stock FÍSICO no alcanza para lo pedido
- * (pedido > stock real en bodega). Las despachadas ya salieron: no aplica.
- */
-const sinStock = (o: Fila) => o.estado === 'DESPACHADO' ? 0 : (o.items ?? []).filter((i) =>
-  !i.alistado && Number(i.cantidad_solicitada) > Number(i.producto?.stock?.cantidad_real ?? 0)).length
+const sinStock = (o: Fila) => o.sin_stock
 
 function fmtFecha(iso?: string | null) {
   if (!iso) return ''
@@ -37,28 +46,15 @@ function fmtFecha(iso?: string | null) {
 }
 
 /** Ítems y unidades que quedaron sin enviar (solicitado − alistado). */
-const pendienteEnvio = (o: Fila) => {
-  let unidades = 0; let items = 0
-  for (const i of o.items ?? []) {
-    const p = Math.max(0, Number(i.cantidad_solicitada) - Number(i.cantidad_alistada))
-    if (p > 0) { unidades += p; items++ }
-  }
-  return { unidades, items }
-}
+const pendienteEnvio = (o: Fila) => ({ unidades: o.pend_unidades, items: o.pend_items })
 /** DESPACHADO pero se fue con productos pendientes. */
-const despachoIncompleto = (o: Fila) => o.estado === 'DESPACHADO' && pendienteEnvio(o).items > 0
+const despachoIncompleto = (o: Fila) => o.estado === 'DESPACHADO' && o.pend_items > 0
 
 /** Unidades pedidas / alistadas (chuleadas) / despachadas de la orden. */
-const unidades = (o: Fila) => {
-  let pedido = 0; let alistado = 0; let despachado = 0
-  for (const i of o.items ?? []) {
-    const f = flujoItem({ estado: o.estado, solicitado: Number(i.cantidad_solicitada), cantidadAlistada: Number(i.cantidad_alistada), alistado: i.alistado })
-    pedido += f.pedido; alistado += f.alistado; despachado += f.despachado
-  }
-  return { pedido, alistado, despachado }
-}
+const unidades = (o: Fila) => ({ pedido: o.und_pedido, alistado: o.und_alistado, despachado: o.und_despachado })
+
 const etapaAlist = (o: Fila) => etapaAlistamiento({
-  estado: o.estado, totalItems: o.items?.length ?? 0, alistados: (o.items ?? []).filter((i) => i.alistado).length,
+  estado: o.estado, totalItems: o.total_items, alistados: o.alistados,
   alistadoAt: o.alistado_at, despachadoAt: o.despachado_at,
 })
 const etapaDesp = (o: Fila) => etapaDespacho({
@@ -84,14 +80,12 @@ const META: Record<string, { label: string; color: string; chip: string }> = {
 const ORDEN_ESTADOS = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO']
 
 const cuenta = (o: Fila) => {
-  const total = o.items?.length ?? 0
-  const listos = (o.items ?? []).filter((i) => i.alistado).length
+  const total = o.total_items
+  const listos = o.alistados
   return { total, listos, falta: total - listos, pct: total > 0 ? Math.round((listos / total) * 100) : 0 }
 }
 
-export function AlistamientoClient({ ordenes, responsables = {} }: {
-  ordenes: Fila[]; responsables?: Record<string, string[]>
-}) {
+export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
   const router = useRouter()
   const [filtro, setFiltro] = useState<string>('PENDIENTES')
   // En vivo: nuevas aprobaciones, avances de alistamiento, despachos y stock.
@@ -143,17 +137,17 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
   const columnas: ColumnaTabla<Fila>[] = [
     { id: 'numero', header: 'Orden', valor: (o) => o.numero, ancho: 'w-32', className: 'font-heading font-bold text-gray-900', tarjeta: 'titulo' },
     {
-      id: 'sede', header: 'Sede', valor: (o) => o.sede?.nombre ?? 'Sin sede',
+      id: 'sede', header: 'Sede', valor: (o) => o.sede ?? 'Sin sede',
       ancho: 'max-w-[200px]', className: 'truncate text-gray-600', tarjeta: 'subtitulo',
     },
     {
       id: 'responsable', header: 'Responsable', prioridad: 2, ancho: 'max-w-[180px]', tarjeta: 'meta',
-      valor: (o) => (responsables[o.id] ?? []).join(', '),
-      celda: (o) => (responsables[o.id]?.length ?? 0) > 0 ? (
+      valor: (o) => o.responsables.join(', '),
+      celda: (o) => o.responsables.length > 0 ? (
         <span className="flex min-w-0 items-center gap-1.5 font-body text-sm text-gray-700">
           <User2 className="h-3.5 w-3.5 shrink-0 text-gray-400" />
           <span className="truncate">
-            {responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}
+            {o.responsables[0]}{o.responsables.length > 1 ? ` +${o.responsables.length - 1}` : ''}
           </span>
         </span>
       ) : <span className="font-body text-xs text-gray-300">—</span>,
@@ -306,12 +300,12 @@ export function AlistamientoClient({ ordenes, responsables = {} }: {
               </div>
               <p className="mt-1 flex min-w-0 items-center gap-1 font-body text-xs text-gray-500">
                 <MapPin className="h-3 w-3 shrink-0" />
-                <span className="truncate">{o.sede?.nombre ?? 'Sin sede'}</span>
+                <span className="truncate">{o.sede ?? 'Sin sede'}</span>
               </p>
-              {(responsables[o.id]?.length ?? 0) > 0 && (
+              {o.responsables.length > 0 && (
                 <p className="mt-0.5 flex min-w-0 items-center gap-1 font-body text-xs text-gray-400">
                   <User2 className="h-3 w-3 shrink-0" />
-                  <span className="truncate">{responsables[o.id][0]}{responsables[o.id].length > 1 ? ` +${responsables[o.id].length - 1}` : ''}</span>
+                  <span className="truncate">{o.responsables[0]}{o.responsables.length > 1 ? ` +${o.responsables.length - 1}` : ''}</span>
                 </p>
               )}
               <div className="mt-3">

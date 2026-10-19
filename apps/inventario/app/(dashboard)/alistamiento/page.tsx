@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import Link from 'next/link'
 import { PackageCheck } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { traerTodo, traerTodoPorIds } from '@/lib/supabase/paginado'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import { AlistamientoClient, type Fila } from './AlistamientoClient'
 
@@ -12,38 +12,62 @@ export const revalidate = 0
 /** Estados que YA pasaron la aprobación de la central y viven en bodega. */
 const ESTADOS_ALISTAMIENTO = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO']
 
+/** Los `numeric` de PostgREST llegan como string. */
+const n = (v: unknown) => Number(v ?? 0) || 0
+
 export default async function AlistamientoPage() {
   await requirePermiso('ver_alistamiento')
   const supabase = await createClient()
 
-  // Paginado: la cola de alistamiento se muestra completa y PostgREST corta en
-  // 1.000 filas por respuesta.
-  const ordenes = (await traerTodo((desde, hasta) => supabase
-    .from('ordenes_insumo')
-    .select('id, numero, estado, created_at, aprobado_at, despachado_at, alistado_at, tomado_ruta_at, recibido_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado, cantidad_solicitada, cantidad_alistada, producto:productos ( stock ( cantidad_real, cantidad_disp ) ) )')
+  // Una fila por orden, con los contadores (ítems, alistados, sin stock,
+  // pendiente de envío, unidades) y los responsables ya resueltos en SQL por
+  // `v_alistamiento_lista`.
+  //
+  // Antes se traía las órdenes con sus ítems anidados y, de cada ítem, su
+  // producto y su stock, solo para calcular esos números: ~6.300 ítems por
+  // carga, 1.099 ms de media y picos de 5.838 ms medidos en pg_stat_statements.
+  // Como `authenticated` tiene statement_timeout = 8 s, con la base ocupada se
+  // pasaba del tope, PostgREST devolvía 500 y la pantalla caía en el aviso de
+  // "Esta pantalla no se pudo cargar". Los responsables, además, eran ~5
+  // peticiones encadenadas en lotes de 60 órdenes.
+  //
+  // Sigue paginado: la cola se muestra completa y PostgREST corta toda
+  // respuesta en 1.000 filas.
+  const filas = await traerTodo<Record<string, unknown>>((desde, hasta) => supabase
+    .from('v_alistamiento_lista')
+    .select(`
+      id, numero, estado, sede, created_at, aprobado_at, despachado_at,
+      alistado_at, tomado_ruta_at, recibido_at, total_items, alistados,
+      sin_stock, pend_items, pend_unidades, und_pedido, und_alistado,
+      und_despachado, responsables
+    `)
     .in('estado', ESTADOS_ALISTAMIENTO)
     .order('aprobado_at', { ascending: false, nullsFirst: false }).order('id')
-    .range(desde, hasta))) as unknown as Fila[]
-  const pendientes = ordenes.filter((o) => o.estado !== 'DESPACHADO').length
+    .range(desde, hasta))
 
-  // Responsables por orden (vista que salta la RLS de usuarios para exponer solo el nombre)
-  const responsables: Record<string, string[]> = {}
-  if (ordenes.length > 0) {
-    const resp = await traerTodoPorIds<{ orden_id: string; nombre: string }>(
-      ordenes.map((o) => o.id),
-      (lote, desde, hasta) => supabase
-        .from('responsables_opciones')
-        .select('orden_id, nombre')
-        .in('orden_id', lote)
-        // (orden_id, usuario_id) es la clave única de la vista: hace falta un
-        // desempate único para que la paginación por OFFSET sea estable.
-        .order('orden_id').order('usuario_id')
-        .range(desde, hasta),
-    )
-    for (const r of resp) {
-      (responsables[r.orden_id] ??= []).push(r.nombre)
-    }
-  }
+  const ordenes: Fila[] = filas.map((o) => ({
+    id: o.id as string,
+    numero: o.numero as string,
+    estado: o.estado as string,
+    created_at: o.created_at as string,
+    aprobado_at: (o.aprobado_at as string | null) ?? null,
+    despachado_at: (o.despachado_at as string | null) ?? null,
+    alistado_at: (o.alistado_at as string | null) ?? null,
+    tomado_ruta_at: (o.tomado_ruta_at as string | null) ?? null,
+    recibido_at: (o.recibido_at as string | null) ?? null,
+    sede: (o.sede as string | null) ?? null,
+    total_items: n(o.total_items),
+    alistados: n(o.alistados),
+    sin_stock: n(o.sin_stock),
+    pend_items: n(o.pend_items),
+    pend_unidades: n(o.pend_unidades),
+    und_pedido: n(o.und_pedido),
+    und_alistado: n(o.und_alistado),
+    und_despachado: n(o.und_despachado),
+    responsables: (o.responsables as string[] | null) ?? [],
+  }))
+
+  const pendientes = ordenes.filter((o) => o.estado !== 'DESPACHADO').length
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -69,7 +93,7 @@ export default async function AlistamientoPage() {
           </Link>
         </div>
       ) : (
-        <AlistamientoClient ordenes={ordenes} responsables={responsables} />
+        <AlistamientoClient ordenes={ordenes} />
       )}
     </div>
   )
