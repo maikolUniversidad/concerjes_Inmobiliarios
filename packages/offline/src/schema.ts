@@ -29,3 +29,25 @@ export function watermarkCol(t: TablaSync): string {
 }
 
 export const EPOCH = '1970-01-01T00:00:00.000Z'
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Tablas que replica la PWA del trabajador (F4 del módulo de Puntos QR).
+// Son solo las de LECTURA que la visita necesita para ejecutarse sin señal:
+// el punto con sus coordenadas y su geocerca, su QR vigente, la plantilla
+// publicada con sus pasos y sus instructivos, y las asignaciones para saber qué
+// aplica. Lo que la visita ESCRIBE no se replica: va por la cola de intents y
+// por la cola de medios (ADR-D).
+//
+// No se agregan a TABLAS_SYNC: `apps/movil` hoy sincroniza inventario y bajarle
+// el catálogo de rondas antes de que tenga el módulo sería gastar datos del
+// celular de alguien por nada.
+export const TABLAS_SYNC_RONDAS: TablaSync[] = [
+  { tabla: 'ronda_zonas',           modo: 'incremental' },
+  { tabla: 'ronda_puntos',          modo: 'incremental' },
+  { tabla: 'ronda_qr',              modo: 'incremental' },
+  { tabla: 'ronda_tipos_actividad', modo: 'incremental' },
+  { tabla: 'ronda_plantillas',      modo: 'incremental' },
+  { tabla: 'ronda_plantilla_pasos', modo: 'incremental' },
+  { tabla: 'ronda_instructivos',    modo: 'incremental' },
+  { tabla: 'ronda_asignaciones',    modo: 'incremental' },
+]

@@ -30,6 +30,15 @@ export interface OutboxItem {
   payload: Record<string, unknown>
   ts: string
   intentos?: number
+  /** Grupo al que pertenece el intent (p. ej. la visita de ronda). Cuando
+   *  viene, `pushOutboxPorGrupo()` respeta el ORDEN dentro del grupo y para de
+   *  enviar el resto del grupo en cuanto uno falla: mandar el cierre de una
+   *  visita cuya evidencia no subió la dejaría incompleta por un problema de
+   *  red (ADR-D). Sin grupo, el comportamiento es el de siempre. */
+  grupo?: string
+  /** Posición dentro del grupo. La fija quien encola, con el orden que define
+   *  `intentsDeVisita()` de @conserjes/ronda-core. */
+  orden?: number
 }
 
 /** Manejador que sube un intent al servidor cuando hay conexión. */
