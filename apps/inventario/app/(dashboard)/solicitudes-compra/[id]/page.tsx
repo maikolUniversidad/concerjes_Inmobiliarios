@@ -119,6 +119,7 @@ export default async function SolicitudDetallePage({ params }: { params: Promise
             estado={estado}
             puedeSolicitar={perm.puede('solicitar_compras')}
             puedeConvertir={perm.puede('crear_ordenes_compra') && puedeConvertirse(estado) && porConvertir > 0}
+            puedeRechazar={perm.puede('crear_ordenes_compra')}
           />
         </div>
 

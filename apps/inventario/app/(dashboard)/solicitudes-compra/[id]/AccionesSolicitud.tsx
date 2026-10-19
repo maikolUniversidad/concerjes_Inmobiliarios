@@ -19,12 +19,15 @@ export function AccionesSolicitud({
   estado,
   puedeSolicitar,
   puedeConvertir,
+  puedeRechazar,
 }: {
   id: string
   numero: string
   estado: EstadoSolicitud
   puedeSolicitar: boolean
   puedeConvertir: boolean
+  /** Rechazar es de compras (`crear_ordenes_compra`), igual que convertir. */
+  puedeRechazar: boolean
 }) {
   const router = useRouter()
   const [pendiente, iniciar] = useTransition()
@@ -79,10 +82,14 @@ export function AccionesSolicitud({
         )}
         {abierta && (
           <>
-            <button type="button" onClick={() => cambiar('RECHAZADA')} disabled={pendiente}
-              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 font-body text-sm text-gray-600 transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50">
-              <ThumbsDown className="h-4 w-4" /> Rechazar
-            </button>
+            {/* Sin el permiso de compras el RPC lo rechaza: mostrarlo solo
+                llevaba a escribir el motivo para después chocar con el error. */}
+            {puedeRechazar && (
+              <button type="button" onClick={() => cambiar('RECHAZADA')} disabled={pendiente}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 font-body text-sm text-gray-600 transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50">
+                <ThumbsDown className="h-4 w-4" /> Rechazar
+              </button>
+            )}
             {puedeSolicitar && (
               <button type="button" onClick={() => cambiar('ANULADA')} disabled={pendiente}
                 className="inline-flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 font-body text-sm text-gray-600 transition-colors hover:border-red-300 hover:text-red-600 disabled:opacity-50">

@@ -77,6 +77,15 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
 
   // Solicitudes de compra que salieron de esta orden pendiente (fase 2 de
   // compras). Se leen por los ítems, que son los que guardan el enlace.
+  //
+  // `puedeVerSolicitudes` son los mismos tres permisos de la política
+  // `sc_items_read`. Sin ellos la consulta vuelve VACÍA por RLS, sin error: hay
+  // que distinguir «no hay solicitud» de «no puedes verla», porque si no la
+  // pantalla le jura a un conserje que nadie pidió su insumo y lo reclama otra
+  // vez.
+  const puedeVerSolicitudes = perm.puede('solicitar_compras')
+    || perm.puede('ver_ordenes_compra')
+    || perm.puede('crear_ordenes_compra')
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: solCompraData } = await (supabase as any)
     .from('solicitud_compra_items')
@@ -217,6 +226,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
             <SolicitudCompraPendiente
               ordenId={id}
               solicitudes={solicitudesCompra}
+              puedeVerSolicitudes={puedeVerSolicitudes}
               puedeSolicitar={perm.puede('solicitar_compras')
                 && (ESTADOS_PENDIENTE_SOLICITABLE as readonly string[]).includes(estado)}
             />

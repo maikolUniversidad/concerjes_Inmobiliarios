@@ -16,10 +16,13 @@ import { generarSolicitudPendiente } from '../../solicitudes-compra/actions'
 export function SolicitudCompraPendiente({
   ordenId,
   solicitudes,
+  puedeVerSolicitudes,
   puedeSolicitar,
 }: {
   ordenId: string
   solicitudes: { id: string; numero: string; estado: string }[]
+  /** Si es false, la lista llegó vacía por RLS y no porque no haya solicitudes. */
+  puedeVerSolicitudes: boolean
   puedeSolicitar: boolean
 }) {
   const router = useRouter()
@@ -34,6 +37,10 @@ export function SolicitudCompraPendiente({
       router.refresh()
     })
   }
+
+  // Quien no puede leer solicitudes de compra no ve el bloque: callar es
+  // correcto, afirmar que nadie pidió nada sería mentirle.
+  if (!puedeVerSolicitudes) return null
 
   return (
     <div className="space-y-1.5 border-t border-orange-200 pt-2">
