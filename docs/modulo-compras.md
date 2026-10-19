@@ -399,8 +399,33 @@ Las dos tablas nacen cerradas por `auth_permiso` y **sin política de escritura 
 
 0 solicitudes de compra · 23 órdenes pendientes esperando que alguien las pida · 109 productos recomendados por 362,5 millones, repartidos en 7 proveedores más 36 productos sin proveedor.
 
+### Atacar el hueco: el filtro «Sin proveedor» del comparador (2026-10-19)
+
+La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en orden. Al medir el catálogo completo resultó que **el hueco no son 36 sino 178**, y que nada permite deducir el proveedor: `movimientos` no tiene columna de proveedor, hay una sola orden de compra en todo el sistema, y ninguno de esos productos tiene fila en `precios_proveedor` — ni siquiera apagada. **24 de los 36 sí tienen entradas registradas**, así que se compran de verdad; el sistema nunca guardó a quién. Llenarlo es trabajo de alguien que sepa a quién se le compra; lo que puede hacer el sistema es poner la lista enfrente, ordenada por lo que pesa.
+
+| Familia | Sin proveedor | De esos, se movieron en 6 meses |
+|---|---|---|
+| ASEO | 76 | 37 |
+| MAQUINARIA | 38 | 19 |
+| OTROS | 27 | 15 |
+| CAFETERIA | 18 | 14 |
+| EPP | 13 | 8 |
+| LIQUIDOS + JARDINERÍA | 6 | 4 |
+| **Total** | **178** | **97** |
+
+Los 81 restantes llevan medio año quietos: pueden esperar, o es señal de que sobran en el catálogo. Los 16 productos de EPP del sistema **no tienen proveedor ninguno**, y de los 43 de MAQUINARIA solo 5 lo tienen — pero buena parte de eso son activos (greca, hidrolavadora, escaleras, balanza), no compra de rutina.
+
+**Qué se construyó.** La vista `v_productos_sin_proveedor` (migración `20261019000001_productos_sin_proveedor.sql`, aplicada) y, sobre ella, un filtro **«Sin proveedor»** en `/comparador-precios` con su KPI. La lista va ordenada por lo que la recomendación pide hoy y después por lo que las sedes pidieron en 6 meses, no alfabéticamente: arriba quedan los que desbloquean plata. Cada fila lleva un botón «Asignar» que abre directo el formulario de proveedor y precio.
+
+Se asigna **en el comparador y no en la ficha del producto** por una razón concreta: 21 de los 36 recomendados tampoco tienen precio de lista, así que llenar solo `productos.proveedor_id` deja la orden de compra en $ 0. El comparador resuelve proveedor y precio de una.
+
+**Lo que apareció al probarlo, y es lo más importante de todo esto:** en la base hay **32 proveedores activos para 12 nombres distintos**. Cada proveedor real está repetido hasta cuatro veces, y solo uno de los duplicados tiene los datos: de los cuatro «MONTERREY», uno tiene 226 precios y los otros tres están vacíos; igual con BEAUTE (235), SCOPA, DETALGRAF, CAJA MENOR y SUMICORP. Elegir el proveedor en una lista con cuatro entradas idénticas es una moneda al aire, y el precio queda colgado de un registro que nadie consulta. Mientras eso no se limpie, el selector **ordena los proveedores por cuántos productos usan ya y muestra ese número en cada opción**, con un aviso de que hay nombres repetidos. Es un parche sobre un problema de datos, no el arreglo.
+
+Nota aparte: el botón «Sincronizar N de fichas» que ya existía en esa pantalla tiene hoy **182 precios por pasar** de las fichas de producto al comparador. Eso no toca a los 178 (que no tienen ni ficha), pero es trabajo hecho que no está rindiendo.
+
 ### Lo que falta para que la fase 2 sirva de verdad
 
-1. **Asignarle proveedor a los 36 productos recomendados que no lo tienen**, en el comparador o en su ficha. Mientras no lo tengan, un tercio de la compra recomendada no se puede convertir en orden sola.
-2. **Decidir si la solicitud se vuelve obligatoria alguna vez.** Hoy no lo es, a propósito. El interruptor es poner `ordenes_compra.solicitud_id` en NOT NULL; conviene mirar antes cuántas órdenes están naciendo con solicitud.
-3. Sigue abierto lo de la fase 1: el rol Gerencia sin usuarios, y si producción / reembasado / maquinaria son bodegas aparte.
+1. **Limpiar los proveedores duplicados** (32 registros activos para 12 nombres). Es lo primero: asignar proveedores sobre una lista con cuatro «BEAUTE» ensucia más de lo que arregla.
+2. **Asignar proveedor y precio a los 97 productos que se mueven**, desde el filtro «Sin proveedor» de `/comparador-precios`. Los 36 que la recomendación pide hoy están de primeros.
+3. **Decidir si la solicitud se vuelve obligatoria alguna vez.** Hoy no lo es, a propósito. El interruptor es poner `ordenes_compra.solicitud_id` en NOT NULL; conviene mirar antes cuántas órdenes están naciendo con solicitud.
+4. Sigue abierto lo de la fase 1: el rol Gerencia sin usuarios, y si producción / reembasado / maquinaria son bodegas aparte.
