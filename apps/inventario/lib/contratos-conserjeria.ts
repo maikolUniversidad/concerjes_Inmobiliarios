@@ -157,6 +157,20 @@ export function textoVigencia(
 }
 
 /**
+ * Insignia de estado para la pantalla. No es `ESTADO_META[estado]` a secas
+ * porque `activo` es otro eje: `/contratos` da de baja un contrato poniéndole
+ * `activo = false` (soft delete, cuando todavía tiene sedes activas), y ese
+ * contrato seguiría luciendo un «Vigente» en verde aunque `grupo_vigente()` lo
+ * tenga apagado. Si está inactivo, eso es lo que se muestra.
+ */
+export function insigniaEstado(
+  contrato: Pick<ContratoFila, 'estado' | 'activo'>,
+): { label: string; badge: string } {
+  if (!contrato.activo) return { label: 'Inactivo', badge: 'bg-gray-200 text-gray-700' }
+  return ESTADO_META[contrato.estado]
+}
+
+/**
  * Por qué un contrato NO está vigente hoy, en una frase, o `null` si sí lo
  * está. Existe porque las dos insignias pueden contradecirse a la vista: el
  * `estado` es la etiqueta administrativa y la vigencia se CALCULA, así que un

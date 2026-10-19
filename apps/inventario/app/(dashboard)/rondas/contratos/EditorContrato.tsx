@@ -8,7 +8,7 @@ import { DeleteButton } from '@/components/ui/DeleteButton'
 import {
   ESTADO_META, ESTADOS_CONTRATO, SERVICIO_LABEL, SERVICIOS_CONTRATO,
   TIPO_VIGENCIA_LABEL, TIPOS_VIGENCIA, diasParaVencer, estaVigente, fechaCorta,
-  motivoNoVigente, textoVigencia,
+  insigniaEstado, motivoNoVigente, textoVigencia,
   type ContratoFila, type ReglasContrato, type VigenciaFila,
 } from '@/lib/contratos-conserjeria'
 import {
@@ -63,7 +63,7 @@ export function EditorContrato({
   const vigente = estaVigente(contrato, periodos)
   const motivo = motivoNoVigente(contrato, periodos)
   const dias = diasParaVencer(contrato, periodos)
-  const meta = ESTADO_META[contrato.estado]
+  const meta = insigniaEstado(contrato)
   const soloLectura = !puedeGestionar
 
   return (

@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { requirePermiso } from '@/lib/permisos-server'
 import {
-  ESTADO_META, SERVICIO_LABEL, diasParaVencer, estaVigente, textoVigencia,
+  SERVICIO_LABEL, diasParaVencer, estaVigente, insigniaEstado, textoVigencia,
   type ContratoFila, type EstadoContrato, type ServicioContrato, type VigenciaFila,
 } from '@/lib/contratos-conserjeria'
 
@@ -104,7 +104,7 @@ export default async function ContratosConserjeriaPage() {
               {filas.map((f) => {
                 const per = porGrupo(f.id)
                 const dias = diasParaVencer(f, per)
-                const meta = ESTADO_META[f.estado]
+                const meta = insigniaEstado(f)
                 const apagado = !estaVigente(f, per)
                 return (
                   <tr key={f.id} className={apagado ? 'bg-gray-50/60' : undefined}>

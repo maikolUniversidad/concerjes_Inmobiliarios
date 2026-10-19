@@ -116,10 +116,14 @@ node --use-system-ca scripts/probar-puntos-qr-f1.mjs
      incoherencia real con el SQL, no un detalle de texto.
   2. El objeto del contrato se recortaba sin aviso en un `textarea` deshabilitado
      en móvil; en solo lectura ahora se pinta el texto entero.
-  Y se agregó `motivoNoVigente()`: el aviso ámbar dice **cuál** condición falló
-  (el estado o las fechas), porque las dos insignias pueden contradecirse a la
+  Y se agregaron dos cosas a partir de eso: `motivoNoVigente()`, para que el
+  aviso ámbar diga **cuál** condición falló (el estado, las fechas o que el
+  contrato esté inactivo), porque las dos insignias pueden contradecirse a la
   vista —un contrato «Vencido» con una prórroga muestra días por delante— y sin
-  el motivo nadie entiende por qué sus QR no abren.
+  el motivo nadie entiende por qué sus QR no abren; e `insigniaEstado()`, porque
+  `/contratos` da de baja un contrato poniéndole `activo = false` y ese
+  contrato lucía un «Vigente» en verde. Reverificado: los 7 escenarios pasan en
+  1280 y 375 px, sin desbordes.
 
 ## Pendientes que esta fase deja anotados
 
