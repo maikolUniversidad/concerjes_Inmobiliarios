@@ -15,6 +15,12 @@ export interface RecFila {
   comprometido: number
   oc_pendiente: number
   recomendado: number
+  /** Proveedor y precio que la base sugiere (comparador vigente o ficha del producto). */
+  proveedor_sugerido_id: string | null
+  proveedor_sugerido: string | null
+  precio_sugerido: number | null
+  fuente_precio: string | null
+  valor_estimado: number
 }
 
 export interface PlanFila {
@@ -73,6 +79,11 @@ export function RecomendacionTabla({ recs }: { recs: RecFila[] }) {
     },
     { id: 'codigo', header: 'Cód', valor: (r) => r.codigo ?? '', prioridad: 3, className: 'font-mono text-gray-500', tarjeta: 'meta' },
     {
+      id: 'proveedor', header: 'Proveedor sug.', valor: (r) => r.proveedor_sugerido ?? '', prioridad: 2,
+      className: 'text-gray-600', ancho: 'min-w-[130px]', tarjeta: 'meta',
+      celda: (r) => <>{r.proveedor_sugerido ?? <span className="text-orange-500">por definir</span>}</>,
+    },
+    {
       id: 'cat', header: 'Cat.', valor: (r) => r.cat_rotacion, align: 'center', prioridad: 2, tarjeta: 'meta',
       celda: (r) => <span className={`font-bold px-1.5 py-0.5 rounded ${getCatColor(r.cat_rotacion)}`}>{r.cat_rotacion}</span>,
     },
@@ -90,10 +101,15 @@ export function RecomendacionTabla({ recs }: { recs: RecFila[] }) {
       celda: (r) => <>{miles(r.recomendado)}</>,
     },
     {
+      // Vale lo que costaría la orden: precio del comparador si lo hay, de lista si no.
       id: 'valor', header: 'Valor est.', align: 'right', prioridad: 2, className: 'text-gray-600', tarjeta: 'meta',
-      valor: (r) => Number(r.recomendado) * Number(r.precio_lista ?? 0),
-      copiaTexto: (r) => String(Number(r.recomendado) * Number(r.precio_lista ?? 0)),
-      celda: (r) => <>{r.precio_lista ? formatCOP(Number(r.recomendado) * Number(r.precio_lista)) : '—'}</>,
+      valor: (r) => Number(r.valor_estimado ?? 0),
+      copiaTexto: (r) => String(Number(r.valor_estimado ?? 0)),
+      celda: (r) => (
+        <span title={r.fuente_precio === 'COMPARADOR' ? 'Precio del comparador' : r.fuente_precio === 'LISTA' ? 'Precio de lista' : 'Sin precio'}>
+          {Number(r.valor_estimado) > 0 ? formatCOP(Number(r.valor_estimado)) : '—'}
+        </span>
+      ),
     },
   ]
 
