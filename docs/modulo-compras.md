@@ -110,7 +110,7 @@ Nota aparte: la pantalla de `/aprovisionamiento` todavía muestra el período «
 
 ## 7. Decisiones
 
-Las cuatro quedaron **aceptadas el 2026-10-18**. Cada una conserva la recomendación y en qué se apoya; lo marcado con ⏳ son las preguntas de detalle que siguen esperando respuesta, recogidas en la sección 9.0.
+Las cuatro quedaron **aceptadas el 2026-10-18**, y la pregunta de detalle de 7.3 se respondió el 2026-10-19. Cada una conserva la recomendación y en qué se apoya; lo marcado con ⏳ son las preguntas que siguen esperando respuesta, recogidas en la sección 9.0.
 
 ### 7.1 ¿Toda compra pasa por solicitud, o compras puede crear la orden directo?
 
@@ -168,7 +168,7 @@ Qué pasa con cada opción:
 
 ✅ **Aceptada el 2026-10-18.** Todo entra a la Central; no se construye multi-bodega, pero el campo de bodega de destino queda puesto con la Central por defecto y la recepción pide la ubicación.
 
-⏳ **Pendiente de responder:** en las observaciones de las entradas aparecen «ingresa desde producción», «de la bodega de maquinaria» y «de lo que se reembasó». ¿Esos son sitios físicos distintos de la Central? Si lo son, conviene registrarlos como bodegas aunque las compras sigan entrando a la Central — no para repartir stock, sino para que lo que viene de producción o de reembasado no se confunda con una compra a proveedor. Hoy ambas cosas son la misma «entrada», eso distorsiona cualquier medición de gasto, y es justo la distinción que la fase 1 necesita para poder exigir la orden de compra.
+✅ **Respondida el 2026-10-19.** Sí son sitios físicos distintos. Producción, Reembasado y Maquinaria quedaron registradas como bodegas (migración `20261019000001_bodegas_internas.sql`), marcadas como **internas**: no despachan a sedes y no reparten stock — el stock sigue siendo uno solo por producto, en la Central. Cada una declara qué origen de entrada representa (`bodegas.origen_movimiento`), que es lo que conecta este registro con el `movimientos.origen` de la fase 1. Detalle en la sección 11.
 
 ### 7.4 ¿Las facturas se registran aquí o viven en el sistema contable?
 
@@ -401,7 +401,7 @@ Las dos tablas nacen cerradas por `auth_permiso` y **sin política de escritura 
 
 ### Atacar el hueco: el filtro «Sin proveedor» del comparador (2026-10-19)
 
-La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en orden. Al medir el catálogo completo resultó que **el hueco no son 36 sino 178** (la sección 12 habla de 273 productos sin proveedor: ese es el conteo de los que no lo tienen **en la ficha**; los 178 son los que no lo tienen **por ninguna vía**, que son los que de verdad bloquean la conversión a orden), y que nada permite deducir el proveedor: `movimientos` no tiene columna de proveedor, hay una sola orden de compra en todo el sistema, y ninguno de esos productos tiene fila en `precios_proveedor` — ni siquiera apagada. **24 de los 36 sí tienen entradas registradas**, así que se compran de verdad; el sistema nunca guardó a quién. Llenarlo es trabajo de alguien que sepa a quién se le compra; lo que puede hacer el sistema es poner la lista enfrente, ordenada por lo que pesa.
+La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en orden. Al medir el catálogo completo resultó que **el hueco no son 36 sino 178** (la sección de proveedores duplicados habla de 273 productos sin proveedor: ese es el conteo de los que no lo tienen **en la ficha**; los 178 son los que no lo tienen **por ninguna vía**, que son los que de verdad bloquean la conversión a orden), y que nada permite deducir el proveedor: `movimientos` no tiene columna de proveedor, hay una sola orden de compra en todo el sistema, y ninguno de esos productos tiene fila en `precios_proveedor` — ni siquiera apagada. **24 de los 36 sí tienen entradas registradas**, así que se compran de verdad; el sistema nunca guardó a quién. Llenarlo es trabajo de alguien que sepa a quién se le compra; lo que puede hacer el sistema es poner la lista enfrente, ordenada por lo que pesa.
 
 | Familia | Sin proveedor | De esos, se movieron en 6 meses |
 |---|---|---|
@@ -419,7 +419,7 @@ Los 81 restantes llevan medio año quietos: pueden esperar, o es señal de que s
 
 Se asigna **en el comparador y no en la ficha del producto** por una razón concreta: 21 de los 36 recomendados tampoco tienen precio de lista, así que llenar solo `productos.proveedor_id` deja la orden de compra en $ 0. El comparador resuelve proveedor y precio de una.
 
-**Lo que apareció al probarlo, y es lo más importante de todo esto:** en la base había **32 proveedores activos para 12 nombres distintos**. Cada proveedor real estaba repetido hasta cuatro veces, y solo uno de los duplicados tenía los datos: de los cuatro «MONTERREY», uno con 226 precios y tres vacíos; igual con BEAUTE (235), SCOPA, DETALGRAF, CAJA MENOR y SUMICORP. Elegir el proveedor en una lista con cuatro entradas idénticas es una moneda al aire, y el precio queda colgado de un registro que nadie consulta. **Eso se arregló aparte: ver la sección 12.**
+**Lo que apareció al probarlo, y es lo más importante de todo esto:** en la base había **32 proveedores activos para 12 nombres distintos**. Cada proveedor real estaba repetido hasta cuatro veces, y solo uno de los duplicados tenía los datos: de los cuatro «MONTERREY», uno con 226 precios y tres vacíos; igual con BEAUTE (235), SCOPA, DETALGRAF, CAJA MENOR y SUMICORP. Elegir el proveedor en una lista con cuatro entradas idénticas es una moneda al aire, y el precio queda colgado de un registro que nadie consulta. **Eso se arregló aparte, en la sección de proveedores duplicados.**
 
 El selector igual quedó **ordenando los proveedores por cuántos productos usan ya y mostrando ese número en cada opción**, con un aviso que solo sale si vuelve a haber nombres repetidos. Con la base limpia el aviso no aparece, y el orden por uso sigue sirviendo para encontrar rápido al proveedor de siempre.
 
@@ -427,7 +427,7 @@ Nota aparte: el botón «Sincronizar N de fichas» que ya existía en esa pantal
 
 ### Un proveedor desactivado ya no se sugiere (migración `20261019000003`)
 
-Al revisar juntas esta sección y la fusión de la 12 apareció que **nada filtraba por `proveedores.activo`**: `compras_precio_sugerido()` tomaba el precio vigente más barato fuera de quien fuera, y `v_productos_sin_proveedor` daba por resuelto un producto cuyo único proveedor estuviera desactivado. Hasta ese día daba igual, porque los 32 proveedores estaban activos.
+Al revisar juntas esta sección y la fusión de proveedores duplicados apareció que **nada filtraba por `proveedores.activo`**: `compras_precio_sugerido()` tomaba el precio vigente más barato fuera de quien fuera, y `v_productos_sin_proveedor` daba por resuelto un producto cuyo único proveedor estuviera desactivado. Hasta ese día daba igual, porque los 32 proveedores estaban activos.
 
 Dejó de dar igual con la fusión: ahora hay 20 desactivados, y «eliminar» un proveedor en `/proveedores` **no borra, pone `activo = false`**. El día que alguien elimine uno que todavía tiene sus precios en el comparador, el sistema seguiría proponiéndolo y `sc_convertir_a_oc()` armaría la orden contra un proveedor que para el usuario ya no existe.
 
@@ -437,7 +437,40 @@ La migración lo corrige en los dos sitios a la vez, que es el punto: si solo se
 
 ### Lo que falta para que la fase 2 sirva de verdad
 
-1. ~~Limpiar los proveedores duplicados~~ — **hecho** (sección 12): la base pasó de 32 activos para 12 nombres a 12 sin repetidos, con un índice único que impide que vuelva a pasar. Era lo primero porque asignar proveedores sobre una lista con cuatro «BEAUTE» ensucia más de lo que arregla.
+1. ~~Limpiar los proveedores duplicados~~ — **hecho**, en la sección de proveedores duplicados: la base pasó de 32 activos para 12 nombres a 12 sin repetidos, con un índice único que impide que vuelva a pasar. Era lo primero porque asignar proveedores sobre una lista con cuatro «BEAUTE» ensucia más de lo que arregla.
 2. **Asignar proveedor y precio a los 97 productos que se mueven**, desde el filtro «Sin proveedor» de `/comparador-precios`. Los 36 que la recomendación pide hoy están de primeros.
 3. **Decidir si la solicitud se vuelve obligatoria alguna vez.** Hoy no lo es, a propósito. El interruptor es poner `ordenes_compra.solicitud_id` en NOT NULL; conviene mirar antes cuántas órdenes están naciendo con solicitud.
-4. Sigue abierto lo de la fase 1: el rol Gerencia sin usuarios, y si producción / reembasado / maquinaria son bodegas aparte.
+4. De la fase 1 sigue abierto el rol **Gerencia sin usuarios**, que mantiene apagado el tope alto de aprobación. Lo de producción, reembasado y maquinaria ya quedó resuelto en la sección 12.
+
+## 12. Bodegas internas (2026-10-19)
+
+La última pregunta abierta de la decisión 7.3 quedó respondida: producción, reembasado y maquinaria **sí** son sitios físicos distintos de la Central. Migración `20261019000001_bodegas_internas.sql`, ya aplicada.
+
+### Qué cambió y qué no
+
+Se registraron tres bodegas —**Producción**, **Reembasado** y **Maquinaria**— junto a la Central que ya existía. Lo que **no** cambió: las compras siguen entrando a la Central y **el stock sigue siendo uno solo por producto**. Esto no reparte inventario por bodega; pone en el sistema unos sitios que ya existían en la vida real y hasta ahora solo aparecían como texto suelto en las observaciones de los movimientos («INGRESA DESDE PRODUCCION», «DE LA BODEGA DE MAQUINARIA», «LO QUE SE REEMBASO»).
+
+Dos columnas nuevas en `bodegas`:
+
+| Columna | Para qué |
+|---|---|
+| `despacha_a_sedes` | Si de ahí salen órdenes de insumo. Solo la Central. |
+| `origen_movimiento` | Qué origen de entrada representa esa bodega. Es el puente con el `movimientos.origen` de la fase 1. |
+
+### Lo que había que arreglar al mismo tiempo
+
+Agregar bodegas no es gratis: `/ordenes-insumo/nuevo` tenía un selector que ofrecía **todas** las bodegas, así que de un día para otro habría permitido crear una orden de despacho «desde Producción», algo que no ocurre nunca. El selector ahora solo trae las que despachan a sedes, y la lista de `/bodegas` marca las internas con una etiqueta para que se distingan de un vistazo.
+
+Por lo mismo, `compras_bodega_central()` dejó de resolver el respaldo como «la bodega más antigua» y pasa a «la más antigua **que despacha**»: una bodega interna nunca debe quedar como destino de una compra.
+
+### Lo que a propósito no se hizo
+
+- **No se crearon ubicaciones dentro de las bodegas nuevas.** Las crea quien conozca cada sitio, desde `/bodegas`.
+- **No se tocó `movimientos.ubicacion_id` del histórico.** Esa columna dice dónde **quedó** la mercancía —la Central—, no de dónde vino; lo segundo ya lo dice `origen`, y rellenarla sería inventar una ubicación que nadie registró.
+
+### Verificación
+
+`compras_bodega_central()` sigue devolviendo la Central y la orden de compra existente conserva su destino; el selector de despacho ofrece 1 bodega y no 4; la vista nueva `v_entradas_por_origen` cruza origen y sitio (ya muestra la entrada de reembasado de septiembre en su bodega); las tres bodegas nuevas quedaron con 0 ubicaciones, sin filas inventadas; `tsc --noEmit` limpio.
+
+La etiqueta «Interna» de `/bodegas` no se verificó en el navegador: esa pantalla es un componente de servidor y el banco de pruebas monta componentes de cliente. El cambio es un `span` condicional sobre un campo ya comprobado en la base.
+

@@ -13,7 +13,9 @@ export default async function NuevaOrdenPage() {
 
   const [{ data: sedes }, { data: bodegas }, { data: usuarios }] = await Promise.all([
     traerTodo((desde, hasta) => supabase.from('sedes').select('id, nombre, grupo:grupos_contrato ( nombre )').eq('activo', true).order('nombre').order('id').range(desde, hasta)).then((data) => ({ data })),
-    supabase.from('bodegas').select('id, nombre').order('nombre'),
+    // Solo las bodegas que despachan a sedes. Producción, reembasado y
+    // maquinaria son sitios internos: nunca sale de ahí una orden de insumo.
+    supabase.from('bodegas').select('id, nombre').eq('despacha_a_sedes', true).eq('activo', true).order('nombre'),
     supabase.from('usuarios').select('id, nombre').eq('activo', true).order('nombre'),
   ])
 

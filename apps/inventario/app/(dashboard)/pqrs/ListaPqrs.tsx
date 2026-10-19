@@ -195,16 +195,19 @@ export function ListaPqrs({ filas, usuarioId, puedeRadicar, verIndicadores }: {
           </div>
         }
         herramientas={
-          <div className="flex flex-wrap gap-1.5">
+          /* `w-full sm:w-auto`: en móvil los dos filtros bajan a su propia
+             línea. Sin eso le roban el ancho al buscador de la tabla, que
+             queda de 30 px y con el contador "0 de 0" encima. */
+          <div className="flex w-full flex-wrap gap-1.5 sm:w-auto">
             <select value={tipo} onChange={(e) => setTipo(e.target.value as TipoPqrs | '')}
               aria-label="Filtrar por tipo"
-              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 font-body text-sm">
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 font-body text-sm sm:flex-none">
               <option value="">Todos los tipos</option>
               {TIPOS_PQRS.map((t) => <option key={t} value={t}>{TIPO_PQRS_META[t].label}</option>)}
             </select>
             <select value={estado} onChange={(e) => setEstado(e.target.value as EstadoPqrs | '')}
               aria-label="Filtrar por estado"
-              className="rounded-lg border border-gray-200 bg-white px-2 py-1.5 font-body text-sm">
+              className="min-w-0 flex-1 rounded-lg border border-gray-200 bg-white px-2 py-1.5 font-body text-sm sm:flex-none">
               <option value="">Todos los estados</option>
               {(Object.keys(ESTADO_PQRS_META) as EstadoPqrs[]).map((e) => (
                 <option key={e} value={e}>{ESTADO_PQRS_META[e].label}</option>
