@@ -6,7 +6,7 @@ import {
   Briefcase, Contact, FolderTree, Scale, IdCard, SlidersHorizontal, Plug,
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
-  ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug,
+  ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -90,6 +90,14 @@ export const navigation: NavModule[] = [
     items: [
       { label: 'Escanear equipo', href: '/equipo',        icon: ScanLine, permiso: 'reportar_falla_maquinaria' },
       { label: 'Tablero',         href: '/mantenimiento', icon: HardHat,  permiso: 'ver_mantenimiento' },
+    ],
+  },
+  {
+    id: 'conserjeria',
+    title: 'Operación Conserjería',
+    icon: MessageSquareWarning,
+    items: [
+      { label: 'PQRS', href: '/pqrs', icon: MessageSquareWarning, permiso: 'ver_pqrs' },
     ],
   },
   {
@@ -186,6 +194,7 @@ export const moduleShortLabel: Record<string, string> = {
   inventario: 'Inventario',
   gestion: 'Gestión',
   mantenimiento: 'Manten.',
+  conserjeria: 'PQRS',
   gestion_humana: 'RRHH',
   logistica: 'Logística',
   servicios_hogar: 'Hogar',
