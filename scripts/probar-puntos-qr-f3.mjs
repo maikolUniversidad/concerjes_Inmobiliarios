@@ -91,12 +91,13 @@ try {
   await c.query(SQL_F1)
   await c.query(SQL_F3)
   check('segunda pasada sin error', true)
-  // La de costura corre aunque ronda_puntos (F2) no exista: avisa y no falla.
+  // La de costura corre exista o no ronda_puntos (F2): si no está, avisa y no
+  // falla; si está, cose la llave foránea. Desde que F2 se unió, está.
   await c.query(SQL_FK)
   await c.query(SQL_FK)
-  check('la migración 000031 corre sin ronda_puntos y es repetible', true)
-  check('y NO dejó la llave foránea, porque ronda_puntos no existe en esta rama',
-    (await todas(`SELECT 1 FROM pg_constraint WHERE conname='fk_ronda_asignaciones_punto'`)).length === 0)
+  check('la migración 000031 es repetible', true)
+  check('y dejó la llave foránea, ahora que ronda_puntos existe',
+    (await todas(`SELECT 1 FROM pg_constraint WHERE conname='fk_ronda_asignaciones_punto'`)).length === 1)
 
   // ── 2. Estructura ─────────────────────────────────────────────────────────
   console.log('\n2) Estructura')
@@ -125,9 +126,14 @@ try {
                  WHERE table_schema='public' AND table_name='ronda_asignaciones'
                    AND column_name='sede_id'`))?.is_nullable === 'NO')
 
+  // Solo las tablas de F3: desde que F2 se unió, `ronda_%` también trae las
+  // suyas (zonas, puntos, qr, lotes y eventos), que tienen sus propias
+  // funciones de acceso y las comprueba `probar-puntos-qr-f2.mjs`.
   const lecturas = await todas(`
     SELECT tablename, policyname, qual FROM pg_policies
-     WHERE schemaname='public' AND cmd='SELECT' AND tablename LIKE 'ronda_%'`)
+     WHERE schemaname='public' AND cmd='SELECT'
+       AND tablename IN ('ronda_tipos_actividad','ronda_plantillas','ronda_plantilla_pasos',
+                         'ronda_instructivos','ronda_asignaciones')`)
   check('las 5 políticas de LECTURA exigen auth_permiso (vía las funciones de acceso)',
     lecturas.length === 5 && lecturas.every((p) =>
       /ronda_catalogo_acceso|ronda_asignaciones_acceso/.test(p.qual)),
@@ -454,8 +460,16 @@ try {
 
   // ── 9. Asignaciones y «qué aplica aquí y ahora» ───────────────────────────
   console.log('\n9) ronda_tareas_aplicables(): día y hora de Bogotá, ventana, tolerancia y vigencia')
-  const punto1 = (await una(`SELECT gen_random_uuid() id`)).id   // F2 lo hará un ronda_puntos
-  const puntoV = (await una(`SELECT gen_random_uuid() id`)).id
+  // Puntos de verdad: desde la migración 20261019000031 hay llave foránea a
+  // `ronda_puntos`, así que un UUID inventado ya no pasa.
+  const punto1 = (await una(`
+    INSERT INTO ronda_puntos (grupo_id, sede_id, codigo, clave_publica, nombre, estado)
+    VALUES ($1, $2, 'ZZ-F3-P1', 'ZZF3PT01', 'ZZ F3 punto de prueba', 'ACTIVO')
+    RETURNING id`, [g1, sede1])).id
+  const puntoV = (await una(`
+    INSERT INTO ronda_puntos (grupo_id, sede_id, codigo, clave_publica, nombre, estado)
+    VALUES ($1, $2, 'ZZ-F3-PV', 'ZZF3PT02', 'ZZ F3 punto del contrato vencido', 'ACTIVO')
+    RETURNING id`, [gVencido, sedeV])).id
   const hoyBta = (await una(`SELECT (NOW() AT TIME ZONE 'America/Bogota')::date d,
                                     EXTRACT(ISODOW FROM (NOW() AT TIME ZONE 'America/Bogota'))::int dow`))
   const asignar = async (campos) => (await una(`
