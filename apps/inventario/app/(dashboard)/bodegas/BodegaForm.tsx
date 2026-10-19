@@ -9,7 +9,19 @@ import { ImagePicker } from '@/components/ui/ImagePicker'
 export interface BodegaDefaults {
   id?: string; nombre?: string; codigo?: string | null; direccion?: string | null
   descripcion?: string | null; plano_url?: string | null; responsable_id?: string | null
+  despacha_a_sedes?: boolean; origen_movimiento?: string | null
 }
+
+/**
+ * Sitios internos que pueden representar un origen de entrada. No se ofrece
+ * COMPRA (eso viene de un proveedor, no de una bodega) ni AJUSTE / OTRO, que no
+ * son lugares. DEVOLUCION_SEDE llega de una sede, tampoco de una bodega.
+ */
+const ORIGENES_BODEGA: { valor: string; label: string }[] = [
+  { valor: 'PRODUCCION', label: 'Producción propia' },
+  { valor: 'REEMBASADO', label: 'Reembasado' },
+  { valor: 'TRASLADO_INTERNO', label: 'Traslado interno (p. ej. maquinaria)' },
+]
 
 const labelCls = 'font-body font-semibold text-sm text-gray-700'
 const inputCls = 'w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green'
@@ -54,6 +66,36 @@ export function BodegaForm({ usuarios, defaults = {}, modo = 'crear' }: {
             <option value="">— Sin responsable —</option>
             {usuarios.map(u => <option key={u.id} value={u.id}>{u.nombre}</option>)}
           </select>
+        </div>
+      </div>
+
+      <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm space-y-4">
+        <h2 className="font-heading font-semibold text-lg text-gray-900">Para qué sirve esta bodega</h2>
+        <label className="flex items-start gap-3">
+          {/* Una casilla sin marcar no viaja en el FormData: la acción lo lee
+              como false, que es justo lo que significa. */}
+          <input type="checkbox" name="despacha_a_sedes" value="1"
+            defaultChecked={defaults.despacha_a_sedes ?? true}
+            className="mt-0.5 h-4 w-4 rounded border-gray-300 text-brand-green" />
+          <span>
+            <span className={labelCls}>De aquí salen órdenes de insumo hacia las sedes</span>
+            <span className="block font-body text-xs text-gray-400">
+              Desmárcalo si es un sitio interno (producción, reembasado, maquinaria): no aparecerá
+              en el selector de «Nueva orden de insumo» ni podrá quedar como destino de una compra.
+            </span>
+          </span>
+        </label>
+        <div>
+          <label className={labelCls}>Origen de entrada que representa</label>
+          <select name="origen_movimiento" defaultValue={defaults.origen_movimiento ?? ''}
+            className={inputCls + ' mt-1 bg-white'}>
+            <option value="">— Ninguno —</option>
+            {ORIGENES_BODEGA.map((o) => <option key={o.valor} value={o.valor}>{o.label}</option>)}
+          </select>
+          <p className="font-body text-xs text-gray-400 mt-1">
+            Relaciona lo que entra al inventario con el sitio de donde vino. Cada origen lo puede
+            representar una sola bodega.
+          </p>
         </div>
       </div>
 

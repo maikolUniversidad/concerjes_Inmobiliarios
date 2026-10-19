@@ -12,6 +12,8 @@ export const revalidate = 0
 interface BodegaRow {
   id: string; nombre: string; codigo: string | null; direccion: string | null
   plano_url: string | null
+  /** Si de aquí salen órdenes de insumo hacia las sedes. Solo la Central. */
+  despacha_a_sedes: boolean
   responsable: { nombre: string } | null
   ubicaciones: { count: number }[]
 }
@@ -21,7 +23,7 @@ export default async function BodegasPage() {
   const supabase = await createClient()
   const { data } = await supabase
     .from('bodegas')
-    .select('id, nombre, codigo, direccion, plano_url, responsable:usuarios!bodegas_responsable_id_fkey ( nombre ), ubicaciones ( count )')
+    .select('id, nombre, codigo, direccion, plano_url, despacha_a_sedes, responsable:usuarios!bodegas_responsable_id_fkey ( nombre ), ubicaciones ( count )')
     .eq('activo', true)
     .order('nombre')
 
@@ -74,7 +76,17 @@ export default async function BodegasPage() {
                 {b.codigo && <span className="absolute top-2 left-2 bg-white/90 font-mono text-xs px-2 py-0.5 rounded">{b.codigo}</span>}
               </div>
               <div className="p-4">
-                <h3 className="font-heading font-bold text-base text-gray-900">{b.nombre}</h3>
+                <div className="flex items-start justify-between gap-2">
+                  <h3 className="font-heading font-bold text-base text-gray-900">{b.nombre}</h3>
+                  {!b.despacha_a_sedes && (
+                    <span
+                      title="Sitio interno: no salen órdenes de insumo desde aquí"
+                      className="shrink-0 rounded-full bg-gray-100 px-2 py-0.5 font-body text-[10px] font-semibold text-gray-500"
+                    >
+                      Interna
+                    </span>
+                  )}
+                </div>
                 {b.direccion && <p className="font-body text-xs text-gray-400 mt-0.5 flex items-center gap-1"><MapPin className="w-3 h-3" /> {b.direccion}</p>}
                 <div className="flex items-center justify-between mt-3 font-body text-xs text-gray-500">
                   <span>{b.ubicaciones?.[0]?.count ?? 0} ubicaciones</span>

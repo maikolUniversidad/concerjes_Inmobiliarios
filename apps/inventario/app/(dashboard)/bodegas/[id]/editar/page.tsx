@@ -15,7 +15,9 @@ export default async function EditarBodegaPage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
   const [{ data, error }, { data: usuarios }] = await Promise.all([
-    supabase.from('bodegas').select('id, nombre, codigo, direccion, descripcion, plano_url, responsable_id').eq('id', id).single(),
+    supabase.from('bodegas')
+      .select('id, nombre, codigo, direccion, descripcion, plano_url, responsable_id, despacha_a_sedes, origen_movimiento')
+      .eq('id', id).single(),
     supabase.from('usuarios').select('id, nombre').eq('activo', true).order('nombre'),
   ])
   if (error || !data) notFound()

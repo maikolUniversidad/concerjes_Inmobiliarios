@@ -19,6 +19,9 @@ async function auth() {
 
 function traducir(msg: string): string {
   if (msg.includes('row-level security')) return 'No tienes permisos (requiere Admin, Bodeguero o Supervisor).'
+  if (msg.includes('uq_bodegas_origen_movimiento')) {
+    return 'Ese origen de entrada ya lo representa otra bodega: cada origen puede tener una sola.'
+  }
   if (msg.includes('duplicate')) return 'Código duplicado en esta bodega.'
   return 'Operación fallida: ' + msg
 }
@@ -40,6 +43,10 @@ export async function crearBodega(_prev: ActionResult, formData: FormData): Prom
     descripcion: String(formData.get('descripcion') ?? '').trim() || null,
     plano_url: String(formData.get('plano_url') ?? '').trim() || null,
     responsable_id: String(formData.get('responsable_id') ?? '') || null,
+    // Sin la casilla marcada no viene en el FormData, y eso significa que es un
+    // sitio interno: no despacha a sedes ni recibe compras.
+    despacha_a_sedes: formData.get('despacha_a_sedes') != null,
+    origen_movimiento: String(formData.get('origen_movimiento') ?? '').trim() || null,
   }
   const { data, error } = await (supabase as DB).from('bodegas').insert(payload).select('id').single()
   if (error) return { error: traducir(error.message) }
@@ -63,6 +70,8 @@ export async function actualizarBodega(_prev: ActionResult, formData: FormData):
     descripcion: String(formData.get('descripcion') ?? '').trim() || null,
     plano_url: String(formData.get('plano_url') ?? '').trim() || null,
     responsable_id: String(formData.get('responsable_id') ?? '') || null,
+    despacha_a_sedes: formData.get('despacha_a_sedes') != null,
+    origen_movimiento: String(formData.get('origen_movimiento') ?? '').trim() || null,
   }
   const { error } = await (supabase as DB).from('bodegas').update(payload).eq('id', id)
   if (error) return { error: traducir(error.message) }
