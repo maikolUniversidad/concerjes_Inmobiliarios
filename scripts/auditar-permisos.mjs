@@ -72,9 +72,16 @@ await c.end()
 const cat = new Set(readFileSync(join(base, 'lib/permisos.ts'), 'utf8').match(/key: '[a-z_]+'/g).map(s => s.slice(6, -1)))
 // Módulos de conserjería aún por construir: las claves ya existen en /roles a
 // propósito, para poder configurar los roles antes de conectar las pantallas.
+//
+// Las tres del módulo de Puntos QR (F2) están aquí por el motivo contrario: sus
+// pantallas SÍ están conectadas (/rondas/puntos y /rondas/qr las exigen), pero
+// su RLS vive en la migración 20261019000020, que todavía NO está aplicada, y
+// ningún rol las tiene marcadas hasta que alguien las habilite en /roles. Al
+// aplicar la migración y asignarlas, se pueden sacar de esta lista.
 const PENDIENTES = new Set([
   'ver_pqrs', 'gestionar_pqrs', 'ver_no_conformes', 'gestionar_no_conformes',
   'ver_contratos_conserjeria', 'ver_panel_gerencia',
+  'ver_puntos_ronda', 'gestionar_puntos_ronda', 'gestionar_qr_ronda',
 ])
 
 const todas = [...new Set([...cat, ...rls, ...app, ...enRoles])].sort()

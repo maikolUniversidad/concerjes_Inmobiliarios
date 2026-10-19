@@ -26,11 +26,16 @@ export async function proxy(request: NextRequest) {
   const path = request.nextUrl.pathname
   const isAuthRoute   = path.startsWith('/login')
   const isClaveRoute  = path.startsWith('/cambiar-clave')
-  // Rutas públicas: landing, APIs y el flujo público de Registro de Vacantes.
+  // Rutas públicas: landing, APIs, el flujo público de Registro de Vacantes y
+  // la página del QR de un punto de control (/q/<token>), que tiene que abrir
+  // sin sesión: el conserje escanea una placa pegada a una pared y ahí decide
+  // cómo seguir. La autoridad de esa página es la FIRMA del token, no la
+  // cookie. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md §3.
   const isPublicRoute =
     path === '/' ||
     path.startsWith('/api') ||
     path.startsWith('/registro-vacantes') ||
+    path.startsWith('/q/') ||
     path.startsWith('/ingresar')
 
   if (!user && !isAuthRoute && !isPublicRoute) {

@@ -7,7 +7,7 @@ import {
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
-  ShoppingCart,
+  ShoppingCart, QrCode,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -104,6 +104,8 @@ export const navigation: NavModule[] = [
       // reglas dependen los puntos, los QR y las tareas. Va aparte de
       // /contratos, que clasifica sedes para inventario.
       { label: 'Contratos', href: '/rondas/contratos', icon: FileSignature, permiso: 'ver_contratos_conserjeria' },
+      { label: 'Zonas y puntos', href: '/rondas/puntos', icon: MapPin, permiso: 'ver_puntos_ronda' },
+      { label: 'Códigos QR', href: '/rondas/qr', icon: QrCode, permiso: 'ver_puntos_ronda' },
     ],
   },
   {

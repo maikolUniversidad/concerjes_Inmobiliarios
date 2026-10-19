@@ -19,6 +19,8 @@
         "NEXT_PUBLIC_SUPABASE_ANON_KEY",
         "SUPABASE_SERVICE_ROLE_KEY",
         "APP_BASE_URL",
+        "RONDA_HMAC_LLAVE_ACTUAL",
+        "RONDA_HMAC_*",
         "CRON_SECRET",
         "FACIAL_SERVICE_URL",
         "FACIAL_SERVICE_TOKEN",
