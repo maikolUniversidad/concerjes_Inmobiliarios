@@ -86,6 +86,7 @@ export function payloadRespuesta(
   return {
     p_visita: v.id,
     p_paso: pasoId,
+    p_id: r.id,
     p_valor: valor,
     p_motivo: r.motivo ?? null,
     p_omitido: r.omitido,
@@ -97,14 +98,17 @@ export function payloadRespuesta(
 }
 
 export function payloadEvidencia(
-  v: VisitaLocal, evId: string, a: Actor, respuestaId?: string | null,
+  v: VisitaLocal, evId: string, a: Actor,
 ): Record<string, unknown> {
   const e = v.evidencias.find((x) => x.id === evId)
   if (!e) throw new Error(`La visita no tiene la evidencia ${evId}`)
+  // La respuesta a la que pertenece: su id lo generó este mismo celular, así
+  // que la evidencia sabe de quién es aunque nada haya subido todavía.
+  const respuestaId = v.respuestas[e.pasoId]?.id ?? null
   return {
     p_id: e.id,
     p_visita: v.id,
-    p_respuesta: respuestaId ?? null,
+    p_respuesta: respuestaId,
     p_tipo: e.tipo,
     p_path: e.rutaArchivo ?? null,
     p_meta: {
@@ -189,16 +193,12 @@ export function payloadNovedad(
  *   5. las novedades;
  *   6. el cierre, de último, porque valida los mínimos de foto.
  *
- * `respuestaIdDe` traduce el id local del paso al `respuesta_id` que devolvió
- * el servidor: la cola lo va llenando a medida que sube las respuestas. Si
- * todavía no lo tiene, la evidencia viaja sin él y queda colgada de la visita,
- * que es menos preciso pero nunca pierde el archivo.
+ * Los ids de la visita, de cada respuesta y de cada evidencia los genera el
+ * DISPOSITIVO, así que la evidencia puede decir de qué respuesta es sin que
+ * nada haya subido todavía, y un reintento no duplica nada (las RPC son
+ * idempotentes por ese id).
  */
-export function intentsDeVisita(
-  v: VisitaLocal,
-  a: Actor,
-  respuestaIdDe: (pasoId: string) => string | null = () => null,
-): Intent[] {
+export function intentsDeVisita(v: VisitaLocal, a: Actor): Intent[] {
   const lista: Intent[] = [{ kind: INTENT_VISITA, payload: payloadVisita(v, a) }]
 
   for (const paso of v.pasos) {
@@ -207,14 +207,14 @@ export function intentsDeVisita(
     for (const e of v.evidencias.filter((x) => x.pasoId === paso.id)) {
       lista.push({
         kind: INTENT_EVIDENCIA,
-        payload: payloadEvidencia(v, e.id, a, respuestaIdDe(paso.id)),
+        payload: payloadEvidencia(v, e.id, a),
       })
     }
   }
   // Evidencia que no cuelga de ningún paso contestado (una foto de contexto).
   for (const e of v.evidencias) {
     if (v.respuestas[e.pasoId]) continue
-    lista.push({ kind: INTENT_EVIDENCIA, payload: payloadEvidencia(v, e.id, a, null) })
+    lista.push({ kind: INTENT_EVIDENCIA, payload: payloadEvidencia(v, e.id, a) })
   }
   for (const f of v.firmas) {
     lista.push({ kind: INTENT_FIRMA, payload: payloadFirma(v, f.quien, a) })
@@ -222,7 +222,8 @@ export function intentsDeVisita(
   for (const n of v.novedades) {
     lista.push({
       kind: INTENT_NOVEDAD,
-      payload: payloadNovedad(v, n.id, a, n.pasoId ? respuestaIdDe(n.pasoId) : null),
+      payload: payloadNovedad(
+        v, n.id, a, n.pasoId ? v.respuestas[n.pasoId]?.id ?? null : null),
     })
   }
   if (v.estado === 'COMPLETADA' || v.estado === 'INCOMPLETA') {

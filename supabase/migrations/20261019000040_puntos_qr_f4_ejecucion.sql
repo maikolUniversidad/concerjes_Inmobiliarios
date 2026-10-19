@@ -1430,6 +1430,11 @@ GRANT EXECUTE ON FUNCTION public.ronda_registrar_visita(UUID, UUID, UUID, TEXT, 
 CREATE OR REPLACE FUNCTION public.ronda_responder_paso(
   p_visita       UUID,
   p_paso         UUID,
+  -- El id de la fila lo puede generar el DISPOSITIVO, y no es un capricho: la
+  -- evidencia apunta a `respuesta_id`, y sin señal el celular tiene que poder
+  -- encolar «esta foto es de esta respuesta» antes de que el servidor haya
+  -- creado ninguna de las dos. Si se omite, lo pone la base.
+  p_id           UUID        DEFAULT NULL,
   p_valor        JSONB       DEFAULT '{}'::jsonb,
   p_motivo       TEXT        DEFAULT NULL,
   p_omitido      BOOLEAN     DEFAULT false,
@@ -1498,12 +1503,13 @@ BEGIN
   END IF;
 
   INSERT INTO public.ronda_respuestas (
-    visita_id, paso_id, plantilla_id, orden, tipo,
+    id, visita_id, paso_id, plantilla_id, orden, tipo,
     valor_bool, valor_texto, valor_numero, valor_opciones,
     motivo, transcripcion, entidad_tipo, entidad_id, entidad_codigo,
     omitido, omision_motivo, respondido_dispositivo, respondido_at
   ) VALUES (
-    p_visita, p_paso, v_paso.plantilla_id, v_paso.orden, v_paso.tipo,
+    COALESCE(p_id, gen_random_uuid()), p_visita, p_paso,
+    v_paso.plantilla_id, v_paso.orden, v_paso.tipo,
     v_bool, v_texto, v_num, v_ops,
     NULLIF(btrim(p_motivo), ''), NULLIF(btrim(p_valor ->> 'transcripcion'), ''),
     NULLIF(p_valor ->> 'entidad_tipo', ''), NULLIF(p_valor ->> 'entidad_id', '')::uuid,
@@ -1531,10 +1537,10 @@ BEGIN
    WHERE id = p_visita AND estado = 'ABIERTA';
   RETURN v_fila;
 END $$;
-COMMENT ON FUNCTION public.ronda_responder_paso(UUID, UUID, JSONB, TEXT, BOOLEAN, TEXT, TIMESTAMPTZ, UUID, UUID) IS
+COMMENT ON FUNCTION public.ronda_responder_paso(UUID, UUID, UUID, JSONB, TEXT, BOOLEAN, TEXT, TIMESTAMPTZ, UUID, UUID) IS
   'Contesta (o corrige) un paso. Upsert por (visita, paso). El tipo del paso decide qué columna se llena y la base valida el dominio: SI/NO/NO_APLICA, rango del número, opciones de la lista. El motivo obligatorio de un «No» lo exige el CHECK de la tabla, no esta función.';
-REVOKE ALL ON FUNCTION public.ronda_responder_paso(UUID, UUID, JSONB, TEXT, BOOLEAN, TEXT, TIMESTAMPTZ, UUID, UUID) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.ronda_responder_paso(UUID, UUID, JSONB, TEXT, BOOLEAN, TEXT, TIMESTAMPTZ, UUID, UUID) TO authenticated;
+REVOKE ALL ON FUNCTION public.ronda_responder_paso(UUID, UUID, UUID, JSONB, TEXT, BOOLEAN, TEXT, TIMESTAMPTZ, UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.ronda_responder_paso(UUID, UUID, UUID, JSONB, TEXT, BOOLEAN, TEXT, TIMESTAMPTZ, UUID, UUID) TO authenticated;
 
 -- ──────────────────────────────────────────────────────────────────────────────
 -- 17. `ronda_adjuntar_evidencia()`

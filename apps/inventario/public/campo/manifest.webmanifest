@@ -1,0 +1,37 @@
+{
+  "name": "Mi ronda — Conserjes Inmobiliarios",
+  "short_name": "Mi ronda",
+  "description": "Ejecuta las rondas del punto de control: tareas, fotos, firma y reporte.",
+  "lang": "es-CO",
+  "dir": "ltr",
+  "start_url": "/campo",
+  "scope": "/campo/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f9fafb",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Escanear un punto",
+      "url": "/campo"
+    },
+    {
+      "name": "Lo que falta por enviar",
+      "url": "/campo/cola"
+    }
+  ]
+}

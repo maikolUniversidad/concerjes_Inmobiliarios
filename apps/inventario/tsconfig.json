@@ -28,6 +28,9 @@
       ],
       "@conserjes/ronda-core": [
         "../../packages/ronda-core/src/index.ts"
+      ],
+      "@conserjes/offline": [
+        "../../packages/offline/src/index.ts"
       ]
     }
   },

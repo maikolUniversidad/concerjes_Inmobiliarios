@@ -24,12 +24,32 @@ import {
 import { type Geocerca } from './geocerca'
 import { type MarcaDeTiempo, marcar } from './reloj'
 
+/** UUID sin depender de nada: `crypto.randomUUID` donde esté, y si no un
+ *  identificador con la misma forma. Los ids los genera el dispositivo porque
+ *  son la llave de idempotencia de las RPC. */
+export function nuevoId(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: () => string } }).crypto
+  if (typeof c?.randomUUID === 'function') return c.randomUUID()
+  const hex = '0123456789abcdef'
+  let s = ''
+  for (let i = 0; i < 36; i++) {
+    s += [8, 13, 18, 23].includes(i) ? '-'
+      : i === 14 ? '4'
+        : hex[Math.floor(Math.random() * 16)]
+  }
+  return s
+}
+
 export type EstadoVisita =
   | 'ABIERTA' | 'EN_CURSO' | 'COMPLETADA' | 'INCOMPLETA' | 'ANULADA' | 'VENCIDA'
 
 export type IdentidadMetodo = 'CUENTA' | 'ENLACE_PIN' | 'CONSOLA' | 'BOT'
 
 export interface RespuestaLocal {
+  /** Lo genera el dispositivo: la evidencia apunta a esta respuesta y sin señal
+   *  hay que poder encolar las dos sin esperar al servidor. Se conserva al
+   *  corregir, para que la foto siga colgada de la misma respuesta. */
+  id: string
   pasoId: string
   casilla?: RespuestaCasilla | null
   texto?: string | null
@@ -219,6 +239,9 @@ export function responderPaso(
   if (problema) return { ok: false, error: problema }
 
   const r: RespuestaLocal = {
+    // Al corregir se conserva el id: si cambiara, la evidencia ya encolada
+    // apuntaría a una respuesta que no existe.
+    id: v.respuestas[pasoId]?.id ?? nuevoId(),
     pasoId,
     casilla: valor.casilla ?? null,
     texto: valor.texto ?? null,
