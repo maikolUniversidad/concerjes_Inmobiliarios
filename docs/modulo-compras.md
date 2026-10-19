@@ -401,7 +401,7 @@ Las dos tablas nacen cerradas por `auth_permiso` y **sin política de escritura 
 
 ### Atacar el hueco: el filtro «Sin proveedor» del comparador (2026-10-19)
 
-La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en orden. Al medir el catálogo completo resultó que **el hueco no son 36 sino 178** (la sección de proveedores duplicados habla de 273 productos sin proveedor: ese es el conteo de los que no lo tienen **en la ficha**; los 178 son los que no lo tienen **por ninguna vía**, que son los que de verdad bloquean la conversión a orden), y que nada permite deducir el proveedor: `movimientos` no tiene columna de proveedor, hay una sola orden de compra en todo el sistema, y ninguno de esos productos tiene fila en `precios_proveedor` — ni siquiera apagada. **24 de los 36 sí tienen entradas registradas**, así que se compran de verdad; el sistema nunca guardó a quién. Llenarlo es trabajo de alguien que sepa a quién se le compra; lo que puede hacer el sistema es poner la lista enfrente, ordenada por lo que pesa.
+La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en orden. Al medir el catálogo completo resultó que **el hueco no son 36 sino 178** (184 desde el 19 de octubre: ver §15) (la sección de proveedores duplicados habla de 273 productos sin proveedor: ese es el conteo de los que no lo tienen **en la ficha**; los 178 son los que no lo tienen **por ninguna vía**, que son los que de verdad bloquean la conversión a orden), y que nada permite deducir el proveedor: `movimientos` no tiene columna de proveedor, hay una sola orden de compra en todo el sistema, y ninguno de esos productos tiene fila en `precios_proveedor` — ni siquiera apagada. **24 de los 36 sí tienen entradas registradas**, así que se compran de verdad; el sistema nunca guardó a quién. Llenarlo es trabajo de alguien que sepa a quién se le compra; lo que puede hacer el sistema es poner la lista enfrente, ordenada por lo que pesa.
 
 | Familia | Sin proveedor | De esos, se movieron en 6 meses |
 |---|---|---|
@@ -412,6 +412,8 @@ La fase 2 dejó claro que 36 productos recomendados no se pueden convertir en or
 | EPP | 13 | 8 |
 | LIQUIDOS + JARDINERÍA | 6 | 4 |
 | **Total** | **178** | **97** |
+
+(Ese total pasó a **184** el 19 de octubre, al dejar de contar como resuelta una ficha sin precio: §15.)
 
 Los 81 restantes llevan medio año quietos: pueden esperar, o es señal de que sobran en el catálogo. Los 16 productos de EPP del sistema **no tienen proveedor ninguno**, y de los 43 de MAQUINARIA solo 5 lo tienen — pero buena parte de eso son activos (greca, hidrolavadora, escaleras, balanza), no compra de rutina.
 
@@ -546,7 +548,7 @@ La sección 11 dejó el filtro «Sin proveedor» con la lista ordenada por lo qu
 
 ### Asignar en cadena, no de a una ida y vuelta
 
-Son 178 productos. Con el formulario cerrándose en cada guardado, asignarlos es 178 veces «buscar la fila, abrir, llenar, guardar, volver a buscar». Ahora, **desde el filtro «Sin proveedor»**, el formulario encadena: al guardar no se cierra, pasa al siguiente de la lista, con un «*X* de 178» arriba para saber por dónde va. Hay «Saltar este» para el que no se sepa y «Terminar» para salir cuando sea. Se entra por el botón «Asignar uno por uno» de la barra (empieza por el primero, el más urgente) o por el «Asignar» de cualquier fila (empieza por esa).
+Son 178 productos —184 desde el arreglo de la §15—. Con el formulario cerrándose en cada guardado, asignarlos es una por una «buscar la fila, abrir, llenar, guardar, volver a buscar». Ahora, **desde el filtro «Sin proveedor»**, el formulario encadena: al guardar no se cierra, pasa al siguiente de la lista, con un «*X* de *N*» arriba para saber por dónde va. Hay «Saltar este» para el que no se sepa y «Terminar» para salir cuando sea. Se entra por el botón «Asignar uno por uno» de la barra (empieza por el primero, el más urgente) o por el «Asignar» de cualquier fila (empieza por esa).
 
 **La cola se captura al empezar y no se recalcula.** Cada guardado revalida la página y saca al producto del filtro, así que una lista viva correría los índices bajo los pies y la cadena saltaría productos. Fuera del filtro «Sin proveedor» el formulario sigue comportándose como siempre: guarda y cierra.
 
@@ -577,4 +579,27 @@ Banco de pruebas con los datos reales de la base (498 productos, 12 proveedores,
 - Los **78 productos** cuya ficha y comparador discrepan en el proveedor, uno por uno.
 - Los **6 con precio 0** en la ficha (ALCOHOL GLICERINADO AL 70%, AMONIO CUATERNARIO, JABON PARA ROPA, SUAVIZANTE PARA ROPA, THINER A GRANEL, VARSOL INDUSTRIAL), que ahora hay que asignar a mano.
 
-  **Y ahí hay un agujero del filtro, medido y sin arreglar:** los 6 **no aparecen en los 178**, porque `v_productos_sin_proveedor` los da por resueltos — tienen proveedor en la ficha. Pero su precio de lista es 0 y no tienen fila en el comparador, así que son exactamente el caso que el propio aviso del filtro advierte: *«llenar solo la ficha del producto deja la orden en $ 0»*. Hoy solo se ven en «Todos», con su insignia «0 prov.», entre los otros 498. Arreglarlo es cambiar la vista (que la ficha cuente como proveedor **solo si trae precio > 0**), o sea tocar la migración `20261019000003`; se deja fuera de este cambio a propósito porque mueve el número 178 que toda la sección 11 explica.
+  **Ese agujero ya está cerrado (§15).** Los 6 no aparecían en los 178 porque `v_productos_sin_proveedor` los daba por resueltos —tienen proveedor en la ficha—, aunque su precio de lista es 0 y no tienen fila en el comparador: exactamente el caso que el aviso del filtro advierte, *«llenar solo la ficha del producto deja la orden en $ 0»*. La migración `20261019000007` hace que la ficha cuente solo si trae precio, y con eso entraron a la lista.
+
+---
+
+## 15. La ficha solo cuenta si trae precio (2026-10-19)
+
+La §14 dejó medido un agujero del filtro «Sin proveedor» y decidió no tocarlo porque movía el número que toda la §11 explica. Ya está cerrado: migración `20261019000007_vista_sin_proveedor_exige_precio.sql`, aplicada.
+
+`v_productos_sin_proveedor` exigía `precio > 0` a los precios del comparador, pero a la ficha del producto solo le pedía que nombrara un proveedor activo. Un producto con proveedor en la ficha y `precio_lista = 0` quedaba **invisible y bloqueado a la vez**:
+
+- invisible, porque el filtro sale de esta vista y lo daba por resuelto;
+- bloqueado, porque desde la §14 (`20261019000006`) una línea de orden sin precio no se escribe: `sc_convertir_a_oc()` lo deja fuera y lo cuenta en `sin_precio`.
+
+Nadie podía comprarlo y nadie lo veía en la lista de los que hay que arreglar.
+
+Son **6 productos**, los que la §14 ya había nombrado: ALCOHOL GLICERINADO AL 70%, AMONIO CUATERNARIO, JABON PARA ROPA, SUAVIZANTE PARA ROPA, THINER A GRANEL y VARSOL INDUSTRIAL. Todos con `precio_lista = 0.00` y cero filas en el comparador. **AMONIO CUATERNARIO está en la recomendación de compra de hoy**, con 2 unidades.
+
+| | Antes | Ahora |
+|---|---|---|
+| Productos en el filtro «Sin proveedor» | 178 | **184** |
+
+Se comprobó también el caso simétrico, por si hacía falta el mismo arreglo del otro lado: productos con filas en el comparador pero ninguna usable (precio 0 o no vigente) hay **0**, así que ahí no había nada que tapar.
+
+Lo único que cambió en la vista es la condición de la ficha, que ahora pide `COALESCE(p.precio_lista, 0) > 0` — el mismo criterio que ya se le exigía al comparador.
