@@ -26,7 +26,7 @@ if (!m) { console.error('No se encontró DIRECT_URL en .env.local'); process.exi
 
 // La migración trae su propio BEGIN/COMMIT: aquí se le quitan para que corra
 // dentro de la transacción de prueba y el ROLLBACK alcance a revertirla.
-const MIGRACION = join(raiz, 'supabase', 'migrations', '20261019000001_proveedores_fusionar_duplicados.sql')
+const MIGRACION = join(raiz, 'supabase', 'migrations', '20261019000002_proveedores_fusionar_duplicados.sql')
 const sqlMigracion = readFileSync(MIGRACION, 'utf8')
   .replace(/^[ \t]*BEGIN[ \t]*;[ \t]*$/gim, '')
   .replace(/^[ \t]*COMMIT[ \t]*;[ \t]*$/gim, '')
