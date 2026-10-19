@@ -180,6 +180,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_puntos_ronda',               label: 'Ver zonas, puntos de control y sus códigos QR' },
       { key: 'gestionar_puntos_ronda',         label: 'Crear / editar zonas y puntos de control' },
       { key: 'gestionar_qr_ronda',             label: 'Generar, imprimir y revocar códigos QR de puntos' },
+      // Catálogo de trabajo de los Puntos QR (F3). Ojo: `gestionar_tipos_servicio`
+      // es de Servicios del Hogar y `gestionar_rutas` es de Logística; ninguna
+      // sirve aquí. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md §2.
+      { key: 'ver_catalogo_rondas',            label: 'Ver el catálogo de tareas: actividades, plantillas e instructivos' },
+      { key: 'gestionar_catalogo_rondas',      label: 'Crear, publicar y versionar plantillas de tarea e instructivos' },
+      { key: 'ver_asignaciones_rondas',        label: 'Ver qué tareas aplican en cada punto de control' },
+      { key: 'gestionar_asignaciones_rondas',  label: 'Asignar tareas a puntos: frecuencia, ventana, responsable y ANS' },
     ],
   },
   {
