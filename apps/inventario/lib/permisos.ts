@@ -140,6 +140,16 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_plantillas_documento', label: 'Editar y versionar plantillas de documentos' },
       { key: 'ver_planta_personal',       label: 'Ver la planta de personal (nómina y retiros)' },
       { key: 'gestionar_planta_personal', label: 'Mantener la planta: centros de costo y vinculaciones' },
+      // Programación de personal (turnos). Ver docs/programacion-personal.md.
+      // Publicar está separado de armar a propósito: publicar no es editar.
+      { key: 'ver_programacion',          label: 'Ver la programación de turnos' },
+      { key: 'gestionar_programacion',    label: 'Armar la programación: asignar turnos y cubrir ausencias' },
+      { key: 'publicar_programacion',     label: 'Publicar la semana programada' },
+      { key: 'ver_mi_turno',              label: 'Ver su propio turno (cada colaborador, solo el suyo)' },
+      { key: 'reportar_novedad_turno',    label: 'Reportar en sitio que alguien no llegó' },
+      { key: 'gestionar_novedades_personal', label: 'Aprobar novedades con soporte (incapacidades, permisos, vacaciones)' },
+      { key: 'autorizar_dobladas',        label: 'Autorizar dobladas y préstamos entre contratos' },
+      { key: 'parametrizar_programacion', label: 'Parametrizar puestos, patrones de turno, topes y festivos' },
     ],
   },
   {
