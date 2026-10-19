@@ -59,6 +59,9 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_proveedores',          label: 'Ver proveedores' },
       { key: 'editar_proveedores',       label: 'Editar proveedores' },
       { key: 'ver_ordenes_compra',       label: 'Ver órdenes de compra' },
+      // La solicitud de compra NO es obligatoria: compras puede crear la orden
+      // directo. Este permiso es para quien pide, no para quien compra.
+      { key: 'solicitar_compras',        label: 'Crear solicitudes de compra (requisición)' },
       // Separación de funciones: crear, aprobar y recibir son tres manos
       // distintas. Quien crea una orden no puede aprobarla (lo frena la BD).
       { key: 'crear_ordenes_compra',     label: 'Crear OC (crear, editar, enviar, anular)' },

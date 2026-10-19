@@ -7,6 +7,7 @@ import {
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
+  ShoppingCart,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -79,6 +80,7 @@ export const navigation: NavModule[] = [
       { label: 'Alistamiento',      href: '/alistamiento',      icon: PackageCheck,   permiso: 'ver_alistamiento' },
       { label: 'Proveedores',       href: '/proveedores',       icon: Truck, permiso: 'ver_proveedores' },
       { label: 'Comparar Precios',  href: '/comparador-precios', icon: Scale, permiso: 'ver_proveedores' },
+      { label: 'Solicitudes de Compra', href: '/solicitudes-compra', icon: ShoppingCart, permiso: 'solicitar_compras' },
       { label: 'Órdenes de Compra', href: '/ordenes-compra',    icon: FileText, permiso: 'ver_ordenes_compra' },
       { label: 'Reportes',          href: '/reportes',          icon: BarChart3, permiso: 'ver_reportes' },
     ],
