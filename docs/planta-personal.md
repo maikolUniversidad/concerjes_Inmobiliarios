@@ -169,26 +169,60 @@ Verificado de punta a punta con una cuenta desechable: con la marca, `/dashboard
 la contraseña vieja deja de servir, la marca queda en `false` sin perder el resto
 de la metadata, y la navegación se abre.
 
-### 2. ~78 tablas se leen con `USING (true)`
+### 2. Las lecturas con `USING (true)` — CERRADO
 
 La plataforma se diseñó cuando «autenticado» eran 27 personas de confianza, y
-por eso casi todo se lee sin filtro. Ahora «autenticado» son casi novecientas
-cuentas. Este trabajo cerró las dos tablas que no podían seguir abiertas —
-`personas` y `documentos_persona`, que tienen salario, dirección, teléfono y
-documentos de vinculación de 6.564 personas — atándolas a los permisos de
-Gestión Humana, con la excepción de la ficha propia (es lo que alimenta el
-carnet).
+por eso casi todo se leía sin filtro. Con las 859 cuentas de nómina, «autenticado»
+pasó a ser casi toda la empresa: **83 políticas de lectura abierta**, de las
+cuales 59 solo para cuentas internas. Una cuenta del rol Empleado (cero permisos,
+853 cuentas) leía los 702 productos con su `precio_lista`, el stock, 7.752
+movimientos, 495 órdenes de insumo, 462 precios de proveedor, las 13.458 filas de
+`historial_cambios` (con el antes y el después de cualquier tabla, salarios
+incluidos), el GPS de los conductores y las firmas de quien recibe en sede.
 
-**Siguen abiertas a cualquier autenticado**, entre otras: `movimientos`,
-`productos`, `ordenes_compra`, `oc_items`, `precios_proveedor`,
-`conductor_ubicacion_actual` e `historial_cambios`. Hay que decidir de frente
-qué ve un empleado raso y cerrar el resto con `auth_permiso_any`, o dejarlo por
-escrito como decisión consciente. Se detecta con:
+Primero se cerraron `personas` y `documentos_persona`. Después, en tres
+migraciones (`20261018000000` a `20261018000002`), las **59 restantes**, agrupadas
+por sensibilidad: personas y rastreo, plata y precios, y operación interna. Cada
+tabla exige ahora la lista de permisos de /roles de las pantallas que la leen,
+vía `auth_permiso_any`. Quedan abiertas 25 políticas: las **24 públicas por
+diseño** (portal de aspirantes y cotizador de clientes, con rol `anon`) y
+`presentaciones` (litro, galón, unidad), por decisión consciente.
+
+Tres cosas que había que respetar y quedaron resueltas:
+
+* **`roles` no se podía cerrar sin más.** `lib/permisos-server.ts` resuelve los
+  permisos con el cliente del usuario (`usuarios.select('rol, permisos,
+  roles(permisos)')`) y ese embebido pasa por RLS: sin la cláusula del rol
+  propio, todo usuario no-admin se quedaba sin permisos en la UI.
+* **`/carnet` y `/perfil` no exigen permiso** (son personales): `sedes`,
+  `grupos_contrato`, `roles` y `empresas_usuarias` llevan cláusula de lo propio.
+* Las **tablas de dimensión** (`sedes`, `productos`) se leen desde casi todos los
+  módulos, y los embebidos de PostgREST también pasan por RLS. Por eso sus listas
+  de permisos son largas: recortarlas rompía al Técnico de Mantenimiento (5
+  permisos, necesita `sedes` en `/equipo`) y al Conductor (necesita `productos`
+  en `/logistica/mis-rutas`).
+
+De paso se corrigió `gps_act_write`, que era `ALL ... USING (true OR …)`: dejaba
+leer, actualizar y borrar la posición de cualquier conductor a cualquier cuenta,
+por detrás de la política de SELECT.
+
+Qué ve ahora cada rol se mide con el script nuevo; los otros dos siguen siendo la
+auditoría estática y la de escrituras:
 
 ```bash
+node scripts/verificar-lecturas.mjs
 node scripts/auditar-permisos.mjs
 node scripts/verificar-permisos.mjs
 ```
+
+Pendientes que esto dejó a la vista, para decidir aparte:
+
+* `productos.precio_lista` sigue visible para quien vea el catálogo; separarlo
+  pide seguridad por columna.
+* `pruebas` (el banco de pruebas del ATS) lo lee `anon` desde el portal de
+  aspirantes.
+* `importaciones` acepta `INSERT` de cualquier cuenta autenticada
+  (`auth_insert_importaciones` con `WITH CHECK true`).
 
 ### 3. Fichas por revisar (`vw_planta_inconsistencias`) — 459
 
