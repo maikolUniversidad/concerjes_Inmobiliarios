@@ -339,7 +339,8 @@ function ProductoCard({ fila, faltante, abierto, onToggle, puedeEditar, puedeCre
   return (
     <div className="bg-white border border-gray-100 rounded-2xl shadow-sm overflow-hidden">
       {/* Cabecera */}
-      <button onClick={onToggle} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/70 transition-colors">
+      <div className="flex items-center">
+      <button onClick={onToggle} className="flex min-w-0 flex-1 items-center gap-3 px-4 py-3 text-left hover:bg-gray-50/70 transition-colors">
         {abierto ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />}
         <div className="min-w-0 flex-1">
           <p className="font-body font-semibold text-sm text-gray-900 truncate">{p.nombre_estandar}</p>
@@ -392,18 +393,19 @@ function ProductoCard({ fila, faltante, abierto, onToggle, puedeEditar, puedeCre
               <Award className="w-3 h-3" /> {cop.format(best)}
             </span>
           )}
-          {/* Atajo: en la vista «sin proveedor» lo único que se viene a hacer es
-              asignarlo, así que el botón no se esconde detrás de desplegar. */}
-          {faltante && puedeEditar && (
-            <span role="button" tabIndex={0}
-              onClick={(e) => { e.stopPropagation(); onAgregar() }}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); onAgregar() } }}
-              className="inline-flex cursor-pointer items-center gap-1 rounded-lg border border-orange-300 bg-white px-2 py-1 font-body text-[11px] font-semibold text-orange-800 transition-colors hover:bg-orange-100">
-              <Plus className="h-3 w-3" /> Asignar
-            </span>
-          )}
         </div>
       </button>
+        {/* Atajo: en la vista «sin proveedor» lo único que se viene a hacer es
+            asignarlo, así que no se esconde detrás de desplegar la tarjeta. Va
+            FUERA del botón de desplegar: un <button> no puede contener otro
+            control, y anidarlo rompe el foco de teclado y los lectores. */}
+        {faltante && puedeEditar && (
+          <button type="button" onClick={onAgregar}
+            className="mr-3 inline-flex shrink-0 items-center gap-1 rounded-lg border border-orange-300 bg-white px-2 py-1 font-body text-[11px] font-semibold text-orange-800 transition-colors hover:bg-orange-100">
+            <Plus className="h-3 w-3" /> Asignar
+          </button>
+        )}
+      </div>
 
       {/* Detalle: precios por proveedor */}
       {abierto && (

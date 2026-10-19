@@ -28,10 +28,13 @@ export default async function ComparadorPreciosPage() {
     // en el comparador y sin proveedor en la ficha. La vista trae además cuánto
     // se pidió y cuánto se movió en 6 meses, para poder empezar por los que
     // pesan en vez de por los primeros alfabéticamente.
-    supabase
+    // Paginado como el resto: PostgREST corta en 1.000 filas por respuesta y hoy
+    // son 178, pero el tope es del servidor y no avisa cuando lo alcanza.
+    traerTodo((desde, hasta) => supabase
       .from('v_productos_sin_proveedor')
       .select('producto_id, pedido_6m, movimientos_6m, recomendado')
-      .order('producto_id'),
+      .order('producto_id')
+      .range(desde, hasta), { etiqueta: 'Productos sin proveedor' }).then((data) => ({ data })),
   ])
 
   // numeric → Number: PostgREST devuelve los numeric como texto.

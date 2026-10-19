@@ -425,6 +425,16 @@ El selector igual quedó **ordenando los proveedores por cuántos productos usan
 
 Nota aparte: el botón «Sincronizar N de fichas» que ya existía en esa pantalla tiene hoy **182 precios por pasar** de las fichas de producto al comparador. Eso no toca a los 178 (que no tienen ni ficha), pero es trabajo hecho que no está rindiendo.
 
+### Un proveedor desactivado ya no se sugiere (migración `20261019000003`)
+
+Al revisar juntas esta sección y la fusión de la 12 apareció que **nada filtraba por `proveedores.activo`**: `compras_precio_sugerido()` tomaba el precio vigente más barato fuera de quien fuera, y `v_productos_sin_proveedor` daba por resuelto un producto cuyo único proveedor estuviera desactivado. Hasta ese día daba igual, porque los 32 proveedores estaban activos.
+
+Dejó de dar igual con la fusión: ahora hay 20 desactivados, y «eliminar» un proveedor en `/proveedores` **no borra, pone `activo = false`**. El día que alguien elimine uno que todavía tiene sus precios en el comparador, el sistema seguiría proponiéndolo y `sc_convertir_a_oc()` armaría la orden contra un proveedor que para el usuario ya no existe.
+
+La migración lo corrige en los dos sitios a la vez, que es el punto: si solo se arreglara uno, la pantalla y la conversión dirían cosas distintas del mismo producto. No cambió ni un dato al aplicarla —hoy no hay una sola referencia a un proveedor desactivado—, es para que siga siendo verdad.
+
+**Lo encontró la prueba, no la lectura:** la primera versión agregaba el `LEFT JOIN proveedores … AND pr.activo` pero seguía devolviendo `productos.proveedor_id` en vez de `pr.id`, así que el join no filtraba nada y la función seguía sugiriendo al desactivado mientras la vista ya lo daba por huérfano — justo la incoherencia que venía a quitar. `node --use-system-ca scripts/probar-proveedor-activo.mjs` lo comprueba desactivando de verdad un proveedor dentro de una transacción que revierte.
+
 ### Lo que falta para que la fase 2 sirva de verdad
 
 1. ~~Limpiar los proveedores duplicados~~ — **hecho** (sección 12): la base pasó de 32 activos para 12 nombres a 12 sin repetidos, con un índice único que impide que vuelva a pasar. Era lo primero porque asignar proveedores sobre una lista con cuatro «BEAUTE» ensucia más de lo que arregla.
