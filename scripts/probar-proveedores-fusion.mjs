@@ -28,7 +28,7 @@ if (!m) { console.error('No se encontró DIRECT_URL en .env.local'); process.exi
 // cuando se aplica de verdad. Si alguien le agrega un BEGIN/COMMIT a la
 // migración, se le quitan aquí para que el ROLLBACK del final alcance a
 // revertirla.
-const MIGRACION = join(raiz, 'supabase', 'migrations', '20261019000004_proveedores_fusionar_duplicados.sql')
+const MIGRACION = join(raiz, 'supabase', 'migrations', '20261019000002_proveedores_fusionar_duplicados.sql')
 const sqlMigracion = readFileSync(MIGRACION, 'utf8')
   .replace(/^[ \t]*BEGIN[ \t]*;[ \t]*$/gim, '')
   .replace(/^[ \t]*COMMIT[ \t]*;[ \t]*$/gim, '')
