@@ -1,7 +1,7 @@
 import type { Metadata } from 'next'
 import { Suspense } from 'react'
 import { createClient } from '@/lib/supabase/server'
-import { traerTodo, traerTodoPorIds } from '@/lib/supabase/paginado'
+import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario, requirePermiso } from '@/lib/permisos-server'
 import type { Categoria, Etiqueta } from '@/lib/clasificacion'
 import { sedesPorClasificacion, leerFiltroClasif, cargarEtiquetas } from '@/lib/clasificacion-server'
@@ -10,8 +10,7 @@ import { FiltroClasificacion } from '@/components/clasificacion/FiltroClasificac
 import { FiltroSemana } from '@/components/filtros/FiltroSemana'
 import { OrdenesInsumoClient, type OrdenRow } from './OrdenesInsumoClient'
 import { PlantillaDownload, type SedeItem } from './PlantillaDownload'
-import { SobrePedidos, type ProductoSobrePedido } from './SobrePedidos'
-import { ordenarPorItem } from '@/lib/stock-reservas'
+import { SobrePedidosPanel } from './SobrePedidosPanel'
 
 export const metadata: Metadata = { title: 'Órdenes de Insumo' }
 export const dynamic = 'force-dynamic'
@@ -21,29 +20,40 @@ export default async function OrdenesInsumoPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>
 }) {
-  await requirePermiso('ver_ordenes_insumo')
+  const perm = await requirePermiso('ver_ordenes_insumo')
   const supabase = await createClient()
-  const perm = await getPermisosUsuario()
   const sp = await searchParams
 
-  const { data: { user } } = await supabase.auth.getUser()
-
   const filtro = leerFiltroClasif(sp)
-  const sedeIds = await sedesPorClasificacion(supabase, filtro)
   const semana = rangoSemana(typeof sp.semana === 'string' ? sp.semana : null)
 
-  // Listado de órdenes, paginado: PostgREST devuelve máximo 1.000 filas por
-  // respuesta y los filtros de la pantalla se aplican en cliente sobre el total.
-  const ordQuery = (desde: number, hasta: number) => {
+  // ── Listado de órdenes ─────────────────────────────────────────────────────
+  // Una fila por orden, con los contadores (ítems, alistados, sin stock,
+  // responsables, comentarios, nivel de reposición, nombre del creador) ya
+  // resueltos en SQL por `v_ordenes_insumo_lista`.
+  //
+  // Antes esto eran ~8 peticiones encadenadas, y la primera se traía los ~10.000
+  // ítems de todas las órdenes con su producto y su stock anidados (2,4 MB) solo
+  // para contar tres números por orden. Esa consulta promediaba 617 ms con picos
+  // de 7,9 s; como `authenticated` tiene statement_timeout = 8 s, cuando la base
+  // estaba ocupada se pasaba del tope, PostgREST devolvía 500 y la pantalla caía
+  // en el aviso de "Esta pantalla no se pudo cargar".
+  //
+  // Sigue paginado: PostgREST corta toda respuesta en 1.000 filas y los filtros
+  // de la pantalla se aplican en cliente sobre el total.
+  // El filtro de clasificación necesita saber antes qué sedes entran; sin filtro
+  // activo devuelve null y no se consulta nada.
+  const sedeIds = await sedesPorClasificacion(supabase, filtro)
+
+  const listado = (desde: number, hasta: number) => {
     let q = supabase
-      .from('ordenes_insumo')
+      .from('v_ordenes_insumo_lista')
       .select(`
-        id, numero, estado, periodo, created_at, despachado_at, observacion,
-        alistamiento_iniciado_at, alistado_at, tomado_ruta_at, recibido_at,
-        fecha_entrega_pactada, urgente, creado_por, orden_origen_id,
-        sede:sedes ( nombre ),
-        items:orden_insumo_items ( id, alistado, cantidad_solicitada, cantidad_alistada, cantidad_a_pendiente, producto:productos ( stock ( cantidad_disp ) ) ),
-        responsables:orden_insumo_responsables ( usuario_id )
+        id, numero, estado, sede, created_at, despachado_at, alistado_at,
+        tomado_ruta_at, recibido_at, fecha_entrega_pactada, urgente,
+        creador_id, creador_nombre, observacion, total_items, alistados,
+        sin_stock, responsables, comentarios, ultimo_comentario,
+        comentario_autor, reposicion
       `)
       .order('created_at', { ascending: false })
       .order('id')
@@ -52,8 +62,8 @@ export default async function OrdenesInsumoPage({
     return q.range(desde, hasta)
   }
 
-  const [data, { data: sedesData }, { data: misSedes }, { categorias, etiquetas }] = await Promise.all([
-    traerTodo(ordQuery),
+  const [data, sedesData, misSedesData, { categorias, etiquetas }] = await Promise.all([
+    traerTodo<OrdenRow>(listado),
 
     // Todas las sedes activas para el selector de plantilla
     traerTodo((desde, hasta) => supabase
@@ -61,106 +71,48 @@ export default async function OrdenesInsumoPage({
       .select('id, nombre, grupo:grupos_contrato ( nombre )')
       .eq('activo', true)
       .order('nombre').order('id')
-      .range(desde, hasta)).then((data) => ({ data })),
+      .range(desde, hasta)),
 
-    // Sedes donde el usuario actual es responsable (para pre-selección)
-    user
-      ? supabase
-          .from('orden_insumo_responsables')
-          .select('orden:ordenes_insumo ( sede_id )')
-          .eq('usuario_id', user.id)
-      : Promise.resolve({ data: [] }),
+    // Sedes donde el usuario actual es responsable (para pre-selección en la
+    // plantilla). `auth.getUser()` es una llamada de red más, así que se
+    // resuelve en paralelo con el resto y no antes.
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return []
+      const { data } = await supabase
+        .from('orden_insumo_responsables')
+        .select('orden:ordenes_insumo ( sede_id )')
+        .eq('usuario_id', user.id)
+      return data ?? []
+    })(),
 
     // Categorías + etiquetas para el filtro de clasificación
     cargarEtiquetas(supabase),
   ])
 
-  // Nombres de los usuarios (para resolver "creado por"): la vista usuarios_opciones
-  // evita la RLS de `usuarios`, así que cualquier autenticado puede resolver el nombre.
-  const { data: usuariosData } = await supabase.from('usuarios_opciones').select('id, nombre')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const nombrePorUsuario = new Map(((usuariosData ?? []) as any[]).map((u) => [u.id, u.nombre]))
-
-  // ── Comentarios del pedido ─────────────────────────────────────────────────
-  // La tabla muestra en una columna la novedad escrita al crear la orden y los
-  // comentarios de la trazabilidad. Se leen en lote (y paginados) para no hacer
-  // una consulta por orden.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ordenIds = (data as any[]).map((o) => o.id as string)
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const comentariosRows = ordenIds.length
-    ? await traerTodoPorIds<any>(ordenIds, (lote, desde, hasta) =>
-        supabase
-          .from('orden_insumo_eventos')
-          .select('id, orden_id, mensaje, usuario_nombre, created_at')
-          .eq('tipo', 'COMENTARIO')
-          .in('orden_id', lote)
-          .order('created_at', { ascending: true })
-          .order('id')
-          .range(desde, hasta),
-        { tamanoLote: 120, etiqueta: 'No se pudieron leer los comentarios' },
-      )
-    : []
-
-  const comentariosPorOrden = new Map<string, { total: number; ultimo: string | null; autor: string | null }>()
-  for (const c of comentariosRows) {
-    const previo = comentariosPorOrden.get(c.orden_id) ?? { total: 0, ultimo: null, autor: null }
-    const mensaje = (c.mensaje ?? '').trim()
-    comentariosPorOrden.set(c.orden_id, {
-      total: previo.total + 1,
-      // Van en orden ascendente: el último que trae texto es el más reciente.
-      ultimo: mensaje || previo.ultimo,
-      autor: mensaje ? (c.usuario_nombre ?? null) : previo.autor,
-    })
-  }
-
-  // ── Reposiciones ───────────────────────────────────────────────────────────
-  // Nivel en la cadena de pendientes (1 = de la orden original, 2 = de una
-  // pendiente…). Se leen todas las reposiciones (no solo las del filtro) para
-  // que el número salga bien aunque la orden de origen quede fuera de la vista.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const reposRows = await traerTodo<any>((desde, hasta) => supabase
-    .from('ordenes_insumo').select('id, orden_origen_id')
-    .not('orden_origen_id', 'is', null).order('id').range(desde, hasta))
-  const origenDe = new Map<string, string>(reposRows.map((r) => [r.id as string, r.orden_origen_id as string]))
-  const nivelReposicion = (id: string) => {
-    let n = 0
-    let actual: string | undefined = id
-    while (actual && origenDe.has(actual) && n < 20) { n++; actual = origenDe.get(actual) }
-    return n
-  }
-
-  // Lo que pasó a una reposición ya no cuenta como ítem de la orden de origen.
-  type ItemLista = { alistado: boolean; cantidad_solicitada: number; cantidad_alistada: number; cantidad_a_pendiente: number | null; producto?: { stock?: { cantidad_disp: number } | null } | null }
-  const itemsPropios = (items: ItemLista[] | null | undefined) => (items ?? []).filter((i) =>
-    !(Number(i.cantidad_a_pendiente ?? 0) > 0 && Number(i.cantidad_alistada ?? 0) <= 0
-      && Number(i.cantidad_solicitada ?? 0) <= Number(i.cantidad_a_pendiente ?? 0)))
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const ordenes: OrdenRow[] = (data as any[]).map((o) => ({
+  const ordenes: OrdenRow[] = data.map((o) => ({
     id: o.id,
     numero: o.numero,
     estado: o.estado,
-    sede: o.sede?.nombre ?? '—',
+    sede: o.sede ?? '—',
     created_at: o.created_at,
     despachado_at: o.despachado_at,
     alistado_at: o.alistado_at ?? null,
     tomado_ruta_at: o.tomado_ruta_at ?? null,
     recibido_at: o.recibido_at ?? null,
-    total_items: itemsPropios(o.items).length,
-    alistados: itemsPropios(o.items).filter((i) => i.alistado).length,
-    // Ítems cuyo producto quedó con disponible real negativo (sobre-pedido).
-    sin_stock: itemsPropios(o.items).filter((i) => Number(i.producto?.stock?.cantidad_disp ?? 0) < 0).length,
-    reposicion: o.orden_origen_id ? nivelReposicion(o.id) : 0,
-    responsables: o.responsables?.length ?? 0,
+    total_items: Number(o.total_items ?? 0),
+    alistados: Number(o.alistados ?? 0),
+    sin_stock: Number(o.sin_stock ?? 0),
+    reposicion: Number(o.reposicion ?? 0),
+    responsables: Number(o.responsables ?? 0),
     fecha_entrega_pactada: o.fecha_entrega_pactada ?? null,
     urgente: !!o.urgente,
-    creador_id: o.creado_por ?? null,
-    creador_nombre: (o.creado_por && nombrePorUsuario.get(o.creado_por)) || null,
-    observacion: (o.observacion ?? '').trim() || null,
-    comentarios: comentariosPorOrden.get(o.id)?.total ?? 0,
-    ultimo_comentario: comentariosPorOrden.get(o.id)?.ultimo ?? null,
-    comentario_autor: comentariosPorOrden.get(o.id)?.autor ?? null,
+    creador_id: o.creador_id ?? null,
+    creador_nombre: o.creador_nombre ?? null,
+    observacion: o.observacion ?? null,
+    comentarios: Number(o.comentarios ?? 0),
+    ultimo_comentario: o.ultimo_comentario ?? null,
+    comentario_autor: o.comentario_autor ?? null,
   }))
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -173,77 +125,8 @@ export default async function OrdenesInsumoPage({
   // IDs únicos de sedes donde el usuario es responsable
   const miSedesIds = [...new Set(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ((misSedes ?? []) as any[]).map((r) => r.orden?.sede_id).filter(Boolean) as string[]
+    ((misSedesData ?? []) as any[]).map((r) => r.orden?.sede_id).filter(Boolean) as string[]
   )]
-
-  // ── Productos sobre-pedidos ────────────────────────────────────────────────
-  // Disponible proyectado = stock real − lo pedido en órdenes que aún NO salen
-  // de bodega (v_stock_proyectado). Si es negativo, se pidió de más.
-  //
-  // Ojo con dos cosas al leer el reporte:
-  //  1) el faltante NO es la suma de las órdenes: es esa suma MENOS el stock;
-  //  2) el detalle se pagina (traerTodoPorIds), porque PostgREST corta en 1.000
-  //     filas por respuesta y con ~130 productos en déficit el detalle pasa de
-  //     las 2.800 filas: sin paginar, el Excel salía con órdenes faltantes.
-  // Todos los productos en déficit (paginado), ordenados por ítem y luego
-  // alfabético: el código del ítem se lee de `productos` (la vista no lo trae).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const deficitRows = await traerTodo<any>((desde, hasta) => supabase
-    .from('v_stock_proyectado')
-    .select('producto_id, nombre_estandar, presentacion, stock_real, comprometido, disponible')
-    .lt('disponible', 0)
-    .order('producto_id')
-    .range(desde, hasta))
-  const codigoPorProducto = new Map<string, number | null>()
-  if (deficitRows.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const cods = await traerTodoPorIds<any>(deficitRows.map((r) => r.producto_id), (lote, desde, hasta) =>
-      supabase.from('productos').select('id, codigo').in('id', lote).order('id').range(desde, hasta))
-    for (const c of cods) codigoPorProducto.set(c.id, c.codigo ?? null)
-  }
-  const deficit = ordenarPorItem(deficitRows, (r) => ({ codigo: codigoPorProducto.get(r.producto_id) ?? null, nombre: r.nombre_estandar }))
-  const deficitIds = deficit.map((r) => r.producto_id)
-  let sobrePedidos: ProductoSobrePedido[] = []
-
-  if (deficitIds.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const filas = await traerTodoPorIds<any>(deficitIds, (lote, desde, hasta) =>
-      supabase
-        .from('v_demanda_ordenes_insumo')
-        .select('producto_id, orden_id, orden_numero, estado, sede_nombre, cantidad_solicitada')
-        .in('producto_id', lote)
-        // `item_id` es la clave única de la vista: sin un desempate único, la
-        // paginación por OFFSET repite o pierde filas en el borde de la página
-        // (una misma orden aporta una fila por producto, todas con igual
-        // created_at y orden_id).
-        .order('created_at', { ascending: false })
-        .order('item_id')
-        .range(desde, hasta),
-    )
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const demMap = new Map<string, any[]>()
-    for (const d of filas) {
-      if (!demMap.has(d.producto_id)) demMap.set(d.producto_id, [])
-      demMap.get(d.producto_id)!.push(d)
-    }
-
-    sobrePedidos = deficit.map((r) => {
-      const ordenes = (demMap.get(r.producto_id) ?? []).map((d: { orden_id: string; orden_numero: string; estado: string; sede_nombre: string | null; cantidad_solicitada: number }) => ({
-        orden_id: d.orden_id, numero: d.orden_numero, estado: d.estado, sede: d.sede_nombre, cantidad: Number(d.cantidad_solicitada),
-      }))
-      ordenes.sort((a, b) => a.numero.localeCompare(b.numero, 'es', { numeric: true }))
-      return {
-        producto_id: r.producto_id,
-        codigo: codigoPorProducto.get(r.producto_id) ?? null,
-        nombre: r.nombre_estandar ?? 'Producto',
-        presentacion: r.presentacion ?? null,
-        stock_real: Number(r.stock_real),
-        comprometido: Number(r.comprometido),
-        disponible: Number(r.disponible),
-        ordenes,
-      }
-    })
-  }
 
   return (
     <div className="p-4 sm:p-6 space-y-5">
@@ -266,7 +149,10 @@ export default async function OrdenesInsumoPage({
           extras={[{ clave: 'semana', grupo: 'Semana', formato: 'semana' }]}
         />
       </Suspense>
-      <SobrePedidos items={sobrePedidos} />
+      {/* Llega en streaming: la tabla de abajo no espera a que esto termine. */}
+      <Suspense fallback={null}>
+        <SobrePedidosPanel />
+      </Suspense>
       <OrdenesInsumoClient
         ordenes={ordenes}
         puedeCrear={perm.puede('crear_ordenes_insumo')}

@@ -26,10 +26,6 @@ interface ProductoDash {
   stock: { cantidad_real: number; cantidad_disp: number } | null
 }
 
-function startOfDay(offsetDays = 0) {
-  const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - offsetDays); return d
-}
-
 export default async function DashboardPage() {
   const supabase = await createClient()
   const perm = await getPermisosUsuario()
@@ -44,61 +40,75 @@ export default async function DashboardPage() {
     redirect('/carnet')
   }
 
-  // ── Pedidos (pipeline de órdenes de insumo) ──────────────────────────────
-  let ped = { porAlistar: 0, enAlistamiento: 0, listos: 0, porEntregar: 0, recibidos: 0 }
-  let pedidosBodega: PedidoFila[] = []
-  let responsables: Record<string, string[]> = {}
-  if (verPedidos) {
-    // Paginado: se cuentan TODAS las órdenes y PostgREST corta en 1.000 filas.
-    const est = await traerTodo<{ estado: string }>((desde, hasta) =>
-      supabase.from('ordenes_insumo').select('estado').order('id').range(desde, hasta))
-    const e = est.map((r) => r.estado)
-    const c = (fn: (s: string) => boolean) => e.filter(fn).length
-    ped = {
-      porAlistar:     c((s) => s === 'APROBADA' || s === 'PENDIENTE'),
-      enAlistamiento: c((s) => s === 'EN_ALISTAMIENTO'),
-      listos:         c((s) => s === 'ALISTADO'),
-      porEntregar:    c((s) => s === 'DESPACHADO' || s === 'EN_RUTA' || s === 'ENTREGADO'),
-      recibidos:      c((s) => s === 'RECIBIDO'),
-    }
+  // Las tres secciones del tablero no dependen una de otra, así que se piden a
+  // la vez. Antes iban encadenadas con `await` y la página tardaba la SUMA de
+  // todas (y cada viaje a Supabase se paga entero, ida y vuelta).
+  const [estadosRes, activasRes, productos, diasRes] = await Promise.all([
+    // Cuentas por estado: las hace la base (v_ordenes_insumo_por_estado). Antes
+    // se traía una fila por cada orden que existe solo para contarlas.
+    verPedidos
+      ? supabase.from('v_ordenes_insumo_por_estado').select('estado, total')
+      : Promise.resolve({ data: [] }),
 
     // Órdenes en curso (bodega + en camino): se siguen hasta que la sede recibe.
-    const { data: act } = await supabase
-      .from('ordenes_insumo')
-      .select('id, numero, estado, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado )')
-      .in('estado', ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO'])
-      .order('aprobado_at', { ascending: false, nullsFirst: false })
-      .limit(100)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    pedidosBodega = ((act ?? []) as any[]).map((o) => ({
-      id: o.id, numero: o.numero, estado: o.estado,
-      sede: o.sede?.nombre ?? null,
-      total: o.items?.length ?? 0,
-      listos: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
-    }))
+    verPedidos
+      ? supabase
+          .from('ordenes_insumo')
+          .select('id, numero, estado, aprobado_at, sede:sede_id ( nombre ), items:orden_insumo_items ( alistado )')
+          .in('estado', ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO'])
+          .order('aprobado_at', { ascending: false, nullsFirst: false })
+          .limit(100)
+      : Promise.resolve({ data: [] }),
 
-    if (pedidosBodega.length > 0) {
-      const { data: resp } = await supabase
-        .from('responsables_opciones')
-        .select('orden_id, nombre')
-        .in('orden_id', pedidosBodega.map((p) => p.id))
-      for (const r of ((resp ?? []) as { orden_id: string; nombre: string }[])) {
-        (responsables[r.orden_id] ??= []).push(r.nombre)
-      }
+    // Inventario. Paginado: el valor del inventario suma el catálogo COMPLETO.
+    verInventario
+      ? (traerTodo((desde, hasta) => supabase
+          .from('productos')
+          .select('id, codigo, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
+          .eq('activo', true)
+          .order('id')
+          .range(desde, hasta)) as unknown as Promise<ProductoDash[]>)
+      : Promise.resolve([] as ProductoDash[]),
+
+    // Movimientos ya agrupados por día (14 filas en vez de ~1.400).
+    verMovs
+      ? supabase.from('v_movimientos_dia').select('dia, entradas, salidas, n_entradas, n_salidas, n_total')
+      : Promise.resolve({ data: [] }),
+  ])
+
+  // ── Pedidos (pipeline de órdenes de insumo) ──────────────────────────────
+  const porEstado = new Map(
+    ((estadosRes.data ?? []) as { estado: string; total: number }[]).map((r) => [r.estado, Number(r.total)]),
+  )
+  const sumar = (...estados: string[]) => estados.reduce((a, e) => a + (porEstado.get(e) ?? 0), 0)
+  const ped = {
+    porAlistar:     sumar('APROBADA', 'PENDIENTE'),
+    enAlistamiento: sumar('EN_ALISTAMIENTO'),
+    listos:         sumar('ALISTADO'),
+    porEntregar:    sumar('DESPACHADO', 'EN_RUTA', 'ENTREGADO'),
+    recibidos:      sumar('RECIBIDO'),
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pedidosBodega: PedidoFila[] = ((activasRes.data ?? []) as any[]).map((o) => ({
+    id: o.id, numero: o.numero, estado: o.estado,
+    sede: o.sede?.nombre ?? null,
+    total: o.items?.length ?? 0,
+    listos: (o.items ?? []).filter((i: { alistado: boolean }) => i.alistado).length,
+  }))
+
+  const responsables: Record<string, string[]> = {}
+  if (pedidosBodega.length > 0) {
+    const { data: resp } = await supabase
+      .from('responsables_opciones')
+      .select('orden_id, nombre')
+      .in('orden_id', pedidosBodega.map((p) => p.id))
+    for (const r of ((resp ?? []) as { orden_id: string; nombre: string }[])) {
+      (responsables[r.orden_id] ??= []).push(r.nombre)
     }
   }
 
   // ── Inventario (productos + stock) ───────────────────────────────────────
-  let productos: ProductoDash[] = []
-  if (verInventario) {
-    // Paginado: el valor del inventario suma el catálogo COMPLETO.
-    productos = (await traerTodo((desde, hasta) => supabase
-      .from('productos')
-      .select('id, codigo, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
-      .eq('activo', true)
-      .order('id')
-      .range(desde, hasta))) as unknown as ProductoDash[]
-  }
   // "Con cuánto se cuenta" = DISPONIBLE REAL (stock real − lo reservado por
   // pedidos aprobados sin despachar; lo fija la BD en stock.cantidad_disp).
   // El crítico se mide contra el disponible; las unidades y el valor del
@@ -114,31 +124,39 @@ export default async function DashboardPage() {
   const valorInventario = productos.reduce((a, p) => a + realDe(p) * Number(p.precio_lista ?? 0), 0)
 
   // ── Movimientos (14 días + hoy) ──────────────────────────────────────────
-  let movs: { tipo: string; cantidad: number; created_at: string }[] = []
-  if (verMovs) {
-    // Paginado: 14 días de movimientos pueden pasar de las 1.000 filas.
-    movs = (await traerTodo((desde, hasta) => supabase
-      .from('movimientos')
-      .select('tipo, cantidad, created_at')
-      .gte('created_at', startOfDay(13).toISOString())
-      .order('id')
-      .range(desde, hasta))) as unknown as typeof movs
-  }
-  const hoy = startOfDay(0)
-  const movsHoy = movs.filter((m) => new Date(m.created_at) >= hoy)
-  const entradasHoy = movsHoy.filter((m) => m.tipo === 'ENTRADA' || m.tipo === 'DEVOLUCION').length
-  const salidasHoy = movsHoy.filter((m) => m.tipo === 'SALIDA').length
+  // Las sumas por día las hace la vista v_movimientos_dia, y corta el día en
+  // hora de Bogotá. Antes se traían los ~1.400 movimientos de 14 días y se
+  // agrupaban aquí con la hora DEL SERVIDOR, que en Vercel es UTC: entre las
+  // 7 y las 12 de la noche, lo de esa noche se contaba como del día siguiente.
+  const porDia = new Map(
+    ((diasRes.data ?? []) as { dia: string; entradas: number; salidas: number; n_entradas: number; n_salidas: number; n_total: number }[])
+      .map((r) => [String(r.dia).slice(0, 10), r]),
+  )
+
+  const fechaBogota = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
+  })
+  const hoyISO = fechaBogota.format(new Date())
+  // Mediodía UTC como ancla: restar días enteros nunca cae en otro día.
+  const ancla = new Date(`${hoyISO}T12:00:00Z`)
 
   const dias: ChartPoint[] = []
   for (let i = 13; i >= 0; i--) {
-    const d = startOfDay(i); const next = startOfDay(i - 1)
-    const r = movs.filter((m) => { const t = new Date(m.created_at); return t >= d && t < next })
+    const d = new Date(ancla)
+    d.setUTCDate(d.getUTCDate() - i)
+    const iso = d.toISOString().slice(0, 10)
+    const fila = porDia.get(iso)
+    const [, mm, dd] = iso.split('-')
     dias.push({
-      dia: d.toLocaleDateString('es-CO', { day: '2-digit', month: '2-digit' }),
-      entradas: r.filter((m) => m.tipo === 'ENTRADA' || m.tipo === 'DEVOLUCION').reduce((a, m) => a + Number(m.cantidad), 0),
-      salidas: r.filter((m) => m.tipo === 'SALIDA').reduce((a, m) => a + Number(m.cantidad), 0),
+      dia: `${dd}/${mm}`,
+      entradas: Number(fila?.entradas ?? 0),
+      salidas: Number(fila?.salidas ?? 0),
     })
   }
+
+  const entradasHoy = Number(porDia.get(hoyISO)?.n_entradas ?? 0)
+  const salidasHoy = Number(porDia.get(hoyISO)?.n_salidas ?? 0)
+  const movimientosHoy = Number(porDia.get(hoyISO)?.n_total ?? 0)
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -197,7 +215,7 @@ export default async function DashboardPage() {
           </h2>
           <div className="grid lg:grid-cols-3 gap-5">
             <div className="grid grid-cols-2 lg:grid-cols-1 gap-4 lg:col-span-1">
-              <Kpi label="Movimientos hoy" value={movsHoy.length} sub={`${entradasHoy} entradas · ${salidasHoy} salidas`} icon={ArrowLeftRight} color="bg-green-50 text-green-600" href="/movimientos" />
+              <Kpi label="Movimientos hoy" value={movimientosHoy} sub={`${entradasHoy} entradas · ${salidasHoy} salidas`} icon={ArrowLeftRight} color="bg-green-50 text-green-600" href="/movimientos" />
               <Link href="/ia/asistente" className="rounded-2xl bg-gradient-to-br from-brand-green to-brand-green-mid p-5 text-white shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between">
                 <div className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-green-300" /><span className="font-heading font-semibold text-sm">Asistente IA</span></div>
                 <p className="font-body text-xs text-green-100 mt-2">Pregunta sobre el inventario en lenguaje natural →</p>
