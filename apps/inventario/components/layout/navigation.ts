@@ -7,7 +7,7 @@ import {
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
-  ShoppingCart,
+  ShoppingCart, ListChecks, BookOpen, CalendarClock,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -104,6 +104,12 @@ export const navigation: NavModule[] = [
       // reglas dependen los puntos, los QR y las tareas. Va aparte de
       // /contratos, que clasifica sedes para inventario.
       { label: 'Contratos', href: '/rondas/contratos', icon: FileSignature, permiso: 'ver_contratos_conserjeria' },
+      // El catálogo de trabajo: qué actividades existen, cómo se hace cada una
+      // paso a paso, con qué material se explica y dónde y cuándo se hace.
+      { label: 'Actividades',  href: '/rondas/catalogo',     icon: ListChecks,    permiso: 'ver_catalogo_rondas' },
+      { label: 'Plantillas',   href: '/rondas/plantillas',   icon: ClipboardList, permiso: 'ver_catalogo_rondas' },
+      { label: 'Instructivos', href: '/rondas/instructivos', icon: BookOpen,      permiso: 'ver_catalogo_rondas' },
+      { label: 'Asignaciones', href: '/rondas/asignaciones', icon: CalendarClock, permiso: 'ver_asignaciones_rondas' },
     ],
   },
   {

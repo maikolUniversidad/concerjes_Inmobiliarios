@@ -173,6 +173,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería (vigencia, servicios, reglas)' },
       { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería: vigencia, prórrogas, servicios y reglas' },
       { key: 'ver_panel_gerencia',             label: 'Ver panel de gerencia' },
+      // Catálogo de trabajo de los Puntos QR. Ojo: `gestionar_tipos_servicio`
+      // es de Servicios del Hogar y `gestionar_rutas` es de Logística; ninguna
+      // sirve aquí. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md §2.
+      { key: 'ver_catalogo_rondas',            label: 'Ver el catálogo de tareas: actividades, plantillas e instructivos' },
+      { key: 'gestionar_catalogo_rondas',      label: 'Crear, publicar y versionar plantillas de tarea e instructivos' },
+      { key: 'ver_asignaciones_rondas',        label: 'Ver qué tareas aplican en cada punto de control' },
+      { key: 'gestionar_asignaciones_rondas',  label: 'Asignar tareas a puntos: frecuencia, ventana, responsable y ANS' },
     ],
   },
   {
