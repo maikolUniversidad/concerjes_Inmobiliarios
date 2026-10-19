@@ -24,9 +24,11 @@ const env = readFileSync(join(raiz, '.env.local'), 'utf8')
 const m = env.match(/^DIRECT_URL="?([^"\n]+)"?/m)
 if (!m) { console.error('No se encontró DIRECT_URL en .env.local'); process.exit(1) }
 
-// La migración trae su propio BEGIN/COMMIT: aquí se le quitan para que corra
-// dentro de la transacción de prueba y el ROLLBACK alcance a revertirla.
-const MIGRACION = join(raiz, 'supabase', 'migrations', '20261019000002_proveedores_fusionar_duplicados.sql')
+// La transacción la pone esta prueba, igual que se la pone apply-migrations.mjs
+// cuando se aplica de verdad. Si alguien le agrega un BEGIN/COMMIT a la
+// migración, se le quitan aquí para que el ROLLBACK del final alcance a
+// revertirla.
+const MIGRACION = join(raiz, 'supabase', 'migrations', '20261019000004_proveedores_fusionar_duplicados.sql')
 const sqlMigracion = readFileSync(MIGRACION, 'utf8')
   .replace(/^[ \t]*BEGIN[ \t]*;[ \t]*$/gim, '')
   .replace(/^[ \t]*COMMIT[ \t]*;[ \t]*$/gim, '')

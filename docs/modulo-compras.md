@@ -439,7 +439,7 @@ La etiqueta «Interna» de `/bodegas` no se verificó en el navegador: esa panta
 
 ## 13. Proveedores duplicados, fusionados (2026-10-19)
 
-La migración `supabase/migrations/20261019000002_proveedores_fusionar_duplicados.sql` **ya está aplicada** en la base. No cambia ninguna decisión de compras: es la limpieza de datos que la fase 2 dejó al descubierto.
+La migración `supabase/migrations/20261019000004_proveedores_fusionar_duplicados.sql` **ya está aplicada** en la base. No cambia ninguna decisión de compras: es la limpieza de datos que la fase 2 dejó al descubierto.
 
 **El problema.** La tabla tenía **32 proveedores activos para solo 12 nombres distintos**. Cada proveedor real estaba repetido hasta cuatro veces, y en cada grupo solo UNO tenía los datos. En `/comparador-precios` y en cualquier pantalla que deje elegir proveedor la lista mostraba cuatro entradas idénticas, así que quien asignaba un precio escogía al azar: el precio quedaba colgado de un registro que nadie consulta, y `compras_precio_sugerido()` podía terminar armando la orden contra un duplicado vacío. Con 273 productos activos sin proveedor por asignar a mano, eso se iba a ensuciar más cada semana.
 

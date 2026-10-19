@@ -16,8 +16,11 @@
 --
 -- Es idempotente: en la segunda corrida ya no hay grupos con más de un activo,
 -- así que no toca nada.
-
-BEGIN;
+--
+-- Sin BEGIN/COMMIT a propósito, como el resto de las migraciones del repo:
+-- scripts/apply-migrations.mjs ya envuelve cada archivo en su transacción y
+-- hace ROLLBACK si algo falla. Anidar otra aquí dejaría al script sin nada que
+-- revertir.
 
 -- ── 1. El registro bueno de cada grupo ────────────────────────────────────────
 -- Criterio: el que tiene más referencias; a igualdad, el más antiguo (y el id
@@ -141,5 +144,3 @@ UPDATE proveedores
 CREATE UNIQUE INDEX IF NOT EXISTS proveedores_nombre_activo_key
     ON proveedores (upper(btrim(nombre)))
  WHERE activo;
-
-COMMIT;
