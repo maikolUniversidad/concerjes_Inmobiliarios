@@ -156,17 +156,22 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
-    // Módulos en construcción de la operación de conserjería. Las claves ya
-    // quedan disponibles para configurar los roles; las pantallas se conectan
-    // a medida que se construyen (PQRS, No conformes, Contratos, Gerencia).
+    // Módulos de la operación de conserjería. Conectados: PQRS (/pqrs) y los
+    // contratos del módulo de Puntos QR (/rondas/contratos, F1). Las demás
+    // claves quedan disponibles para configurar los roles y sus pantallas se
+    // conectan a medida que se construyen (No conformes, Gerencia).
+    // OJO con las dos parejas que se parecen y son de módulos distintos:
+    // ver_contratos / editar_contratos son de /contratos (clasificación de
+    // sedes para inventario); las *_conserjeria son del contrato como eje de la
+    // operación. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md.
     grupo: 'Operación Conserjería',
     permisos: [
       { key: 'ver_pqrs',                       label: 'Ver PQRS' },
       { key: 'gestionar_pqrs',                 label: 'Radicar / gestionar PQRS' },
       { key: 'ver_no_conformes',               label: 'Ver no conformes' },
       { key: 'gestionar_no_conformes',         label: 'Reportar / gestionar no conformes' },
-      { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería' },
-      { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería' },
+      { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería (vigencia, servicios, reglas)' },
+      { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería: vigencia, prórrogas, servicios y reglas' },
       { key: 'ver_panel_gerencia',             label: 'Ver panel de gerencia' },
     ],
   },
