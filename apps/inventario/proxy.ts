@@ -31,6 +31,10 @@ export async function proxy(request: NextRequest) {
   // sin sesión: el conserje escanea una placa pegada a una pared y ahí decide
   // cómo seguir. La autoridad de esa página es la FIRMA del token, no la
   // cookie. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md §3.
+  // La app de campo (/campo) también: la usa quien NO tiene cuenta, con enlace
+  // + PIN, y cada página resuelve su propio actor (actorDeCampo) y manda a
+  // /campo/entrar si no hay ninguno. Mandarla a /login la dejaba sin salida.
+  const isCampoRoute = path === '/campo' || path.startsWith('/campo/')
   const isPublicRoute =
     path === '/' ||
     path.startsWith('/api') ||
@@ -38,7 +42,7 @@ export async function proxy(request: NextRequest) {
     path.startsWith('/q/') ||
     path.startsWith('/ingresar')
 
-  if (!user && !isAuthRoute && !isPublicRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute && !isCampoRoute) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     // Volver a donde iba después de entrar (p. ej. el QR de un equipo).
