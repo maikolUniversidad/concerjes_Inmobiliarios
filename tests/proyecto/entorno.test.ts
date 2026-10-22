@@ -8,11 +8,16 @@ const envTurbo: string[] = turbo.tasks?.build?.env ?? []
 
 const fuentes = codigoFuente()
 
+/** Las pone Node/Next por su cuenta; nadie las configura ni las documenta. */
+const DEL_ENTORNO = new Set(['NODE_ENV'])
+
 /** Variables leídas con process.env.X en el código de las apps. */
 function variablesUsadas(): Set<string> {
   const encontradas = new Set<string>()
   for (const f of fuentes) {
-    for (const m of leer(f).matchAll(/process\.env\.([A-Z0-9_]+)/g)) encontradas.add(m[1])
+    for (const m of leer(f).matchAll(/process\.env\.([A-Z0-9_]+)/g)) {
+      if (!DEL_ENTORNO.has(m[1])) encontradas.add(m[1])
+    }
   }
   return encontradas
 }

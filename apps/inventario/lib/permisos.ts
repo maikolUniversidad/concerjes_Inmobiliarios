@@ -156,18 +156,37 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     ],
   },
   {
-    // Módulos en construcción de la operación de conserjería. Las claves ya
-    // quedan disponibles para configurar los roles; las pantallas se conectan
-    // a medida que se construyen (PQRS, No conformes, Contratos, Gerencia).
+    // Módulos de la operación de conserjería. Conectados: PQRS (/pqrs) y los
+    // contratos del módulo de Puntos QR (/rondas/contratos, F1). Las demás
+    // claves quedan disponibles para configurar los roles y sus pantallas se
+    // conectan a medida que se construyen (No conformes, Gerencia).
+    // OJO con las dos parejas que se parecen y son de módulos distintos:
+    // ver_contratos / editar_contratos son de /contratos (clasificación de
+    // sedes para inventario); las *_conserjeria son del contrato como eje de la
+    // operación. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md.
     grupo: 'Operación Conserjería',
     permisos: [
       { key: 'ver_pqrs',                       label: 'Ver PQRS' },
       { key: 'gestionar_pqrs',                 label: 'Radicar / gestionar PQRS' },
       { key: 'ver_no_conformes',               label: 'Ver no conformes' },
       { key: 'gestionar_no_conformes',         label: 'Reportar / gestionar no conformes' },
-      { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería' },
-      { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería' },
+      { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería (vigencia, servicios, reglas)' },
+      { key: 'gestionar_contratos_conserjeria', label: 'Gestionar contratos de conserjería: vigencia, prórrogas, servicios y reglas' },
       { key: 'ver_panel_gerencia',             label: 'Ver panel de gerencia' },
+      // Puntos de control y códigos QR (F2). `ver_puntos_ronda` no se confunde
+      // con `ver_puntos_hogar`, que es el programa de recompensas; y el QR va
+      // en su propia clave porque emitir un código es lo que manda a imprimir
+      // placas que hay que ir a pegar a una pared.
+      { key: 'ver_puntos_ronda',               label: 'Ver zonas, puntos de control y sus códigos QR' },
+      { key: 'gestionar_puntos_ronda',         label: 'Crear / editar zonas y puntos de control' },
+      { key: 'gestionar_qr_ronda',             label: 'Generar, imprimir y revocar códigos QR de puntos' },
+      // Catálogo de trabajo de los Puntos QR (F3). Ojo: `gestionar_tipos_servicio`
+      // es de Servicios del Hogar y `gestionar_rutas` es de Logística; ninguna
+      // sirve aquí. Ver docs/puntos-qr-whatsapp/03-nomenclatura.md §2.
+      { key: 'ver_catalogo_rondas',            label: 'Ver el catálogo de tareas: actividades, plantillas e instructivos' },
+      { key: 'gestionar_catalogo_rondas',      label: 'Crear, publicar y versionar plantillas de tarea e instructivos' },
+      { key: 'ver_asignaciones_rondas',        label: 'Ver qué tareas aplican en cada punto de control' },
+      { key: 'gestionar_asignaciones_rondas',  label: 'Asignar tareas a puntos: frecuencia, ventana, responsable y ANS' },
     ],
   },
   {

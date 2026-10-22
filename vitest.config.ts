@@ -29,6 +29,11 @@ export default defineConfig({
       {
         test: { ...comun, name: 'proyecto', include: ['tests/proyecto/**/*.test.ts'] },
       },
+      {
+        // El núcleo de ejecución de la visita (packages/ronda-core): lógica
+        // pura, sin React ni Supabase, que comparten la PWA y apps/movil.
+        test: { ...comun, name: 'ronda-core', include: ['tests/ronda-core/**/*.test.ts'] },
+      },
     ],
   },
 })

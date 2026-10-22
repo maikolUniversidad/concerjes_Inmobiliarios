@@ -19,9 +19,16 @@ export async function encolar(
   kind: string,
   payload: Record<string, unknown>,
   optimista?: { tabla: string; row: Row },
+  /** Grupo y posición, cuando el intent hace parte de una secuencia que tiene
+   *  que llegar en orden (los de una visita de ronda: ver `intentsDeVisita()`
+   *  de @conserjes/ronda-core). */
+  secuencia?: { grupo: string; orden: number },
 ): Promise<void> {
   if (optimista) await store.bulkPut(optimista.tabla, [optimista.row])
-  const item: OutboxItem = { id: uuid(), kind, payload, ts: ahora(), intentos: 0 }
+  const item: OutboxItem = {
+    id: uuid(), kind, payload, ts: ahora(), intentos: 0,
+    grupo: secuencia?.grupo, orden: secuencia?.orden,
+  }
   await store.addOutbox(item)
 }
 
