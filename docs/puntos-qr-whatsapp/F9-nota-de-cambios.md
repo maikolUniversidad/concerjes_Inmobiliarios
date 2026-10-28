@@ -155,6 +155,16 @@ valen más escritos que callados:
   UPDATE no respeta el `ORDER BY` con el que se eligieron las filas, así que un
   aviso masivo podía salir antes que la respuesta a alguien que estaba parado en
   un punto. El lote ahora se ordena en el trabajador.
+- **La evidencia se bajaba a Storage pero NO entraba al módulo.** El archivo
+  quedaba en el bucket con su `sha256`, y `ronda_adjuntar_evidencia` fallaba con
+  «hay que decir quién hace la visita»: se llamaba sin `p_persona`. El síntoma
+  habría sido el peor posible — un reporte de visita **sin ninguna foto**, con
+  los archivos ahí, en Storage, sin que nada los enlazara. Dos cosas más del
+  mismo camino: `ronda_evidencias.tipo` sólo admite `FOTO`, `VIDEO` y `AUDIO`, y
+  se le estaba mandando `ARCHIVO`; y el cliente simulado devolvía
+  `application/octet-stream` como tipo de archivo, o sea que **el simulador
+  probaba un camino que en real no ocurre**. Ahora no inventa un tipo que no
+  conoce y manda el que declaró el mensaje entrante.
 
 ---
 
@@ -308,9 +318,38 @@ Dos decisiones de la pantalla:
 
 - **El número de WhatsApp no se muestra completo.** Es dato personal (el ADR lo
   dice en su riesgo R-7) y quien mira el tablero no necesita el número para
-  hacer su trabajo.
+  hacer su trabajo. El buscador **sí** filtra por el número completo, a
+  propósito: un supervisor que lo tiene en la mano necesita encontrar la
+  conversación. El texto del buscador lo dice, para que sea una decisión visible.
 - **Lo primero que se ve es qué le falta al entorno** para poder mandar algo de
   verdad. Es más útil ahí que como un error en el momento de enviar.
+
+### Lo que la verificación visual encontró
+
+Se montó el componente real con datos reales y con un juego inventado (números
+`5730000000NN`, nombres ficticios). Nueve cosas, todas corregidas:
+
+1. El aviso de «falta configuración» escribía `</code>, <code>` **como texto**:
+   en JSX el separador de `join` es una cadena literal y React lo escapa. Era el
+   aviso más importante de la pantalla y se veía roto.
+2. Buscar sin resultados decía «Todavía no hay conversaciones», o sea mentía
+   sobre el estado del sistema. Ahora dice que el filtro no encontró nada.
+3. **Los dos contadores de omitidos no medían lo mismo**: la tarjeta sumaba la
+   vista agrupada (toda la tabla) y la pestaña contaba sobre los últimos 100
+   mensajes. Con tráfico real mostraban dos cifras distintas del mismo dato a
+   cinco centímetros de distancia. La pestaña usa ahora el total de SQL.
+4. La lista de omitidos se cortaba en 15 en silencio. Ahora dice cuántos faltan.
+5. El chip de motivo tenía el mismo fondo que el panel naranja y no se veía como
+   pastilla.
+6. `EN_ESPERA_FUERA_DE_JORNADA` se pintaba neutro, porque la condición era
+   `startsWith('ESPERA')` y ese estado empieza por `EN_`. Justo el estado ligado
+   a la Ley 2191 quedaba indistinguible de uno normal.
+7. El nombre del punto y del contrato se traían de la base y **no se mostraban**:
+   la tabla tenía códigos crípticos y el nombre viajaba al cliente para nada.
+8. Sin ninguna cuenta registrada el bloque desaparecía sin decir nada, y un
+   bloque ausente se lee como «está bien» y no como «no hay número conectado».
+9. El texto del buscador no mencionaba que también filtra por nombre y por
+   número.
 
 ---
 

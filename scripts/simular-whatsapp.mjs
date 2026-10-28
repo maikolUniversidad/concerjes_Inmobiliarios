@@ -306,10 +306,25 @@ r = await respuesta('Foto de inicio', '[foto]')
 esperar('pasa a la lista de tareas', r.conv.estado === 'FOTO_INICIO_OK', r.conv.estado)
 esperar('manda la lista con las 3 tareas',
   r.nuevos.some((m) => m.tipo === 'LISTA' && ((m.payload ?? {}).secciones ?? [])[0]?.filas?.length === 3))
-const medios = await q(`select hito, estado, integridad, path, sha256 from whatsapp_medios
-  where conversacion_id = $1 order by created_at`, [r.conv.id])
-esperar('el medio quedó registrado con su hito', medios.some((m) => m.hito === 'FOTO_INICIO'),
+const medios = await q(`select hito, estado, integridad, path, sha256, bucket, evidencia_id
+  from whatsapp_medios where conversacion_id = $1 order by created_at`, [r.conv.id])
+const inicio = medios.find((m) => m.hito === 'FOTO_INICIO')
+esperar('el medio quedó registrado con su hito', !!inicio,
   JSON.stringify(medios.map((m) => `${m.hito}/${m.estado}`)))
+// Lo que de verdad importa: que el archivo SE BAJÓ a Storage propio y que su
+// sha256 quedó calculado. La URL de Meta vale 5 minutos y el media_id 7 días:
+// si esto no pasa, la prueba del trabajo se pierde.
+esperar('el archivo se bajó a Storage propio, con su sha256',
+  inicio?.estado === 'DESCARGADO' && /^[0-9a-f]{64}$/.test(inicio?.sha256 ?? ''),
+  `${inicio?.estado} · ${inicio?.bucket}/${inicio?.path}`)
+esperar('y entró al módulo de rondas como evidencia', !!inicio?.evidencia_id,
+  String(inicio?.evidencia_id))
+if (inicio?.path) console.log(`      📎 ${inicio.bucket}/${inicio.path}`)
+const evidencias = await q(`select tipo, archivo_path, sha256, origen from ronda_evidencias
+  where visita_id = $1 order by created_at`, [r.conv.visita_id])
+esperar('la evidencia quedó en ronda_evidencias con su huella',
+  evidencias.length >= 1 && evidencias.every((e) => /^[0-9a-f]{64}$/.test(e.sha256 ?? '')),
+  JSON.stringify(evidencias.map((e) => `${e.tipo}/${e.origen}`)))
 
 /* 11. Elige la primera tarea. */
 id = idOfrecido(r.nuevos, 'tarea:') ?? `tarea:${pasos[0].id}`

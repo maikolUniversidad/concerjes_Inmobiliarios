@@ -115,7 +115,11 @@ export class ClienteSimulado implements ClienteWhatsapp {
     // Un contenido determinista por media_id: así el sha256 que calcula el
     // motor es estable entre corridas y la prueba se puede repetir.
     const texto = `medio simulado ${id}`
-    return { ok: true as const, datos: new TextEncoder().encode(texto), mime: 'application/octet-stream' }
+    // `mime: null` A PROPÓSITO: el simulador NO sabe de qué tipo es el archivo,
+    // así que no inventa uno. Devolver `application/octet-stream` haría que una
+    // foto se guardara como archivo genérico y la prueba pasaría por un camino
+    // que en real no ocurre. Sin mime, manda el que declaró el mensaje entrante.
+    return { ok: true as const, datos: new TextEncoder().encode(texto), mime: null }
   }
 
   /** Lo registrado hasta ahora. Lo consume la pantalla de pruebas. */

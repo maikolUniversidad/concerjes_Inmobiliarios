@@ -155,6 +155,19 @@ export function WhatsappClient({
   }, [porEstado])
 
   const omitidos = useMemo(() => mensajes.filter((m) => m.estado.startsWith('OMITIDO')), [mensajes])
+  // El total REAL de omitidos sale de la vista agrupada (contada en SQL sobre
+  // toda la tabla). `omitidos` son solo los que están entre los últimos 100
+  // mensajes que trae la pantalla: si se usara ese número en el título, la
+  // pestaña y la tarjeta de la cuenta mostrarían dos cifras distintas del mismo
+  // dato, a cinco centímetros de distancia.
+  const omitidosTotal = useMemo(
+    () => cuentas.reduce((n, c) => n + (c.cola
+      ? Number(c.cola.omitidos_ventana) + Number(c.cola.omitidos_jornada) +
+        Number(c.cola.omitidos_consentimiento) + Number(c.cola.omitidos_plantilla) +
+        Number(c.cola.omitidos_bloqueado)
+      : 0), 0),
+    [cuentas],
+  )
   const aprobadas = plantillas.filter((p) => p.estado === 'APPROVED').length
 
   const convFiltradas = useMemo(() => {
@@ -194,12 +207,33 @@ export function WhatsappClient({
           <p className="mt-1 font-body text-sm text-amber-800">
             El bot funciona entero —recibe, conversa, guarda evidencia y deja ver cada mensaje tal
             como saldría— pero <strong>no puede enviar nada a un teléfono</strong> hasta que estén
-            estas variables de entorno: <code>{faltaEnElEntorno.join('</code>, <code>')}</code>.
+            estas variables de entorno:{' '}
+            {/* Una por una, no con `join`: en JSX el separador de `join` es TEXTO,
+                así que `'</code>, <code>'` se escaparía y se leería tal cual. */}
+            {faltaEnElEntorno.map((v, i) => (
+              <span key={v}>
+                {i > 0 && ', '}
+                <code>{v}</code>
+              </span>
+            ))}
+            .
           </p>
         </div>
       )}
 
-      {/* La cuenta */}
+      {/* La cuenta. Sin ninguna, hay que DECIRLO: un bloque que simplemente no
+          aparece se lee como «está bien» y no como «no hay número conectado». */}
+      {cuentas.length === 0 && (
+        <section className={`${tarjeta} border-dashed text-center`}>
+          <p className="font-body text-sm text-gray-500">
+            No hay ningún número de WhatsApp registrado. Mientras no haya uno, el bot no puede
+            recibir ni responder nada.
+            {puedeConectar
+              ? ' Conectá el número de la empresa desde la consola de Meta con Embedded Signup.'
+              : ' Pedíselo a quien tenga el permiso de conectar WhatsApp.'}
+          </p>
+        </section>
+      )}
       {cuentas.map((c) => (
         <section key={c.id} className={tarjeta}>
           <div className="flex flex-wrap items-start justify-between gap-3">
@@ -267,7 +301,7 @@ export function WhatsappClient({
 
       <nav className="flex flex-wrap gap-1 border-b border-gray-200">
         {([
-          ['cola', `Cola y omitidos${omitidos.length ? ` (${omitidos.length})` : ''}`],
+          ['cola', `Cola y omitidos${omitidosTotal ? ` (${omitidosTotal})` : ''}`],
           ['conversaciones', 'Conversaciones'],
           ['plantillas', 'Plantillas'],
           ['seguridad', `Webhook${rechazos.length ? ` (${rechazos.length})` : ''}`],
@@ -293,16 +327,31 @@ export function WhatsappClient({
                 solo sale una plantilla aprobada, y fuera de la jornada de la persona el bot no
                 inicia conversación (Ley 2191 de 2022). Lo que haya que decirle a alguien de otra
                 forma se recoge desde acá.
+                {omitidosTotal > omitidos.length && (
+                  <> Acá se ven los más recientes; en total hay <strong>{omitidosTotal}</strong>.</>
+                )}
               </p>
               <ul className="mt-3 space-y-1.5">
                 {omitidos.slice(0, 15).map((m) => (
                   <li key={m.id} className="font-body text-sm text-orange-900">
-                    <span className={`${chip} ${colorEstado(m.estado)}`}>{m.estado.replace('OMITIDO_', '')}</span>{' '}
+                    {/* `ring` y fondo blanco: dentro de este panel naranja un
+                        chip `bg-orange-50` tiene el MISMO fondo que el panel y
+                        deja de verse como pastilla. */}
+                    <span className={`${chip} bg-white text-orange-700 ring-1 ring-orange-200`}>
+                      {m.estado.replace('OMITIDO_', '')}
+                    </span>{' '}
                     <span className="text-gray-500">{hora(m.created_at)}</span>{' '}
                     {m.omitido_motivo}
                   </li>
                 ))}
               </ul>
+              {/* Cortar en 15 sin decirlo iría contra el propósito del bloque,
+                  que es justamente «esto es lo que hay que recoger». */}
+              {omitidos.length > 15 && (
+                <p className="mt-2 font-body text-sm text-orange-800">
+                  Y {omitidos.length - 15} más en la tabla de abajo.
+                </p>
+              )}
             </div>
           )}
           <Tabla
@@ -325,8 +374,12 @@ export function WhatsappClient({
         <section className="space-y-3">
           <label className="flex max-w-sm items-center gap-2 rounded-lg border border-gray-200 px-3 py-2">
             <Search className="h-4 w-4 text-gray-400" />
+            {/* El número completo SÍ filtra, a propósito: un supervisor que lo
+                tiene en la mano necesita encontrar la conversación. El
+                recordatorio va en el texto para que sea una decisión visible y
+                no una sorpresa. */}
             <input value={busca} onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por estado, punto o contrato"
+              placeholder="Buscar por estado, punto, contrato, nombre o número"
               className="w-full font-body text-sm outline-none" />
           </label>
           <Tabla
@@ -336,19 +389,39 @@ export function WhatsappClient({
                 {numeroCorto(c.wa_id)}
               </span>,
               c.persona?.nombres?.split(/\s+/)[0] ?? (c.bloqueada ? 'bloqueada' : 'sin identificar'),
-              <span key="e" className={`${chip} ${c.estado.startsWith('ERROR') || c.estado === 'EXPIRADA' ? 'bg-red-50 text-red-700' : c.estado.startsWith('ESPERA') ? 'bg-amber-50 text-amber-700' : 'bg-gray-100 text-gray-700'}`}>
+              // `includes` y no `startsWith`: EN_ESPERA_FUERA_DE_JORNADA empieza
+              // por `EN_`, y es justo el estado de la Ley 2191 el que no puede
+              // quedar pintado como uno normal.
+              <span key="e" className={`${chip} ${
+                c.estado.startsWith('ERROR') || c.estado === 'EXPIRADA'
+                  ? 'bg-red-50 text-red-700'
+                  : c.estado.includes('ESPERA')
+                    ? 'bg-amber-50 text-amber-700'
+                    : 'bg-gray-100 text-gray-700'}`}>
                 {c.estado}
               </span>,
               hora(c.estado_desde),
-              c.punto ? `${c.punto.codigo}` : '—',
-              c.contrato?.codigo ?? '—',
+              // El nombre del punto y del contrato se traen de la base: se
+              // muestran en el `title`, que es donde caben sin volver la tabla
+              // ilegible. Un código críptico y sin nombre no sirve de nada.
+              c.punto
+                ? <span key="p" title={c.punto.nombre}>{c.punto.codigo}</span>
+                : '—',
+              c.contrato
+                ? <span key="c" title={c.contrato.nombre}>{c.contrato.codigo}</span>
+                : '—',
               c.ventana_vence_at && Date.parse(c.ventana_vence_at) > Date.now()
                 ? <span key="v" className={`${chip} bg-emerald-50 text-emerald-700`}><CheckCircle2 className="h-3 w-3" /> abierta</span>
                 : <span key="v" className={`${chip} bg-gray-100 text-gray-600`}>cerrada</span>,
               hora(c.espera_vence_at),
               `${c.mensajes_entrantes}/${c.mensajes_salientes}`,
             ])}
-            vacio="Todavía no hay conversaciones."
+            // Si hay conversaciones y el filtro no encontró ninguna, decirlo
+            // como «no hay conversaciones» sería mentir sobre el estado del
+            // sistema.
+            vacio={busca.trim()
+              ? `Ninguna conversación coincide con «${busca.trim()}».`
+              : 'Todavía no hay conversaciones.'}
           />
         </section>
       )}

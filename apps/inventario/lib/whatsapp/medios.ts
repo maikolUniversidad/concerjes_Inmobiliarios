@@ -119,7 +119,7 @@ export async function bajarUno(supabase: Sb, medioId: string): Promise<boolean> 
   const c = config()
   const { data: medio } = await supabase
     .from('whatsapp_medios')
-    .select('*, crm_conversaciones ( cuenta_id, wa_id )')
+    .select('*, crm_conversaciones ( cuenta_id, wa_id, persona_id )')
     .eq('id', medioId)
     .maybeSingle()
   if (!medio || medio.estado === 'DESCARGADO') return false
@@ -219,13 +219,25 @@ export async function bajarUno(supabase: Sb, medioId: string): Promise<boolean> 
 
   // Y ahora sí: la evidencia entra al módulo de rondas por la MISMA RPC que usa
   // la app propia, con su sha256, que es lo que la hace prueba.
-  if (medio.visita_id && esEvidencia(medio.hito)) {
+  //
+  // `ronda_evidencias.tipo` sólo admite FOTO, VIDEO y AUDIO. Un PDF o un
+  // archivo sin tipo reconocible se queda en `whatsapp_medios` con su ruta y su
+  // huella, que es lo correcto: no es evidencia de la visita, y mandarlo a la
+  // RPC con un tipo inventado la haría fallar y perdería el enlace de todo lo
+  // demás.
+  const tipo = tipoEvidencia(mime, medio.voz)
+  // QUIÉN la adjunta: la persona de la conversación. `ronda_actor` lo exige, y
+  // con razón — una evidencia sin autor no prueba nada. Como esto corre con la
+  // llave de servicio no hay `auth.uid()`, así que la persona va explícita, el
+  // mismo patrón de /api/campo/rpc.
+  const personaId = medio.crm_conversaciones?.persona_id ?? null
+  if (medio.visita_id && esEvidencia(medio.hito) && tipo !== null && personaId) {
     const { randomUUID } = await import('node:crypto')
     const evidenciaId = randomUUID()
     const { error } = await supabase.rpc('ronda_adjuntar_evidencia', {
       p_id: evidenciaId,
       p_visita: medio.visita_id,
-      p_tipo: tipoEvidencia(mime, medio.voz),
+      p_tipo: tipo,
       p_path: ruta,
       p_meta: {
         sha256: sha,
@@ -236,7 +248,7 @@ export async function bajarUno(supabase: Sb, medioId: string): Promise<boolean> 
         // viene como `image`: así nadie lee el silencio como «no había».
         exif: medio.con_exif ? { conservado: true, via: 'DOCUMENTO' } : { conservado: false, via: 'IMAGEN' },
       },
-      p_persona: null,
+      p_persona: personaId,
     })
     if (!error) {
       await supabase.from('whatsapp_medios').update({ evidencia_id: evidenciaId }).eq('id', medioId)
@@ -261,12 +273,15 @@ function esEvidencia(hito: string): boolean {
   return ['FOTO_INICIO', 'FOTO_FIN', 'TAREA', 'NOVEDAD'].includes(String(hito).toUpperCase())
 }
 
-function tipoEvidencia(mime: string | null, voz: boolean): string {
+/** El `tipo` de `ronda_evidencias`, que sólo admite FOTO, VIDEO y AUDIO.
+ *  `null` para lo que no es ninguno de los tres: un PDF no es evidencia de la
+ *  visita y no hay que forzarlo a que lo parezca. */
+function tipoEvidencia(mime: string | null, voz: boolean): 'FOTO' | 'VIDEO' | 'AUDIO' | null {
   const m = (mime ?? '').toLowerCase()
   if (voz || m.startsWith('audio/')) return 'AUDIO'
   if (m.startsWith('video/')) return 'VIDEO'
   if (m.startsWith('image/')) return 'FOTO'
-  return 'ARCHIVO'
+  return null
 }
 
 function normalizarSha(v: string | null): string | null {
