@@ -220,6 +220,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_rutas_ronda',                label: 'Ver las rutas de ronda y sus paradas' },
       { key: 'gestionar_rutas_ronda',          label: 'Crear rutas de ronda, ordenar sus paradas y asignarlas' },
       { key: 'reportar_ubicacion_campo',       label: 'Enviar su propia ubicación durante el turno (trabajador)' },
+      // Bot de WhatsApp (F9). `conectar_whatsapp` va aparte de las otras dos
+      // porque conectar el número desvincula los dispositivos acompañantes de
+      // quien usaba WhatsApp Web y deja el canal de toda la operación en manos
+      // de quien lo haga: no es la misma decisión que leer conversaciones.
+      { key: 'ver_whatsapp',       label: 'Ver conversaciones y mensajes de WhatsApp' },
+      { key: 'gestionar_whatsapp', label: 'Responder por WhatsApp, reencolar lo omitido y gestionar plantillas' },
+      { key: 'conectar_whatsapp',  label: 'Conectar o desconectar el número de WhatsApp de la empresa' },
     ],
   },
   {

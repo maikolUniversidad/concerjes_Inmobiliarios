@@ -8,7 +8,7 @@ import {
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, Cog,
-  MapPinned, Route,
+  MapPinned, Route, MessagesSquare,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -126,6 +126,9 @@ export const navigation: NavModule[] = [
       // sensible del módulo.
       { label: 'Mapa operativo', href: '/rondas/mapa',  icon: MapPinned, permiso: 'ver_mapa_operativo' },
       { label: 'Rutas de ronda', href: '/rondas/rutas', icon: Route,     permiso: 'ver_rutas_ronda' },
+      // El bot: las conversaciones, la cola de salida y el estado de las
+      // plantillas ante Meta.
+      { label: 'WhatsApp', href: '/rondas/whatsapp', icon: MessagesSquare, permiso: 'ver_whatsapp' },
     ],
   },
   {

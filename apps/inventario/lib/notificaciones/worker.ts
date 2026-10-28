@@ -69,7 +69,10 @@ interface PasoFlujo {
   flujo_id: string
   orden: number
   nombre: string | null
-  tipo: 'EMAIL' | 'APP' | 'ESPERA' | 'WEBHOOK'
+  // WHATSAPP lo agrega F9 (Puntos QR): el canal es un valor más de `tipo` y un
+  // caso más en este worker, no un motor aparte. Lo pide la §8.1 punto 6 del
+  // complemento 2.
+  tipo: 'EMAIL' | 'APP' | 'ESPERA' | 'WEBHOOK' | 'WHATSAPP'
   demora_minutos: number
   plantilla_id: string | null
   asunto: string | null
@@ -341,6 +344,111 @@ async function ejecutarApp(
   return { enviados: filas.length, detalle: `Notificados ${filas.length} usuario(s).` }
 }
 
+/**
+ * Encola un mensaje de WhatsApp por el buzón de salida de F9 (Puntos QR).
+ *
+ * El canal es un caso más de este worker y no un motor aparte, que es lo que
+ * pide la §8.1 punto 6 del complemento 2. Tres reglas propias de WhatsApp que un
+ * correo no tiene:
+ *
+ *   · OPT-IN OBLIGATORIO. Sin `persona_consentimientos` de tipo WHATSAPP la
+ *     persona NO entra. No es una preferencia: es lo que exige la §10.3 del
+ *     complemento, y un correo de trabajo no necesita permiso pero un WhatsApp
+ *     al celular personal sí.
+ *   · PLANTILLA. Un flujo se dispara por un evento, en cualquier momento, y es
+ *     normal que la ventana de 24 h esté cerrada. Sin `plantilla` el portero lo
+ *     va a omitir con OMITIDO_VENTANA, y eso está bien: queda registrado y el
+ *     supervisor lo recoge. El nombre de la plantilla va en `paso.asunto`.
+ *   · JORNADA. El portero lo bloquea fuera del turno de la persona (Ley 2191).
+ *
+ * Nada de esto se decide aquí: se encola por `whatsapp_encolar`, que es la
+ * ÚNICA puerta de salida y la que tiene el portero.
+ */
+async function ejecutarWhatsapp(
+  supabase: DB,
+  paso: PasoFlujo,
+  payload: Payload,
+): Promise<{ enviados: number; omitido: boolean; detalle: string }> {
+  const { usuarios } = await resolverDestinatarios(supabase, paso.destinatarios, payload)
+  if (usuarios.length === 0) {
+    return { enviados: 0, omitido: true, detalle: 'Sin usuarios destino para WhatsApp.' }
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const sb = supabase as any
+  const { data: cuenta } = await sb
+    .from('whatsapp_cuentas')
+    .select('id')
+    .in('estado', ['ACTIVA', 'SIMULADA'])
+    .eq('predeterminada', true)
+    .maybeSingle()
+  if (!cuenta?.id) {
+    return { enviados: 0, omitido: true, detalle: 'No hay una cuenta de WhatsApp conectada.' }
+  }
+
+  const { data: personas } = await sb
+    .from('personas')
+    .select('id, usuario_id')
+    .in('usuario_id', usuarios.map((u) => u.id))
+  const ids = ((personas ?? []) as { id: string }[]).map((p) => p.id)
+  if (ids.length === 0) {
+    return { enviados: 0, omitido: true, detalle: 'Ningún usuario destino está vinculado a una persona.' }
+  }
+
+  const { data: canales } = await sb
+    .from('persona_canales')
+    .select('persona_id, wa_id, valor')
+    .in('persona_id', ids)
+    .eq('canal', 'WHATSAPP')
+    .eq('verificado', true)
+    .eq('activo', true)
+    .is('bloqueado_at', null)
+
+  const texto = renderTexto(paso.mensaje ?? '', payload)
+  const plantilla = paso.asunto ? renderTexto(paso.asunto, payload).trim() : null
+
+  let encolados = 0
+  let sinOptIn = 0
+  for (const c of (canales ?? []) as { persona_id: string; wa_id: string | null; valor: string }[]) {
+    // El opt-in se consulta en la base, con la misma función que usa el bot: la
+    // última declaración manda.
+    const { data: optIn } = await sb.rpc('persona_consiente', {
+      p_persona: c.persona_id,
+      p_tipo: 'WHATSAPP',
+    })
+    if (optIn !== true) {
+      sinOptIn++
+      continue
+    }
+    const waId = (c.wa_id ?? c.valor).replace(/[^0-9]/g, '')
+    if (!waId) continue
+    const { data: conv } = await sb.rpc('crm_conversacion_resolver', {
+      p_cuenta: cuenta.id,
+      p_wa_id: waId,
+      p_perfil: null,
+    })
+    const fila = Array.isArray(conv) ? conv[0] : conv
+    if (!fila?.id) continue
+    const { error } = await sb.rpc('whatsapp_encolar', {
+      p_conversacion: fila.id,
+      p_tipo: plantilla ? 'PLANTILLA' : 'TEXTO',
+      p_texto: texto || null,
+      p_payload: plantilla ? {} : { tipo: 'TEXTO', texto },
+      p_iniciado_por: 'BOT',
+      p_plantilla: plantilla,
+      // Un aviso de flujo no es urgente: va detrás de las respuestas a quien
+      // está parado en un punto esperando.
+      p_prioridad: 7,
+    })
+    if (!error) encolados++
+  }
+
+  const notas: string[] = [`Encolados ${encolados} mensaje(s) de WhatsApp.`]
+  if (sinOptIn) notas.push(`${sinOptIn} sin opt-in de WhatsApp (no se les escribe).`)
+  if (!plantilla) notas.push('Sin plantilla: fuera de la ventana de 24 h el portero lo va a omitir.')
+  return { enviados: encolados, omitido: encolados === 0, detalle: notas.join(' ') }
+}
+
 /** Envía el payload del evento a un webhook externo. */
 async function ejecutarWebhook(paso: PasoFlujo, payload: Payload): Promise<string> {
   if (!paso.webhook_url) throw new Error('El paso no tiene URL de webhook.')
@@ -440,6 +548,14 @@ export async function procesarFlujosPendientes(supabase: DB, limite = 50): Promi
       } else if (paso.tipo === 'APP') {
         const r = await ejecutarApp(supabase, paso, payload, ejecucion.entidad ?? null, ejecucion.entidad_id ?? null)
         res.notificaciones += r.enviados
+        detalle = r.detalle
+      } else if (paso.tipo === 'WHATSAPP') {
+        const r = await ejecutarWhatsapp(supabase, paso, payload)
+        if (r.omitido) {
+          await marcar('OMITIDO', r.detalle)
+          res.omitidos++
+          continue
+        }
         detalle = r.detalle
       } else if (paso.tipo === 'WEBHOOK') {
         detalle = await ejecutarWebhook(paso, payload)
