@@ -209,11 +209,39 @@ general de ocho tipos (`grupo_id IS NULL`), que es catálogo, no muestra.
 
 ## 6. Lo que queda pendiente o pide una decisión
 
-1. **Los tres permisos nuevos no los tiene ningún rol todavía.** Están en el
-   catálogo de `/roles` y las políticas los exigen, así que hasta que alguien
-   los marque, solo `ADMIN` y `SUPER_ADMIN` ven la pantalla. Es lo mismo que
-   pasó con F2 y F3, y se resuelve en `/roles`. El rol Auditor sí recibió
-   `ver_activos_ronda` en la migración, como ya tenía el catálogo de F3.
+1. **El reparto de los tres permisos está escrito pero sin aplicar.** La
+   migración `20261028000601_puntos_qr_f6_roles_activos.sql` los reparte así:
+
+   | Rol | ver | gestionar | registrar lecturas |
+   |---|---|---|---|
+   | Coordinador | ✓ | ✓ | ✓ |
+   | Supervisor de Conserjería | ✓ | ✓ | ✓ |
+   | Jefe de Mantenimiento | ya lo tenía | ✓ | ✓ |
+   | Técnico de Mantenimiento | ya lo tenía | — | ✓ |
+   | Conserje | ✓ | — | ✓ |
+   | Operador de Sede | ✓ | — | ✓ |
+   | Auditor | ya lo tenía | — | — |
+
+   El criterio es el de `20261018000005` (programación): quien **arma** el
+   inventario va aparte de quien **reporta** en sitio. El técnico y el conserje
+   anotan el contador y no editan la ficha, que es dato maestro del contrato.
+   Mantenimiento entra aquí y no se deja para F7 porque los planes por medidor
+   leen `activo_medidores.valor_actual`, y ese valor solo se mueve cuando
+   alguien registra una lectura: sin el permiso, un plan por horas o por ciclos
+   no avanza nunca. Gerencia, Administrador y Super Administrador no se siembran
+   porque `auth_permiso()` les da paso libre por rol base.
+
+   Falta aplicarla:
+
+   ```
+   NODE_OPTIONS=--use-system-ca node scripts/apply-migrations.mjs supabase/migrations/20261028000601_puntos_qr_f6_roles_activos.sql
+   ```
+
+   Mientras no se aplique, solo `ADMIN` y `SUPER_ADMIN` ven la pantalla (el
+   Auditor la lee, porque `ver_activos_ronda` sí se le dio en la migración de
+   F6). La migración termina con una comprobación que revienta si algún rol
+   quedara pudiendo escribir activos sin poder verlos, porque la pantalla exige
+   `ver_activos_ronda` aunque la RLS deje pasar a quien solo registra lecturas.
 2. **La llave HMAC tiene que estar en Vercel** (`RONDA_HMAC_LLAVE_ACTUAL` y el
    secreto de esa llave). Sin ella, la ficha del activo muestra el aviso y no
    deja emitir placas — a propósito: una placa que nadie puede verificar es
