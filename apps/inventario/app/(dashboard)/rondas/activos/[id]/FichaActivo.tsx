@@ -19,7 +19,7 @@ import { useRouter } from 'next/navigation'
 import { useFormStatus } from 'react-dom'
 import {
   AlertTriangle, Cog, Download, Eye, FileText, Gauge, Loader2, Plus, Printer,
-  QrCode, Save, Trash2, Upload, X,
+  QrCode, Save, Trash2, Upload, X, Wrench, ChevronRight,
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
@@ -33,6 +33,8 @@ import {
 } from '@/lib/activos'
 import { ESTADO_QR, FORMATOS, FORMATOS_LOTE, formatearManual, urlDelQr, type FormatoLote, type EstadoQr } from '@/lib/puntos-qr'
 import { armarPdfDeLote } from '../../qr/placas'
+import { ReportarFallaForm } from '@/components/mantenimiento/ReportarFallaForm'
+import { ESTADO_TICKET_META, TIPO_TICKET_META } from '@/lib/mantenimiento'
 import {
   eliminarDocumentoActivo, eliminarLectura, eliminarMedidor, emitirQrActivo,
   guardarDocumentoActivo, guardarMedidor, registrarImpresionActivo,
@@ -148,9 +150,14 @@ function fechaHora(iso: string | null): string {
   })
 }
 
+export interface OrdenActivo {
+  id: string; numero: string; estado: string; tipo: string; titulo: string; createdAt: string
+}
+
 export function FichaActivo({
-  activo, hijos, documentos, medidores, lecturas, qrs,
+  activo, hijos, documentos, medidores, lecturas, qrs, ordenes,
   baseUrl, llaveLista, llaveId, puedeGestionar, puedeLeer, puedeQr,
+  puedeReportarFalla, puedeVerMantenimiento,
 }: {
   activo: ActivoFicha
   hijos: { id: string; codigo: string; nombre: string; estado: EstadoActivo }[]
@@ -158,12 +165,15 @@ export function FichaActivo({
   medidores: MedidorFila[]
   lecturas: LecturaFila[]
   qrs: QrFila[]
+  ordenes: OrdenActivo[]
   baseUrl: string
   llaveLista: boolean
   llaveId: string | null
   puedeGestionar: boolean
   puedeLeer: boolean
   puedeQr: boolean
+  puedeReportarFalla: boolean
+  puedeVerMantenimiento: boolean
 }) {
   const router = useRouter()
   const sb = createClient()
@@ -181,6 +191,7 @@ export function FichaActivo({
   const [subiendo, setSubiendo] = useState(false)
   const [archivo, setArchivo] = useState<{ path: string; nombre: string; mime: string; tamano: number } | null>(null)
   const [formato, setFormato] = useState<FormatoLote>('PLACA_A6')
+  const [reportando, setReportando] = useState(false)
   const archivoRef = useRef<HTMLInputElement>(null)
 
   const qrActivo = qrs.find((q) => q.estado === 'ACTIVO') ?? null
@@ -824,6 +835,57 @@ export function FichaActivo({
           </div>
         )}
       </div>
+
+      {/* Mantenimiento del activo (F7). Aquí entra el módulo: es el único sitio
+          desde el que se reporta una falla de un activo del cliente, y de ahí
+          sale una ORDEN DE TRABAJO, no un ticket de maquinaria. */}
+      {(puedeReportarFalla || puedeVerMantenimiento) && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-heading flex items-center gap-2 text-sm font-bold text-gray-900">
+              <Wrench className="h-4 w-4 text-brand-green" /> Mantenimiento
+            </h2>
+            {puedeReportarFalla && activo.enUso && activo.estado !== 'RETIRADO' && (
+              <button onClick={() => setReportando(true)}
+                className="font-body inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-1.5 text-xs font-semibold text-white hover:bg-brand-green-dark">
+                <AlertTriangle className="h-3.5 w-3.5" /> Reportar una falla
+              </button>
+            )}
+          </div>
+
+          {ordenes.length === 0 ? (
+            <p className="font-body mt-2 text-sm text-gray-500">
+              Este activo no tiene órdenes de trabajo todavía.
+            </p>
+          ) : (
+            <ul className="mt-2 divide-y divide-gray-100">
+              {ordenes.slice(0, 10).map((o) => (
+                <li key={o.id}>
+                  <Link href={`/mantenimiento/${o.id}`}
+                    className="font-body flex items-center gap-2 py-2 text-sm hover:bg-gray-50">
+                    <span className="font-mono text-xs text-gray-500">{o.numero}</span>
+                    <span className="min-w-0 flex-1 truncate text-gray-900">{o.titulo}</span>
+                    <span className="text-xs text-gray-500">{TIPO_TICKET_META[o.tipo]?.label ?? o.tipo}</span>
+                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${ESTADO_TICKET_META[o.estado]?.cls ?? 'bg-gray-100'}`}>
+                      {ESTADO_TICKET_META[o.estado]?.label ?? o.estado}
+                    </span>
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
+          {ordenes.length > 10 && (
+            <p className="font-body mt-1 text-xs text-gray-400">y {ordenes.length - 10} más.</p>
+          )}
+        </div>
+      )}
+
+      {reportando && (
+        <ReportarFallaForm abierta onClose={() => setReportando(false)} esActivo
+          maquina={{ id: activo.id, codigo: activo.codigo, nombre: activo.nombre }}
+          esTecnico={puedeVerMantenimiento} />
+      )}
     </div>
   )
 }

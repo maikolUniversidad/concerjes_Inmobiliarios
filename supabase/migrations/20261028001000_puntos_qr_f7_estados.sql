@@ -1,0 +1,57 @@
+-- =============================================================================
+-- PUNTOS QR · F7 (1 de 2) · Los cuatro estados nuevos de la orden de trabajo
+-- =============================================================================
+-- Este archivo hace UNA sola cosa: ampliar el enum `estado_ticket_mant`.
+--
+-- POR QUÉ VA SOLO
+-- PostgreSQL 17 permite `ALTER TYPE … ADD VALUE` dentro de una transacción pero
+-- PROHÍBE usar el valor nuevo en esa misma transacción, y
+-- `scripts/apply-migrations.mjs` envuelve cada archivo en un `BEGIN … COMMIT`
+-- único. Si los `ADD VALUE` compartieran archivo con cualquier cosa que los
+-- mencione como dato —una fila sembrada, un `CHECK`, una vista con
+-- `WHERE estado = 'EN_SITIO'`— la migración fallaría con «unsafe use of new
+-- value of enum type». El cuerpo de una función sí puede nombrarlos, porque no
+-- se evalúa al crearla; el resto del módulo va en
+-- `20261028001010_puntos_qr_f7_ot.sql`, que se aplica después.
+--
+-- EL ORDEN DEL ENUM NO ES COSMÉTICO
+-- Se usa `BEFORE` / `AFTER` para que el enum quede en orden de ciclo de vida:
+--
+--   ABIERTO · RECIBIDO · ACEPTADO · EN_CAMINO · EN_SITIO · EN_PROCESO ·
+--   EN_ESPERA · RESUELTO · APROBADO_CLIENTE · CERRADO · CANCELADO
+--
+-- El índice `idx_mant_tickets_estado(estado, prioridad)` ordena por el enum, y
+-- un `ORDER BY estado` o un `BETWEEN` futuro daría un resultado absurdo si los
+-- cuatro valores nuevos quedaran pegados al final, después de `CANCELADO`.
+-- Insertar en medio es gratis hoy (el tablero ordena en JavaScript, nada en el
+-- repositorio ordena por `estado`); reordenar después no existe en Postgres.
+--
+-- CADA ANCLA ES UN VALOR QUE YA EXISTÍA
+-- `EN_CAMINO` y `EN_SITIO` se anclan los dos `BEFORE 'EN_PROCESO'`, no uno
+-- detrás del otro: anclar contra un valor añadido en la misma transacción sería
+-- usarlo, que es justo lo que Postgres prohíbe. Como se aplican en este orden,
+-- `EN_SITIO` cae entre `EN_CAMINO` y `EN_PROCESO`, que es donde va.
+--
+-- `IF NOT EXISTS` lo hace idempotente: volver a aplicar el archivo no falla.
+--
+-- QUÉ SIGNIFICA CADA UNO (el acuerdo de `docs/puntos-qr-whatsapp/F7-propuesta-estados.md`)
+--   ACEPTADO .......... el técnico asignado dice que la toma. Solo `asignado_a`.
+--   EN_CAMINO ......... va para allá. Declarativo.
+--   EN_SITIO .......... llegó, y lo ESCRIBE EL ESCANEO del QR, no un botón. La
+--                       salida para el QR ilegible queda marcada como apertura
+--                       manual, igual que hace F4 con el código impreso, para
+--                       que se distingan en el informe.
+--   APROBADO_CLIENTE .. el cliente recibió a satisfacción (firma en sitio, o
+--                       nombre + cargo + fecha), o venció el plazo del contrato
+--                       y se aprobó tácitamente.
+--
+-- Los tres primeros son OPCIONALES: el camino corto de siempre
+-- (`ABIERTO → RECIBIDO → EN_PROCESO → RESUELTO → CERRADO`) sigue existiendo tal
+-- cual para el ticket correctivo de maquinaria propia, y el SLA de respuesta se
+-- corta con la primera marca de tiempo que exista.
+-- =============================================================================
+
+ALTER TYPE estado_ticket_mant ADD VALUE IF NOT EXISTS 'ACEPTADO'         AFTER  'RECIBIDO';
+ALTER TYPE estado_ticket_mant ADD VALUE IF NOT EXISTS 'EN_CAMINO'        BEFORE 'EN_PROCESO';
+ALTER TYPE estado_ticket_mant ADD VALUE IF NOT EXISTS 'EN_SITIO'         BEFORE 'EN_PROCESO';
+ALTER TYPE estado_ticket_mant ADD VALUE IF NOT EXISTS 'APROBADO_CLIENTE' AFTER  'RESUELTO';

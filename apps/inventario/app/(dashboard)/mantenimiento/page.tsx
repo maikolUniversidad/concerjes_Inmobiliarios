@@ -21,7 +21,7 @@ export default async function MantenimientoPage({ searchParams }: { searchParams
   const periodo: Periodo = PERIODOS.some((p) => p.k === sp.periodo) ? sp.periodo as Periodo : 'mes'
   const rango = rangoPeriodo(periodo, sp.desde, sp.hasta)
 
-  const SELECT = 'id, numero, tipo, prioridad, estado, titulo, reportado_nombre, asignado_a, asignado_nombre, created_at, recibido_at, iniciado_at, resuelto_at, cerrado_at, programado_para, ultimo_mensaje_at, costo, maquinaria:maquinaria_id(id, codigo, nombre), sede:sede_id(id, nombre)'
+  const SELECT = 'id, numero, tipo, prioridad, estado, titulo, reportado_nombre, asignado_a, asignado_nombre, created_at, recibido_at, iniciado_at, resuelto_at, cerrado_at, programado_para, ultimo_mensaje_at, costo, origen, activo_codigo, activo_nombre, maquinaria:maquinaria_id(id, codigo, nombre), sede:sede_id(id, nombre)'
   const enRango = (q: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     if (rango.desde) q = q.gte('created_at', rango.desde)
     if (rango.hasta) q = q.lt('created_at', rango.hasta)
@@ -29,13 +29,13 @@ export default async function MantenimientoPage({ searchParams }: { searchParams
   }
   const limiteAlerta = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
 
-  const [tickets, activos, equipos] = await Promise.all([
+  const [tickets, backlogFila, equipos] = await Promise.all([
     traerTodo<TicketFila>((desde, hasta) => enRango(sb.from('mantenimiento_tickets').select(SELECT))
       .order('created_at', { ascending: false }).order('id').range(desde, hasta), { etiqueta: 'Tickets' }),
-    // Pendientes de cualquier fecha: el trabajo por hacer no depende del periodo.
-    traerTodo<{ estado: string; prioridad: string; asignado_a: string | null }>((desde, hasta) => sb.from('mantenimiento_tickets')
-      .select('estado, prioridad, asignado_a').in('estado', ['ABIERTO', 'RECIBIDO', 'EN_PROCESO', 'EN_ESPERA', 'RESUELTO'])
-      .order('id').range(desde, hasta), { etiqueta: 'Pendientes' }),
+    // El pendiente de cualquier fecha (no depende del periodo) lo cuenta la
+    // vista en SQL. Antes se traían todas las filas pendientes para contarlas
+    // en JavaScript, y Supabase corta a los 8 s: el backlog de un año no cabe.
+    sb.from('vw_mant_backlog').select('*').maybeSingle(),
     traerTodo<EquipoAlerta>((desde, hasta) => sb.from('maquinaria')
       .select('id, codigo, nombre, estado, condicion, proximo_mant, sedes:ubicacion_sede_id(nombre)')
       .eq('activo', true).neq('estado', 'BAJA')
@@ -43,12 +43,19 @@ export default async function MantenimientoPage({ searchParams }: { searchParams
       .order('codigo').order('id').range(desde, hasta), { etiqueta: 'Equipos' }),
   ])
 
+  // La vista devuelve `bigint`, que PostgREST entrega como cadena.
+  const n = (v: unknown) => Number(v ?? 0)
+  const f = (backlogFila?.data ?? {}) as Record<string, unknown>
   const backlog: Backlog = {
-    porRecibir: activos.filter((t) => t.estado === 'ABIERTO').length,
-    enCurso: activos.filter((t) => ['RECIBIDO', 'EN_PROCESO', 'EN_ESPERA'].includes(t.estado)).length,
-    criticos: activos.filter((t) => t.estado !== 'RESUELTO' && (t.prioridad === 'CRITICA' || t.prioridad === 'ALTA')).length,
-    porConfirmar: activos.filter((t) => t.estado === 'RESUELTO').length,
-    mios: activos.filter((t) => t.estado !== 'RESUELTO' && t.asignado_a === user?.id).length,
+    por_recibir: n(f.por_recibir),
+    en_curso: n(f.en_curso),
+    criticos: n(f.criticos),
+    por_aprobar: n(f.por_aprobar),
+    por_cerrar: n(f.por_cerrar),
+    aprobacion_vencida: n(f.aprobacion_vencida),
+    mios: n(f.mios),
+    sla_respuesta_vencido: n(f.sla_respuesta_vencido),
+    sla_solucion_vencido: n(f.sla_solucion_vencido),
   }
 
   return (

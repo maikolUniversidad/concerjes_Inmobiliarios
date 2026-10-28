@@ -91,8 +91,9 @@ export const navigation: NavModule[] = [
     title: 'Mantenimiento',
     icon: HardHat,
     items: [
-      { label: 'Escanear equipo', href: '/equipo',        icon: ScanLine, permiso: 'reportar_falla_maquinaria' },
-      { label: 'Tablero',         href: '/mantenimiento', icon: HardHat,  permiso: 'ver_mantenimiento' },
+      { label: 'Escanear equipo', href: '/equipo',               icon: ScanLine,      permiso: 'reportar_falla_maquinaria' },
+      { label: 'Tablero',         href: '/mantenimiento',        icon: HardHat,       permiso: 'ver_mantenimiento' },
+      { label: 'Planes preventivos', href: '/mantenimiento/planes', icon: CalendarClock, permiso: 'ver_mantenimiento' },
     ],
   },
   {

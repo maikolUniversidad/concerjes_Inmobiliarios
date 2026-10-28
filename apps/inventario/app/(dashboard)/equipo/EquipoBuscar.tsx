@@ -7,7 +7,7 @@ import { QrCode, Search, Wrench, AlertTriangle, CalendarClock, Loader2, ChevronR
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { ESTADO_MAQ_META } from '../maquinaria/estados'
-import { CONDICION_META, extraerReferenciaEquipo } from '@/lib/mantenimiento'
+import { CONDICION_META, ESTADOS_TICKET_EN_CURSO, extraerReferenciaEquipo } from '@/lib/mantenimiento'
 
 export interface EquipoRow {
   id: string; codigo: string; nombre: string; tipo: string | null; marca: string | null; modelo: string | null
@@ -16,8 +16,10 @@ export interface EquipoRow {
   mantenimiento_tickets: { id: string; estado: string }[]
 }
 
-const ABIERTOS = new Set(['ABIERTO', 'RECIBIDO', 'EN_PROCESO', 'EN_ESPERA'])
-const abiertos = (e: EquipoRow) => (e.mantenimiento_tickets ?? []).filter((t) => ABIERTOS.has(t.estado)).length
+// La lista sale de `lib/mantenimiento`: antes estaba escrita aquí y se quedaba
+// corta cada vez que el enum crecía.
+const abiertos = (e: EquipoRow) =>
+  (e.mantenimiento_tickets ?? []).filter((t) => ESTADOS_TICKET_EN_CURSO.includes(t.estado)).length
 const fechaCorta = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 
 export function EquipoBuscar({ sede, equipos }: { sede: { id: string; nombre: string } | null; equipos: EquipoRow[] }) {

@@ -11,10 +11,20 @@ import { FotosPicker } from './FotosPicker'
 
 type Modo = 'CORRECTIVO' | 'SOPORTE_REMOTO' | 'PREVENTIVO' | 'INSPECCION'
 
-export function ReportarFallaForm({ abierta, onClose, maquina, modoInicial = 'CORRECTIVO', esTecnico }: {
+/**
+ * Reportar una falla. Sirve para las dos cosas que el módulo atiende, y de
+ * `esActivo` depende a cuál:
+ *   · un EQUIPO PROPIO de la empresa (`maquinaria`) → ticket de siempre;
+ *   · un ACTIVO DEL CLIENTE (F6) → orden de trabajo, con el alcance por
+ *     contrato que valida la RPC.
+ * `mant_reportar` exige exactamente uno de los dos, así que aquí se manda uno.
+ */
+export function ReportarFallaForm({ abierta, onClose, maquina, esActivo = false, modoInicial = 'CORRECTIVO', esTecnico }: {
   abierta: boolean
   onClose: () => void
   maquina: { id: string; codigo: string; nombre: string }
+  /** true = `maquina` es un activo del cliente, no un equipo propio. */
+  esActivo?: boolean
   modoInicial?: Modo
   esTecnico: boolean
 }) {
@@ -45,8 +55,10 @@ export function ReportarFallaForm({ abierta, onClose, maquina, modoInicial = 'CO
       }
       setPaso('Creando ticket…')
       const estadoEquipo = programable ? null : funciona === 'NO' ? 'DANADA' : null
+      const estadoActivo = programable ? null
+        : funciona === 'NO' ? 'FUERA_SERVICIO' : funciona === 'CON_FALLA' ? 'DEGRADADO' : null
       const { data, error } = await sb.rpc('mant_reportar', {
-        p_maquinaria: maquina.id,
+        ...(esActivo ? { p_activo: maquina.id } : { p_maquinaria: maquina.id }),
         p_tipo: tipo,
         p_prioridad: funciona === 'NO' && prioridad === 'BAJA' ? 'MEDIA' : prioridad,
         p_titulo: titulo.trim(),
@@ -54,12 +66,12 @@ export function ReportarFallaForm({ abierta, onClose, maquina, modoInicial = 'CO
           descripcion.trim(),
           !programable ? `Estado al reportar: ${funciona === 'SI' ? 'funciona' : funciona === 'NO' ? 'no funciona' : 'funciona con falla'}.` : '',
         ].filter(Boolean).join('\n\n'),
-        p_estado_equipo: estadoEquipo,
+        ...(esActivo ? { p_estado_activo: estadoActivo } : { p_estado_equipo: estadoEquipo }),
         p_fotos: rutas,
         p_programado: programable && programado ? programado : null,
       })
       if (error) throw new Error(error.message)
-      toast.success(`Ticket ${data.numero} creado. Mantenimiento ya fue notificado.`)
+      toast.success(`${esActivo ? 'Orden' : 'Ticket'} ${data.numero} creada. Mantenimiento ya fue notificado.`)
       onClose()
       router.push(`/mantenimiento/${data.id}`)
     } catch (e) {
