@@ -19,7 +19,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { BarcodeScanner } from '@/components/ui/BarcodeScanner'
 import { Hoja, inputMant, labelMant } from './Hoja'
-import { extraerReferenciaEquipo, UUID_RE } from '@/lib/mantenimiento'
+import { clasificarEscaneoOT } from '@/lib/mantenimiento'
 
 export function AbrirVisitaOT({ ticketId, tienePunto, onListo }: {
   ticketId: string
@@ -50,7 +50,15 @@ export function AbrirVisitaOT({ ticketId, tienePunto, onListo }: {
     })
   }
 
-  function abrir(qrId: string | null, modo: 'QR' | 'MANUAL', motivoTexto: string | null) {
+  /**
+   * Abre la visita. El CÓDIGO de la placa se le manda a la RPC tal cual
+   * (`p_codigo`) y ella lo resuelve contra `ronda_qr`: el token de 21 y el
+   * código manual de 8 están impresos en la misma placa y se buscan en
+   * columnas distintas, así que resolverlo aquí serían dos caminos donde
+   * equivocarse. Antes esta pantalla le pasaba la URL entera y nunca
+   * encontraba nada.
+   */
+  function abrir(codigo: string | null, modo: 'QR' | 'MANUAL', motivoTexto: string | null) {
     startTransition(async () => {
       const u = await ubicacion()
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,7 +68,7 @@ export function AbrirVisitaOT({ ticketId, tienePunto, onListo }: {
         // El id de la visita lo genera el dispositivo: así la RPC es
         // idempotente y un reintento no abre dos visitas.
         p_visita: globalThis.crypto?.randomUUID?.() ?? null,
-        p_qr: qrId,
+        p_codigo: codigo,
         p_lat: u.lat, p_lng: u.lng, p_precision: u.precision,
         p_motivo_fuera: motivoTexto,
         p_apertura_modo: modo,
@@ -79,22 +87,25 @@ export function AbrirVisitaOT({ ticketId, tienePunto, onListo }: {
 
   function conCodigo(valor: string) {
     setEscaneando(false)
-    const ref = extraerReferenciaEquipo(valor)
-    // El QR de un activo resuelve en /q/<token> y el de un punto igual: lo que
-    // la RPC necesita es el id de la fila de `ronda_qr`. Si lo que llega no es
-    // un uuid, se resuelve el token contra la base.
-    if (UUID_RE.test(ref)) { abrir(ref, 'QR', null); return }
-    startTransition(async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const sb = createClient() as any
-      const { data, error } = await sb.rpc('ronda_qr_objeto_por_token', { p_token: ref })
-      const fila = Array.isArray(data) ? data[0] : data
-      if (error || !fila?.qr_id) {
-        toast.error('Ese código no corresponde a una placa registrada. Si la placa está ilegible, usa la apertura manual.')
-        return
-      }
-      abrir(fila.qr_id, 'QR', null)
-    })
+    const r = clasificarEscaneoOT(valor)
+
+    if (r.tipo === 'EQUIPO') {
+      // La placa de un equipo propio de la empresa, no la del activo del
+      // cliente. Se dice cuál escaneó en vez de un «no está registrada» que
+      // haría pensar que la placa está mala.
+      toast.error(`Esa es la placa del equipo ${r.referencia}, de la empresa. Esta orden es sobre un activo del cliente: escanea la placa del activo o la de su punto de control.`)
+      return
+    }
+    if (r.tipo === 'DESCONOCIDO') {
+      toast.error('Eso no tiene forma de código de placa. Si la placa está ilegible, usa la apertura manual.')
+      return
+    }
+
+    // Token o código manual: los dos los resuelve la RPC. El modo lo decide la
+    // forma del código, no la pantalla: un manual tecleado no es un escaneo.
+    abrir(r.codigo, r.modo, r.modo === 'MANUAL'
+      ? 'Código manual de la placa, tecleado o leído sin el QR'
+      : null)
   }
 
   if (!tienePunto) {

@@ -36,6 +36,9 @@ export type TicketDetalle = MantenimientoTicket & {
     tipo: { nombre: string; normativa: string | null } | null
   } | null
   plan: { id: string; codigo: string; nombre: string; frecuencia_tipo: string; frecuencia_valor: number; obligatorio_normativo: boolean; normativa: string | null } | null
+  /** La unidad del contador, para que un plan por medidor no diga «unidades»
+   *  donde el resto de la pantalla dice «horas». */
+  medidor: { id: string; nombre: string; unidad: string | null } | null
   proveedor: { id: string; nombre: string } | null
   sede: { id: string; nombre: string } | null
 }
@@ -289,7 +292,7 @@ export function TicketClient({ ticket: t, mensajes, tecnicos, materiales, usuari
               <p className="flex items-center gap-1.5 text-gray-700">
                 <CalendarClock className="w-3.5 h-3.5 text-gray-400" />
                 Plan <span className="font-mono text-xs text-gray-500">{t.plan.codigo}</span> · {t.plan.nombre} ·{' '}
-                {textoFrecuencia(t.plan.frecuencia_tipo, t.plan.frecuencia_valor)}
+                {textoFrecuencia(t.plan.frecuencia_tipo, t.plan.frecuencia_valor, t.medidor?.unidad)}
                 {t.plan.obligatorio_normativo && (
                   <span className="ml-1 rounded-full bg-amber-100 px-1.5 py-0.5 text-[10px] font-medium text-amber-700">
                     Obligatorio{t.plan.normativa ? ` · ${t.plan.normativa}` : ''}
@@ -346,8 +349,8 @@ export function TicketClient({ ticket: t, mensajes, tecnicos, materiales, usuari
             <p className={`${labelMant} flex items-center gap-1`}><Signature className="w-3.5 h-3.5" /> Aprobación del cliente</p>
             {t.aprobado_tacito ? (
               <p className="text-sm text-gray-700">
-                Aprobada <b>tácitamente</b>: venció el plazo del contrato sin respuesta del cliente,
-                el {fechaHora(t.aprobado_cliente_at)}. No hay firma.
+                Aprobada <b>tácitamente</b> el {fechaHora(t.aprobado_cliente_at)} — venció el plazo
+                del contrato sin respuesta del cliente, así que no hay firma.
               </p>
             ) : (
               <p className="text-sm text-gray-700">

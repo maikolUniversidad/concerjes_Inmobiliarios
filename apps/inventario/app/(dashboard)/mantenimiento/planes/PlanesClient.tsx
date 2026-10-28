@@ -37,7 +37,7 @@ export interface PlanFila {
   objeto_activo: { codigo: string; nombre: string } | null
   objeto_maquinaria: { codigo: string; nombre: string } | null
   proveedor: { nombre: string } | null
-  tareas: { id: string; orden: number; plantilla_id: string | null; descripcion: string | null; plantilla: { codigo: string; nombre: string; version: number } | null }[]
+  tareas: { id: string; orden: number; plantilla_id: string | null; plantilla_codigo: string | null; descripcion: string | null; plantilla: { codigo: string; nombre: string; version: number } | null }[]
   materiales: { id: string; cantidad: number; producto_id: string; producto: { nombre_estandar: string; presentacion: string | null } | null }[]
 }
 
@@ -61,9 +61,17 @@ export interface Opciones {
 const fecha = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
 const num = (n: number) => new Intl.NumberFormat('es-CO', { maximumFractionDigits: 2 }).format(n)
 
-/** A qué se aplica un plan, en una línea. */
+/**
+ * A qué se aplica un plan, en una línea.
+ *
+ * Para un plan por tipo se dice «Cada extintor», no «Todos los extintor»: los
+ * nombres de `activo_tipos` están en singular y con géneros mezclados
+ * (Extintor, Luminaria, Bomba de agua…), así que cualquier artículo fijo se
+ * equivoca en la mitad. «Cada» concuerda con todos y además dice lo que un
+ * plan por tipo hace de verdad: una orden por cada activo de ese tipo.
+ */
 function objetoDe(p: PlanFila): string {
-  if (p.tipo) return `Todos los ${p.tipo.nombre.toLowerCase()}`
+  if (p.tipo) return `Cada ${p.tipo.nombre.toLowerCase()}`
   if (p.objeto_activo) return `${p.objeto_activo.codigo} · ${p.objeto_activo.nombre}`
   if (p.objeto_maquinaria) return `${p.objeto_maquinaria.codigo} · ${p.objeto_maquinaria.nombre} (equipo propio)`
   return '—'
@@ -96,6 +104,15 @@ export function PlanesClient({ planes, proximos, opciones, puedeGestionar }: {
       })
   }, [proximos])
 
+  // La unidad del medidor por plan: sin ella la tabla decía «cada 500
+  // unidades» mientras «Lo que toca» decía «1.200 de 1.500 horas», las dos
+  // zonas de la misma pantalla contradiciéndose.
+  const unidadPorPlan = useMemo(() => {
+    const m = new Map<string, string>()
+    for (const p of proximos) if (p.medidor_unidad) m.set(p.plan_id, p.medidor_unidad)
+    return m
+  }, [proximos])
+
   const vencidos = pendientes.filter((p) => p.vencido && !p.ticket_abierto_id).length
   const conOrden = pendientes.filter((p) => p.ticket_abierto_id).length
 
@@ -125,11 +142,11 @@ export function PlanesClient({ planes, proximos, opciones, puedeGestionar }: {
     { id: 'objeto', header: 'Se aplica a', valor: objetoDe, tarjeta: 'meta', className: 'text-xs text-gray-700 max-w-[240px] truncate' },
     {
       id: 'frecuencia', header: 'Cada', tarjeta: 'badge',
-      valor: (p) => textoFrecuencia(p.frecuencia_tipo, p.frecuencia_valor),
+      valor: (p) => textoFrecuencia(p.frecuencia_tipo, p.frecuencia_valor, unidadPorPlan.get(p.id)),
       celda: (p) => (
         <span className="inline-flex items-center gap-1 text-xs text-gray-700">
           {p.frecuencia_tipo === 'MEDIDOR' && <Gauge className="w-3 h-3 text-gray-400" />}
-          {textoFrecuencia(p.frecuencia_tipo, p.frecuencia_valor)}
+          {textoFrecuencia(p.frecuencia_tipo, p.frecuencia_valor, unidadPorPlan.get(p.id))}
         </span>
       ),
     },
@@ -274,6 +291,7 @@ export function PlanesClient({ planes, proximos, opciones, puedeGestionar }: {
       )}
       {detalle && (
         <DetalleHoja plan={detalle} opciones={opciones} puedeGestionar={puedeGestionar}
+          unidadMedidor={unidadPorPlan.get(detalle.id)}
           onClose={() => setDetalle(null)} />
       )}
     </div>
@@ -510,10 +528,11 @@ function PlanHoja({ plan, opciones, onClose, onListo }: {
   )
 }
 
-function DetalleHoja({ plan, opciones, puedeGestionar, onClose }: {
+function DetalleHoja({ plan, opciones, puedeGestionar, unidadMedidor, onClose }: {
   plan: PlanFila
   opciones: Opciones
   puedeGestionar: boolean
+  unidadMedidor?: string
   onClose: () => void
 }) {
   const [pending, startTransition] = useTransition()
@@ -533,7 +552,7 @@ function DetalleHoja({ plan, opciones, puedeGestionar, onClose }: {
     <Hoja abierta titulo={`${plan.codigo} · ${plan.nombre}`} onClose={onClose}>
       <div className="space-y-1 text-sm text-gray-700">
         <p><b>Se aplica a:</b> {objetoDe(plan)}</p>
-        <p><b>Frecuencia:</b> {textoFrecuencia(plan.frecuencia_tipo, plan.frecuencia_valor)}</p>
+        <p><b>Frecuencia:</b> {textoFrecuencia(plan.frecuencia_tipo, plan.frecuencia_valor, unidadMedidor)}</p>
         <p><b>Contrato:</b> {plan.grupo ? `${plan.grupo.codigo} · ${plan.grupo.nombre}` : 'todos'}</p>
         <p><b>Avisa:</b> {plan.anticipacion_dias} días antes · tolerancia {plan.tolerancia_dias} d</p>
         {plan.proveedor && <p><b>Proveedor:</b> {plan.proveedor.nombre}</p>}
@@ -559,7 +578,18 @@ function DetalleHoja({ plan, opciones, puedeGestionar, onClose }: {
                       <span className="font-mono text-xs text-gray-500">{t.plantilla.codigo}</span> v{t.plantilla.version} ·{' '}
                       {t.plantilla.nombre}
                     </>
-                  ) : '—'}
+                  ) : t.plantilla_codigo ? (
+                    // Una tarea puede fijar la tarea por CÓDIGO y no por id, para
+                    // que cada contrato ejecute su versión publicada (F3). Antes
+                    // se dibujaba como un guion, como si estuviera vacía.
+                    <>
+                      <span className="font-mono text-xs text-gray-500">{t.plantilla_codigo}</span>
+                      <span className="text-gray-500"> · la versión publicada de cada contrato</span>
+                    </>
+                  ) : (
+                    <span className="text-gray-400">sin tarea</span>
+                  )}
+                  {t.descripcion && <span className="block text-[11px] text-gray-500">{t.descripcion}</span>}
                 </span>
                 {puedeGestionar && (
                   <button onClick={() => accion(() => borrarTarea(t.id), 'Tarea quitada.')} disabled={pending}

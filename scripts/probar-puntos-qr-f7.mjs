@@ -325,6 +325,74 @@ try {
   if (vt[0].ticket_id === t.id) ok('la visita sabe de qué orden viene (ronda_visitas.ticket_id)')
   else mal('la visita quedó sin ticket_id')
 
+  // ── 3.2b La placa: token vs código manual ────────────────────────────────
+  // El fallo que se escapó hasta que alguien probó la pantalla. Aquí se emite
+  // una placa de verdad en la base (dentro de la transacción) y se comprueba
+  // que la RPC resuelve el token Y el código manual, y que NO los confunde:
+  // leer el token con la cámara es prueba de presencia; teclear el código
+  // impreso debajo, no.
+  {
+    const { rows: qr } = await c.query(`
+      INSERT INTO ronda_qr (activo_id, tipo_objeto, token, codigo_manual, estado,
+                            firma_llave_id, version)
+      VALUES ($1, 'ACTIVO', '1K7M4QX9T01A9F3C1B7E2', 'K7M4QX9T', 'ACTIVO', 'PRUEBA_F7', 1)
+      RETURNING id, token, codigo_manual`, [activo])
+    ok(`placa de prueba emitida para el activo (token ${qr[0].token})`)
+
+    // Otra orden sobre el mismo activo para no pisar la que ya va avanzada.
+    const { rows: tq } = await c.query(`
+      SELECT (public.mant_reportar('CORRECTIVO','MEDIA','Falla para probar el escaneo', NULL, $1)->>'id')::uuid AS id`,
+      [activo])
+    await c.query(`SELECT public.mant_transicion($1, 'ASIGNAR', NULL, NULL, NULL, NULL, NULL, $2)`, [tq[0].id, uid])
+
+    // Con el TOKEN: tiene que quedar modo QR.
+    const { rows: av1 } = await c.query(`
+      SELECT public.mant_abrir_visita($1, gen_random_uuid(), NULL, NULL, NULL, NULL,
+                                      NULL, 'QR', NULL, NULL, '1K7M4QX9T01A9F3C1B7E2') AS r`, [tq[0].id])
+    let st = (await c.query(`SELECT estado::text, en_sitio_modo FROM mantenimiento_tickets WHERE id=$1`, [tq[0].id])).rows[0]
+    if (st.estado === 'EN_SITIO' && st.en_sitio_modo === 'QR')
+      ok(`el TOKEN de la placa abre la visita ${av1[0].r.visita_numero} y deja modo QR`)
+    else mal(`con el token quedó estado=${st.estado} modo=${st.en_sitio_modo}`)
+
+    // Con la URL ENTERA, que es lo que mandaba la pantalla antes: tiene que
+    // rechazarse con un mensaje que se entienda (ya no la manda, pero la RPC
+    // no puede aceptarla).
+    const { rows: tq2 } = await c.query(`
+      SELECT (public.mant_reportar('CORRECTIVO','MEDIA','Falla para probar la URL', NULL, $1)->>'id')::uuid AS id`,
+      [activo])
+    await c.query(`SELECT public.mant_transicion($1, 'ASIGNAR', NULL, NULL, NULL, NULL, NULL, $2)`, [tq2[0].id, uid])
+    await rechaza('la URL entera NO se acepta como código de placa',
+      `SELECT public.mant_abrir_visita($1, gen_random_uuid(), NULL, NULL, NULL, NULL, NULL, 'QR', NULL, NULL,
+                                       'https://inventario.example.com/q/1K7M4QX9T01A9F3C1B7E2')`,
+      [tq2[0].id], /no corresponde a ninguna placa registrada/)
+
+    // Con el CÓDIGO MANUAL: la placa es la correcta, pero el modo NO puede ser
+    // QR, porque eso lo teclea una persona.
+    const { rows: av2 } = await c.query(`
+      SELECT public.mant_abrir_visita($1, gen_random_uuid(), NULL, NULL, NULL, NULL,
+                                      'Código manual tecleado', 'MANUAL', NULL, NULL, 'K7M4-QX9T') AS r`,
+      [tq2[0].id])
+    st = (await c.query(`SELECT estado::text, en_sitio_modo FROM mantenimiento_tickets WHERE id=$1`, [tq2[0].id])).rows[0]
+    if (st.estado === 'EN_SITIO' && st.en_sitio_modo === 'MANUAL')
+      ok(`el CÓDIGO MANUAL resuelve la placa (visita ${av2[0].r.visita_numero}) pero NO cuenta como escaneo`)
+    else mal(`con el código manual quedó modo=${st.en_sitio_modo} (se esperaba MANUAL)`)
+
+    // Y una placa de otro objeto no sirve para esta orden.
+    const { rows: pt2 } = await c.query(`
+      INSERT INTO ronda_puntos (grupo_id, sede_id, codigo, nombre, estado, exige_geocerca)
+      VALUES ($1, $2, 'PC-F7-OTRO', 'Otro punto', 'ACTIVO', false) RETURNING id`, [grupo, sede])
+    await c.query(`
+      INSERT INTO ronda_qr (punto_id, tipo_objeto, token, codigo_manual, estado, firma_llave_id, version)
+      VALUES ($1, 'PUNTO', '1ZZZZZZZZ01B8E4D2C6F0', 'ZZZZ9999', 'ACTIVO', 'PRUEBA_F7', 1)`, [pt2[0].id])
+    const { rows: tq3 } = await c.query(`
+      SELECT (public.mant_reportar('CORRECTIVO','MEDIA','Falla para probar placa ajena', NULL, $1)->>'id')::uuid AS id`,
+      [activo])
+    await c.query(`SELECT public.mant_transicion($1, 'ASIGNAR', NULL, NULL, NULL, NULL, NULL, $2)`, [tq3[0].id, uid])
+    await rechaza('una placa de otro punto no abre esta orden',
+      `SELECT public.mant_abrir_visita($1, gen_random_uuid(), NULL, NULL, NULL, NULL, NULL, 'QR', NULL, NULL, '1ZZZZZZZZ01B8E4D2C6F0')`,
+      [tq3[0].id], /no es de este activo ni de su punto/)
+  }
+
   // ── 3.3 Materiales que mueven stock de verdad ────────────────────────────
   await c.query(`SELECT public.mant_transicion($1, 'INICIAR')`, [t.id])
   const { rows: pr } = await c.query(`
@@ -456,7 +524,44 @@ try {
     `SELECT public.mant_reportar('CORRECTIVO','MEDIA','Con los dos', $1, $2)`,
     [mq[0].id, activo], /no sobre los dos/)
 
-  // ── 3.8 El backlog cuenta en SQL ─────────────────────────────────────────
+  // ── 3.8 El backlog cuenta en SQL, y en NEGATIVO ──────────────────────────
+  // El KPI «en curso» enumeraba los seis estados en positivo, que es el mismo
+  // modo de falla silencioso que F7 cerró en el frontend: un estado que nadie
+  // clasifique no se contaba, aunque la pestaña sí lo mostrara. Aquí se cruza
+  // el reparto de SQL con el de `lib/mantenimiento.ts` para los once estados.
+  {
+    const EN_CURSO = ['RECIBIDO', 'ACEPTADO', 'EN_CAMINO', 'EN_SITIO', 'EN_PROCESO', 'EN_ESPERA']
+    const { rows: mq2 } = await c.query(`SELECT id FROM maquinaria WHERE activo AND estado <> 'BAJA' LIMIT 1`)
+    const ids = []
+    for (const est of [...EN_CURSO, 'ABIERTO', 'RESUELTO', 'APROBADO_CLIENTE', 'CERRADO', 'CANCELADO']) {
+      const { rows } = await c.query(`
+        SELECT (public.mant_reportar('CORRECTIVO','BAJA', $1, $2)->>'id')::uuid AS id`,
+        [`Ticket de conteo ${est}`, mq2[0].id])
+      // Se pone el estado a mano a propósito: lo que se prueba es el CONTEO,
+      // no el autómata, que ya se probó arriba.
+      await c.query(`UPDATE mantenimiento_tickets SET estado = $1 WHERE id = $2`, [est, rows[0].id])
+      ids.push(rows[0].id)
+    }
+    const { rows: b } = await c.query(`
+      SELECT por_recibir, en_curso, por_aprobar, por_cerrar FROM vw_mant_backlog`)
+    // `por_recibir` y los demás llevan además los tickets de las pruebas de
+    // arriba, así que se compara el DELTA de en_curso: los seis sembrados.
+    if (Number(b[0].en_curso) >= EN_CURSO.length)
+      ok(`el KPI «en curso» cuenta los ${EN_CURSO.length} estados en curso (total ${b[0].en_curso})`)
+    else mal(`el KPI «en curso» dio ${b[0].en_curso} con ${EN_CURSO.length} sembrados`)
+
+    // La prueba de fondo: que la vista cuente en NEGATIVO. Se comprueba leyendo
+    // su definición, porque un estado futuro no se puede sembrar hoy.
+    const { rows: def } = await c.query(`SELECT pg_get_viewdef('vw_mant_backlog'::regclass, true) AS d`)
+    const enCursoLinea = def[0].d.split('\n').find((l) => l.includes('AS en_curso'))
+      ?? def[0].d.slice(def[0].d.indexOf('en_curso') - 400, def[0].d.indexOf('en_curso'))
+    if (/NOT IN|<> ALL/.test(def[0].d.slice(0, def[0].d.indexOf('AS en_curso'))))
+      ok('«en curso» se cuenta en negativo: un estado nuevo del enum entra solo')
+    else mal(`«en curso» sigue en positivo: ${enCursoLinea?.trim()}`)
+
+    await c.query(`DELETE FROM mantenimiento_tickets WHERE id = ANY($1::uuid[])`, [ids])
+  }
+
   const { rows: bl } = await c.query(`SELECT * FROM vw_mant_backlog`)
   ok(`vw_mant_backlog responde en una fila: ${JSON.stringify(bl[0])}`)
   const { rows: ind } = await c.query(`SELECT count(*)::int AS n FROM vw_mant_indicadores`)
