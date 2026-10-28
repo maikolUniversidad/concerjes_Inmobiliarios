@@ -50,6 +50,37 @@ export default async function PuntoCampoPage({
     )
   }
 
+  // F6: la placa puede ser de un ACTIVO del cliente, no de un punto de control.
+  // Esta pantalla ejecuta las tareas de un PUNTO, así que de un activo no tiene
+  // nada que ejecutar todavía: la orden de trabajo sobre un equipo es F7. Se
+  // muestra qué se escaneó y se manda a la ficha pública, que sí la resuelve.
+  if (r.objeto === 'ACTIVO') {
+    return (
+      <main className="px-4 py-8">
+        <div className="rounded-2xl border border-gray-100 bg-white p-5 text-center">
+          <h1 className="font-heading text-xl font-bold">{r.activo.nombre}</h1>
+          <p className="mt-1 text-sm text-gray-500">
+            {r.activo.codigo}
+            {r.activo.tipo ? ` · ${r.activo.tipo}` : ''}
+          </p>
+          <p className="mt-3 text-sm text-gray-600">
+            Esta placa es de un equipo, no de un punto de control. Reportar una falla y hacerle
+            mantenimiento desde la app todavía no está disponible.
+          </p>
+          <a
+            href={`/q/${encodeURIComponent(codigo)}`}
+            className="mt-5 flex h-14 w-full items-center justify-center rounded-xl bg-gray-900 font-bold text-white"
+          >
+            Ver la ficha del equipo
+          </a>
+          <a href="/campo" className="mt-3 block text-sm font-semibold text-gray-500">
+            Volver a escanear
+          </a>
+        </div>
+      </main>
+    )
+  }
+
   // Sin identidad no se ejecuta nada, pero se conserva el destino: quien
   // escanea la placa vuelve a ESTE punto después de poner su PIN (ADR-A).
   const actor = await actorDeCampo()

@@ -7,7 +7,7 @@ import {
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
-  ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock,
+  ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, Cog,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -114,6 +114,12 @@ export const navigation: NavModule[] = [
       { label: 'Plantillas',   href: '/rondas/plantillas',   icon: ClipboardList, permiso: 'ver_catalogo_rondas' },
       { label: 'Instructivos', href: '/rondas/instructivos', icon: BookOpen,      permiso: 'ver_catalogo_rondas' },
       { label: 'Asignaciones', href: '/rondas/asignaciones', icon: CalendarClock, permiso: 'ver_asignaciones_rondas' },
+      // Lo que se MANTIENE en la sede del cliente: el extintor, el ascensor, la
+      // bomba. Va aquí y no en Mantenimiento porque Mantenimiento es el equipo
+      // propio de la empresa (`maquinaria`); esto es del contrato (§4.2).
+      // `Cog` y no `Wrench`: `Wrench` ya es Maquinaria, que es justo el módulo
+      // con el que no hay que confundir este.
+      { label: 'Activos', href: '/rondas/activos', icon: Cog, permiso: 'ver_activos_ronda' },
     ],
   },
   {

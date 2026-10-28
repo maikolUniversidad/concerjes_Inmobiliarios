@@ -12,7 +12,7 @@ import 'server-only'
 
 import { getAdmin } from '@/lib/supabase/admin'
 import type {
-  EventoAuditoria, FilaPunto, FilaQr, PuertaDatos,
+  EventoAuditoria, FilaActivo, FilaPunto, FilaQr, PuertaDatos,
 } from './decidir'
 
 export function puertaSupabase(): PuertaDatos {
@@ -21,7 +21,9 @@ export function puertaSupabase(): PuertaDatos {
     async buscarQr(porToken, codigo) {
       const { data, error } = await sb
         .from('ronda_qr')
-        .select('id, punto_id, grupo_id, sede_id, version, estado, firma_llave_id, codigo_manual')
+        // `tipo_objeto` y `activo_id` entran en F6: son los que dicen si la
+        // placa es de un punto o de un activo del cliente.
+        .select('id, punto_id, activo_id, tipo_objeto, grupo_id, sede_id, version, estado, firma_llave_id, codigo_manual')
         .eq(porToken ? 'token' : 'codigo_manual', codigo)
         .maybeSingle()
       if (error) throw new Error(`No se pudo resolver el código: ${error.message}`)
@@ -60,6 +62,59 @@ export function puertaSupabase(): PuertaDatos {
         sede_direccion: p.sede?.direccion ?? null,
       }
       return fila
+    },
+
+    // ── F6: el activo del cliente ────────────────────────────────────────────
+    async buscarActivo(activoId) {
+      const { data, error } = await sb
+        .from('activos')
+        .select(`id, codigo, nombre, descripcion, estado, ubicacion_texto, piso,
+                 marca, modelo, sede_nombre,
+                 tipo:activo_tipos ( nombre ),
+                 zona:ronda_zonas ( nombre ),
+                 sede:sedes ( nombre, ciudad, direccion )`)
+        .eq('id', activoId)
+        .maybeSingle()
+      if (error) throw new Error(`No se pudo leer el activo: ${error.message}`)
+      if (!data) return null
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const a = data as any
+      const fila: FilaActivo = {
+        id: a.id,
+        codigo: a.codigo,
+        nombre: a.nombre,
+        descripcion: a.descripcion,
+        estado: a.estado,
+        ubicacion_texto: a.ubicacion_texto,
+        piso: a.piso,
+        marca: a.marca,
+        modelo: a.modelo,
+        tipo_nombre: a.tipo?.nombre ?? null,
+        zona_nombre: a.zona?.nombre ?? null,
+        sede_nombre: a.sede?.nombre ?? a.sede_nombre ?? '',
+        sede_ciudad: a.sede?.ciudad ?? null,
+        sede_direccion: a.sede?.direccion ?? null,
+      }
+      return fila
+    },
+
+    async activosDePunto(puntoId) {
+      // Solo los que están en uso y no retirados: la placa del punto no tiene
+      // por qué listar un equipo que ya salió de la operación. El tope de 20 es
+      // lo que cabe en una pantalla de celular.
+      const { data, error } = await sb
+        .from('activos')
+        .select('id, codigo, nombre, tipo:activo_tipos ( nombre )')
+        .eq('punto_id', puntoId)
+        .eq('activo', true)
+        .neq('estado', 'RETIRADO')
+        .order('codigo')
+        .limit(20)
+      if (error) throw new Error(`No se pudieron leer los activos del punto: ${error.message}`)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data ?? []) as any[]).map((a) => ({
+        id: a.id, codigo: a.codigo, nombre: a.nombre, tipo_nombre: a.tipo?.nombre ?? null,
+      }))
     },
 
     async registrarEvento(e: EventoAuditoria) {
