@@ -23,9 +23,12 @@ import {
   type ContextoMaquina,
   type EstadoConversacion,
   type EventoMaquina,
+  type MenuOpcion,
+  type ProximaParada,
   type TareaCtx,
 } from './maquina'
 import { descomponer, esEstado, leerEstado, leerMensaje, tipoMensaje, type EventoCrudo } from './entrada'
+import { codigoDePunto, reconocer } from './comandos'
 import { config } from './config'
 import { CONSENTIMIENTOS, type TipoConsentimiento } from './textos'
 import { descargarMedio } from './medios'
@@ -339,6 +342,8 @@ async function armarContexto(
     tareas: [],
     tareaActual: null,
     puntosDelDia: [],
+    menu: [],
+    proximaParada: null,
     geocerca: null,
     puntoBuscado: null,
     visitaAbiertaEnOtroPunto: null,
@@ -367,6 +372,18 @@ async function armarContexto(
     estado: p.estado,
   }))
 
+  // El menú de esta persona (F10, §4.2): contrato + cargo, resuelto en SQL con
+  // la regla de «gana el conjunto más específico», y filtrado por permiso acá
+  // porque es acá donde se sabe qué permisos tiene.
+  ctx.menu = await leerMenu(supabase, conv.persona_id)
+
+  // La próxima parada (F10, §4.3) sólo se consulta cuando el mensaje la pide:
+  // el comando, o una fila del menú que apunte a esa acción. Un «hola» no
+  // tiene por qué pagar tres consultas de rutas.
+  if (necesitaProximaParada(evento, ctx.menu)) {
+    ctx.proximaParada = await leerProximaParada(supabase, conv.persona_id)
+  }
+
   // El permiso de crear un QR: la clave es PLANA (`gestionar_qr_ronda`), y se
   // resuelve contra la cuenta de la persona si la tiene. Quien no tiene cuenta
   // no tiene permisos: no es un castigo, es que no hay dónde mirarlos.
@@ -386,7 +403,6 @@ async function armarContexto(
 
   // Un código escrito a mano: se busca aquí, porque la máquina no toca la base.
   if (evento.clase === 'TEXTO' && evento.texto) {
-    const { codigoDePunto } = await import('./comandos')
     const cod = codigoDePunto(evento.texto)
     if (cod) {
       const punto = await leerPunto(supabase, { codigo: cod })
@@ -475,6 +491,89 @@ async function armarContexto(
 
   ctx.tareaActual = (ctx.datos.tareaActual as string | null) ?? null
   return ctx
+}
+
+/**
+ * El menú configurable de una persona.
+ *
+ * `crm_menu_para()` ya devuelve el conjunto más específico (contrato + cargo,
+ * contrato, cargo, general) y como máximo 10 filas, que es el tope de una lista
+ * de WhatsApp. Lo único que falta es QUITAR las opciones que piden un permiso
+ * que la persona no tiene: una opción que aparece y después responde «no tenés
+ * permiso» es una opción mal configurada.
+ */
+async function leerMenu(supabase: Sb, personaId: string): Promise<MenuOpcion[]> {
+  const { data } = await supabase.rpc('crm_menu_para', { p_persona: personaId })
+  const filas = (data ?? []) as any[]
+  if (!filas.length) return []
+
+  const conPermiso = filas.filter((f) => f.requiere_permiso)
+  const permisos = conPermiso.length ? await permisosDe(supabase, personaId) : null
+
+  return filas
+    .filter((f) => !f.requiere_permiso || permisos?.(f.requiere_permiso) === true)
+    .map((f) => ({
+      id: String(f.id),
+      etiqueta: f.etiqueta,
+      descripcion: f.descripcion ?? null,
+      accion: f.accion,
+      texto: f.texto ?? null,
+    }))
+}
+
+/** La próxima parada, tal como la calcula F8. La regla de cuál es la siguiente
+ *  vive en `ronda_proxima_parada()` y no se reimplementa: acá sólo se traduce la
+ *  respuesta a lo que la máquina entiende. */
+async function leerProximaParada(supabase: Sb, personaId: string): Promise<ProximaParada> {
+  const { data } = await supabase.rpc('ronda_proxima_parada', { p_persona: personaId })
+  const r = (data ?? {}) as any
+  if (r.estado === 'PARADA' && r.punto) {
+    return {
+      estado: 'PARADA',
+      codigo: r.punto.codigo ?? '',
+      nombre: r.punto.nombre ?? '',
+      // §4.3: «si falta la foto o la referencia, el bot usa lo que haya».
+      comoLlegar: r.punto.como_llegar ?? null,
+      piso: r.punto.piso ?? null,
+      paradasPendientes: r.paradas_pendientes ?? null,
+    }
+  }
+  return { estado: r.estado === 'RUTA_TERMINADA' ? 'RUTA_TERMINADA' : 'SIN_RUTA' }
+}
+
+/** ¿Este mensaje puede necesitar la próxima parada? */
+function necesitaProximaParada(evento: EventoMaquina, menu: MenuOpcion[]): boolean {
+  // Se usa el MISMO reconocedor de comandos que la máquina, para que no haya
+  // dos listas de frases que puedan quedar desalineadas.
+  if (evento.clase === 'TEXTO') return reconocer(evento.texto) === 'PROXIMA_UBICACION'
+  if ((evento.clase === 'BOTON' || evento.clase === 'LISTA') && evento.idRespuesta?.startsWith('menu:')) {
+    const id = evento.idRespuesta.slice('menu:'.length)
+    return menu.some((o) => o.id === id && o.accion === 'PROXIMA_UBICACION')
+  }
+  return false
+}
+
+/** Los permisos efectivos de la persona, si tiene cuenta. Quien no tiene cuenta
+ *  no tiene permisos: no es un castigo, es que no hay dónde mirarlos. */
+async function permisosDe(
+  supabase: Sb,
+  personaId: string,
+): Promise<((clave: string) => boolean) | null> {
+  const { data: persona } = await supabase
+    .from('personas')
+    .select('usuario_id')
+    .eq('id', personaId)
+    .maybeSingle()
+  if (!persona?.usuario_id) return () => false
+  const { data: usuario } = await supabase
+    .from('usuarios')
+    .select('rol, permisos, roles ( permisos )')
+    .eq('id', persona.usuario_id)
+    .maybeSingle()
+  if (!usuario) return () => false
+  if (usuario.rol === 'ADMIN' || usuario.rol === 'SUPER_ADMIN') return () => true
+  const permisos = { ...((usuario as any).roles?.permisos ?? {}), ...(usuario.permisos ?? {}) }
+  return (clave: string) => permisos[clave] === true
 }
 
 async function leerConsentimientos(

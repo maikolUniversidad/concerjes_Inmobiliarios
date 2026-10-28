@@ -8,7 +8,7 @@ import {
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, Cog,
-  MapPinned, Route, MessagesSquare,
+  MapPinned, Route, MessagesSquare, Send,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -129,6 +129,10 @@ export const navigation: NavModule[] = [
       // El bot: las conversaciones, la cola de salida y el estado de las
       // plantillas ante Meta.
       { label: 'WhatsApp', href: '/rondas/whatsapp', icon: MessagesSquare, permiso: 'ver_whatsapp' },
+      // Los envíos masivos y el menú del bot. Van en su propia pantalla y no en
+      // una pestaña de WhatsApp porque son otra cosa: una se mira (las
+      // conversaciones) y la otra se decide (mandarle un mensaje a 800 personas).
+      { label: 'Envíos masivos', href: '/rondas/envios', icon: Send, permiso: 'ver_envios_whatsapp' },
     ],
   },
   {

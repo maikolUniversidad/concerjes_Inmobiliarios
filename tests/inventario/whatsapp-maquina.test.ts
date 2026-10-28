@@ -15,6 +15,7 @@ import { describe, expect, it } from 'vitest'
 import {
   avanzar, REINTENTOS, RELOJES,
   type Accion, type ContextoMaquina, type EstadoConversacion, type EventoMaquina, type TareaCtx,
+  type MenuOpcion,
 } from '@/lib/whatsapp/maquina'
 
 const PUNTO = {
@@ -51,6 +52,8 @@ function ctx(p: Partial<ContextoMaquina> = {}): ContextoMaquina {
     tareas: [],
     tareaActual: null,
     puntosDelDia: [{ codigo: 'K7M4QX9', nombre: 'Portería principal', sedeNombre: 'Conjunto de prueba', estado: 'PENDIENTE' }],
+    menu: [],
+    proximaParada: null,
     geocerca: null,
     puntoBuscado: null,
     visitaAbiertaEnOtroPunto: null,
@@ -719,5 +722,128 @@ describe('invariantes de toda la máquina', () => {
         expect(tipos(r.acciones).filter((t) => t !== 'MENSAJE'), `${estado} + ${clase}`).toHaveLength(0)
       }
     }
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// F10 · El menú configurable y la próxima ubicación
+// ─────────────────────────────────────────────────────────────────────────────
+// El menú es de datos, no de código: lo configura cada contrato en
+// `crm_menu_opciones` y la máquina solo lo pinta y despacha la opción tocada.
+// Lo que estas pruebas fijan es que una opción nunca haga algo que el bot no
+// sepa hacer, y que la próxima parada NO se invente cuando no hay ruta.
+describe('F10 · menú del bot', () => {
+  const MENU: MenuOpcion[] = [
+    { id: 'm1', etiqueta: 'Mi próximo punto', accion: 'PROXIMA_UBICACION' },
+    { id: 'm2', etiqueta: 'Mis puntos de hoy', accion: 'MIS_PUNTOS' },
+    { id: 'm3', etiqueta: 'Portería', accion: 'TEXTO', texto: 'Extensión 101.' },
+    { id: 'm4', etiqueta: 'Ver mi mapa', accion: 'MI_MAPA' },
+  ]
+  const PARADA = {
+    estado: 'PARADA' as const,
+    codigo: 'K7M4QX9',
+    nombre: 'Cuarto de bombas',
+    comoLlegar: 'Al fondo del sótano',
+    piso: '-1',
+  }
+
+  it('MENÚ responde con una lista de las opciones configuradas', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'TEXTO', texto: 'menú' }), ctx({ menu: MENU }))
+    const m = r.acciones[0]
+    expect(m.tipo).toBe('MENSAJE')
+    expect(m.tipo === 'MENSAJE' && m.mensaje.tipo).toBe('LISTA')
+    const filas = m.tipo === 'MENSAJE' && m.mensaje.tipo === 'LISTA'
+      ? m.mensaje.secciones.flatMap((s) => s.filas) : []
+    expect(filas.map((f) => f.id)).toEqual(['menu:m1', 'menu:m2', 'menu:m3', 'menu:m4'])
+  })
+
+  it('sin menú configurado responde la ayuda, no una lista vacía', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'TEXTO', texto: 'MENU' }), ctx({ menu: [] }))
+    expect(r.disparador).toBe('CMD_MENU_VACIO')
+    const m = r.acciones[0]
+    expect(m.tipo === 'MENSAJE' && m.mensaje.tipo).toBe('TEXTO')
+  })
+
+  it('tocar la opción de próxima ubicación da el punto que trajo el motor', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'LISTA', idRespuesta: 'menu:m1' }),
+      ctx({ menu: MENU, proximaParada: PARADA }))
+    expect(r.disparador).toBe('MENU_PROXIMA_UBICACION')
+    const texto = r.acciones[0].tipo === 'MENSAJE' && r.acciones[0].mensaje.tipo === 'TEXTO'
+      ? r.acciones[0].mensaje.texto : ''
+    expect(texto).toContain('K7M4QX9')
+    expect(texto).toContain('Cuarto de bombas')
+    // §4.3: si falta la foto o la referencia, el bot usa lo que haya.
+    expect(texto).toContain('Al fondo del sótano')
+  })
+
+  it('una opción de texto fijo contesta ese texto y NADA más', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'LISTA', idRespuesta: 'menu:m3' }), ctx({ menu: MENU }))
+    expect(tipos(r.acciones)).toEqual(['MENSAJE'])
+    const texto = r.acciones[0].tipo === 'MENSAJE' && r.acciones[0].mensaje.tipo === 'TEXTO'
+      ? r.acciones[0].mensaje.texto : ''
+    expect(texto).toBe('Extensión 101.')
+  })
+
+  it('una opción que el canal todavía no hace lo DICE, no se queda muda', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'LISTA', idRespuesta: 'menu:m4' }), ctx({ menu: MENU }))
+    expect(r.disparador).toBe('MENU_OPCION_SIN_CANAL')
+    expect(r.acciones).toHaveLength(1)
+  })
+
+  it('un id de opción que ya no existe vuelve a mostrar el menú', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'LISTA', idRespuesta: 'menu:borrada' }), ctx({ menu: MENU }))
+    expect(r.disparador).toBe('MENU_OPCION_VIEJA')
+    const m = r.acciones[0]
+    expect(m.tipo === 'MENSAJE' && m.mensaje.tipo).toBe('LISTA')
+  })
+
+  it('ninguna opción del menú escribe en la visita: solo responde', () => {
+    for (const o of MENU) {
+      const r = avanzar('EN_EJECUCION', ev({ clase: 'LISTA', idRespuesta: `menu:${o.id}` }),
+        ctx({ menu: MENU, proximaParada: PARADA }))
+      const escrituras = tipos(r.acciones).filter(
+        (t) => !['MENSAJE', 'DERIVAR_AGENTE', 'AVISAR_SUPERVISOR', 'CONSENTIMIENTO'].includes(t),
+      )
+      expect(escrituras, o.accion).toHaveLength(0)
+    }
+  })
+
+  it('el menú no cambia el estado de la conversación', () => {
+    const r = avanzar('EN_EJECUCION', ev({ clase: 'TEXTO', texto: 'opciones' }), ctx({ menu: MENU }))
+    expect(r.estado).toBe('EN_EJECUCION')
+  })
+})
+
+describe('F10 · próxima ubicación', () => {
+  it('sin ruta de hoy lo dice y no inventa un punto', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'TEXTO', texto: 'a dónde sigo' }),
+      ctx({ proximaParada: { estado: 'SIN_RUTA' } }))
+    expect(r.disparador).toBe('CMD_PROXIMA_UBICACION')
+    const texto = r.acciones[0].tipo === 'MENSAJE' && r.acciones[0].mensaje.tipo === 'TEXTO'
+      ? r.acciones[0].mensaje.texto : ''
+    expect(texto.toLowerCase()).toContain('no tenés una ruta')
+    expect(texto).not.toContain('undefined')
+  })
+
+  it('con la ruta terminada felicita en vez de mandar a un punto', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'TEXTO', texto: 'próximo punto' }),
+      ctx({ proximaParada: { estado: 'RUTA_TERMINADA' } }))
+    const texto = r.acciones[0].tipo === 'MENSAJE' && r.acciones[0].mensaje.tipo === 'TEXTO'
+      ? r.acciones[0].mensaje.texto : ''
+    expect(texto.toLowerCase()).toContain('no te quedan paradas')
+  })
+
+  it('si el motor no la trajo, se comporta como «sin ruta» y no revienta', () => {
+    const r = avanzar('SIN_VISITA', ev({ clase: 'TEXTO', texto: 'mi próximo punto' }),
+      ctx({ proximaParada: null }))
+    expect(r.acciones).toHaveLength(1)
+    expect(r.estado).toBe('SIN_VISITA')
+  })
+
+  it('«siguiente punto» sigue siendo terminar el punto, no la próxima parada', () => {
+    // Las dos frases se parecen y significan cosas distintas: una pide la
+    // siguiente parada, la otra dice «ya terminé acá».
+    const r = avanzar('EN_EJECUCION', ev({ clase: 'TEXTO', texto: 'siguiente punto' }), ctx())
+    expect(r.disparador).toBe('CMD_SIGUIENTE')
   })
 })

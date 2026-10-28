@@ -227,6 +227,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_whatsapp',       label: 'Ver conversaciones y mensajes de WhatsApp' },
       { key: 'gestionar_whatsapp', label: 'Responder por WhatsApp, reencolar lo omitido y gestionar plantillas' },
       { key: 'conectar_whatsapp',  label: 'Conectar o desconectar el número de WhatsApp de la empresa' },
+      // Envío masivo y menú del bot (F10). Gestionar un envío va aparte de ver:
+      // un envío a una sede entera le llega al celular personal de cientos de
+      // personas. La EMERGENCIA fuera de jornada no tiene clave propia: la
+      // autoriza quien tiene `gestionar_whatsapp`, como definió F9.
+      { key: 'ver_envios_whatsapp',       label: 'Ver los envíos masivos de WhatsApp y sus destinatarios' },
+      { key: 'gestionar_envios_whatsapp', label: 'Crear, calcular y aprobar un envío masivo de WhatsApp' },
+      { key: 'gestionar_menu_whatsapp',   label: 'Configurar el menú del bot de WhatsApp por contrato y cargo' },
     ],
   },
   {

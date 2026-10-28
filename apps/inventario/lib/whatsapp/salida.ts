@@ -22,6 +22,7 @@ import 'server-only'
 // (sobre `maxDuration = 60`) dejando lo pendiente en la cola. Lo que quede lo
 // recoge la próxima vuelta del cron. Nada se procesa dos veces.
 
+import { cabenEn, caudalDe, intervaloMs } from './caudal'
 import { clienteDe, SinCredencial, type ClienteWhatsapp, type CuentaTransporte } from './cliente'
 import { config, simuladorActivo } from './config'
 import type { MensajeSaliente } from './mensajes'
@@ -143,14 +144,15 @@ export async function procesarSalida(
 
     // El caudal propio, por debajo del del número. `throughput_mps` de la
     // cuenta es el tope real que informó Meta; el de la configuración es el
-    // nuestro, y manda el menor de los dos.
-    const mps = Math.max(Math.min(c.throughputMps, cuenta.throughput_mps || 20), 1)
-    const intervaloMs = Math.ceil(1000 / mps)
+    // nuestro, y manda el menor de los dos. El cálculo vive en `caudal.ts`
+    // porque el envío masivo de F10 reparte la hora de sus destinos con EL
+    // MISMO número: si cada uno tuviera el suyo, un día quedarían desalineados.
+    const mps = caudalDe(cuenta.throughput_mps)
+    const paso = intervaloMs(mps)
     // Nunca se pide más de lo que cabe en el presupuesto al caudal permitido:
     // reclamar 500 filas para mandar 40 dejaría 460 EN_PROCESO esperando el
     // rescate de huérfanos.
-    const cabe = Math.max(Math.floor(((hasta - Date.now()) / 1000) * mps), 1)
-    const limite = Math.min(opciones.limite ?? 200, cabe)
+    const limite = Math.min(opciones.limite ?? 200, cabenEn(hasta - Date.now(), mps))
 
     const { data: lote, error } = await supabase.rpc('whatsapp_salida_tomar', {
       p_cuenta: cuenta.id,
@@ -201,7 +203,7 @@ export async function procesarSalida(
       }
 
       // Control de caudal: se espera lo que falte para no pasarse de mps.
-      const espera = intervaloMs - (Date.now() - ultimo)
+      const espera = paso - (Date.now() - ultimo)
       if (espera > 0) await new Promise((r) => setTimeout(r, espera))
       ultimo = Date.now()
 

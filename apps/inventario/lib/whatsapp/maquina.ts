@@ -115,6 +115,41 @@ export interface PuntoDelDia {
   estado: 'PENDIENTE' | 'EN_CURSO' | 'CERRADO'
 }
 
+/** Una opción del menú configurable (F10, §4.2). La arma el motor leyendo
+ *  `crm_menu_para()`, YA FILTRADA por permiso: una opción que aparece y después
+ *  dice «no tenés permiso» es una opción mal configurada. */
+export interface MenuOpcion {
+  id: string
+  etiqueta: string
+  descripcion?: string | null
+  accion:
+    | 'MIS_PUNTOS'
+    | 'PROXIMA_UBICACION'
+    | 'MI_MAPA'
+    | 'NOVEDAD'
+    | 'PQRS'
+    | 'SUPERVISOR'
+    | 'PRIVACIDAD'
+    | 'AYUDA'
+    | 'TEXTO'
+  texto?: string | null
+}
+
+/** La próxima parada de la ruta de hoy (F10, §4.3). Es lo que devuelve
+ *  `ronda_proxima_parada()` de F8: la regla de cuál es la siguiente vive allí y
+ *  no se reimplementa acá. */
+export type ProximaParada =
+  | { estado: 'SIN_RUTA' }
+  | { estado: 'RUTA_TERMINADA' }
+  | {
+      estado: 'PARADA'
+      codigo: string
+      nombre: string
+      comoLlegar?: string | null
+      piso?: string | null
+      paradasPendientes?: number | null
+    }
+
 /** Lo que la máquina necesita saber y no puede averiguar sola. Lo arma el motor
  *  con una consulta por vuelta: la máquina no toca la base. */
 export interface ContextoMaquina {
@@ -133,6 +168,13 @@ export interface ContextoMaquina {
   tareas: TareaCtx[]
   tareaActual?: string | null
   puntosDelDia: PuntoDelDia[]
+  /** El menú de esta persona (contrato + cargo), ya filtrado por permiso. Vacío
+   *  si nadie configuró uno: entonces se responde con la ayuda. */
+  menu: MenuOpcion[]
+  /** La próxima parada de la ruta de hoy. El motor la trae SOLO cuando el
+   *  mensaje la pide (el comando o una opción del menú): es una consulta que un
+   *  «hola» no necesita. */
+  proximaParada?: ProximaParada | null
   /** La resuelve el motor cuando llega una ubicación, con `ronda_geocerca_evaluar`
    *  —la MISMA función que usa la app propia, para que el número que se le
    *  responde a la persona sea el mismo en los tres canales. */
@@ -341,6 +383,37 @@ function listaDeTareas(ctx: ContextoMaquina, pagina = 1): Accion {
     botonTexto: 'Ver tareas',
     secciones: [{ filas }],
   })
+}
+
+/** El menú configurable, como lista de WhatsApp. El tope de 10 filas lo
+ *  garantiza la base (`crm_menu_para` devuelve 10 como máximo), así que acá no
+ *  hay paginación: un menú que necesita dos páginas no es un menú. */
+function listaDeMenu(ctx: ContextoMaquina): Accion {
+  return msj({
+    tipo: 'LISTA',
+    encabezado: T.menuEncabezado,
+    cuerpo: T.menuCuerpo,
+    botonTexto: recortar(T.menuBoton, LIMITES.listaBoton),
+    secciones: [
+      {
+        filas: ctx.menu.slice(0, LIMITES.listaFilas).map((o) => ({
+          id: `menu:${o.id}`,
+          titulo: recortar(o.etiqueta, LIMITES.filaTitulo),
+          descripcion: o.descripcion ? recortar(o.descripcion, LIMITES.filaDescripcion) : undefined,
+        })),
+      },
+    ],
+  })
+}
+
+/** La próxima ubicación (§4.3). Si falta la foto o la referencia del punto se
+ *  usa lo que haya —`ronda_puntos.descripcion`—, que es justo lo que §4.3
+ *  prevé; lo que no se hace es inventar un punto cuando no hay ruta. */
+function textoProximaParada(ctx: ContextoMaquina): string {
+  const p = ctx.proximaParada
+  if (!p || p.estado === 'SIN_RUTA') return T.proximaSinRuta
+  if (p.estado === 'RUTA_TERMINADA') return T.proximaRutaTerminada
+  return T.proximaParada(p.codigo, p.nombre, p.comoLlegar ?? null, p.piso ?? null)
 }
 
 function pedirUbicacion(): Accion {
@@ -604,6 +677,16 @@ function comando(
     case 'AYUDA':
       return quieto(estado, ctx, [texto(ayuda(estado, ctx.puedeCrearQr))], 'CMD_AYUDA', null)
 
+    case 'MENU':
+      // Sin menú configurado se responde la ayuda, no una lista vacía.
+      if (!ctx.menu.length) {
+        return quieto(estado, ctx, [texto(ayuda(estado, ctx.puedeCrearQr))], 'CMD_MENU_VACIO', null)
+      }
+      return quieto(estado, ctx, [listaDeMenu(ctx)], 'CMD_MENU', null)
+
+    case 'PROXIMA_UBICACION':
+      return quieto(estado, ctx, [texto(textoProximaParada(ctx))], 'CMD_PROXIMA_UBICACION', null)
+
     case 'MIS_PUNTOS':
       if (!ctx.puntosDelDia.length) {
         return quieto(estado, ctx, [texto(T.sinPuntosHoy)], 'CMD_MIS_PUNTOS_VACIO', null)
@@ -708,6 +791,66 @@ function comando(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// F10 · Una opción del menú configurable
+// ─────────────────────────────────────────────────────────────────────────────
+// Cada acción se traduce a algo que el bot YA sabe hacer: el menú no es un
+// lenguaje con el que quien lo configura pueda hacer actuar al bot, es una forma
+// de elegir y ordenar lo que ya existe. Lo que todavía no existe por este canal
+// se dice con claridad en vez de dejar un botón que no responde.
+function opcionDeMenu(
+  opcion: MenuOpcion,
+  estado: EstadoConversacion,
+  evento: EventoMaquina,
+  ctx: ContextoMaquina,
+): Resultado {
+  switch (opcion.accion) {
+    case 'MIS_PUNTOS':
+      return ctx.puntosDelDia.length
+        ? quieto(estado, ctx, [listaDePuntos(ctx)], 'MENU_MIS_PUNTOS', null)
+        : quieto(estado, ctx, [texto(T.sinPuntosHoy)], 'MENU_MIS_PUNTOS_VACIO', null)
+
+    case 'PROXIMA_UBICACION':
+      return quieto(estado, ctx, [texto(textoProximaParada(ctx))], 'MENU_PROXIMA_UBICACION', null)
+
+    case 'NOVEDAD':
+      return comando('NOVEDAD', estado, evento, ctx) ?? quieto(estado, ctx, [], 'MENU_NOVEDAD', null)
+
+    case 'SUPERVISOR':
+      return comando('SUPERVISOR', estado, evento, ctx) ?? quieto(estado, ctx, [], 'MENU_SUPERVISOR', null)
+
+    case 'PRIVACIDAD':
+      return comando('PRIVACIDAD', estado, evento, ctx) ?? quieto(estado, ctx, [], 'MENU_PRIVACIDAD', null)
+
+    case 'AYUDA':
+      return quieto(estado, ctx, [texto(ayuda(estado, ctx.puedeCrearQr))], 'MENU_AYUDA', null)
+
+    case 'TEXTO':
+      // Un texto fijo que escribió quien configuró el menú (el teléfono de la
+      // portería, la instrucción del contrato). No ejecuta nada.
+      return quieto(
+        estado,
+        ctx,
+        [texto(recortar(opcion.texto ?? '', LIMITES.textoCuerpo))],
+        'MENU_TEXTO',
+        null,
+      )
+
+    // `MI_MAPA` necesita el enlace firmado de corta duración del ADR-A y `PQRS`
+    // la radicación por chat: las dos piden una decisión que no es de F10 (van
+    // anotadas en el informe), así que el menú lo dice en vez de fingir.
+    case 'MI_MAPA':
+    case 'PQRS':
+      return quieto(
+        estado,
+        ctx,
+        [texto(T.menuOpcionSinCanal(opcion.etiqueta))],
+        'MENU_OPCION_SIN_CANAL',
+        null,
+      )
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Botones y filas
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -730,6 +873,19 @@ function respuestaInteractiva(
 
     case 'novedad':
       return comando('NOVEDAD', estado, evento, ctx)
+
+    case 'menu': {
+      // `menu:<id de la opción>`. El id lo emitió el bot, pero el menú puede
+      // haber cambiado entre que se mandó la lista y que la tocaron: si la
+      // opción ya no existe, se vuelve a mostrar el menú en vez de adivinar.
+      const opcion = ctx.menu.find((o) => o.id === partes[1])
+      if (!opcion) {
+        return ctx.menu.length
+          ? quieto(estado, ctx, [listaDeMenu(ctx)], 'MENU_OPCION_VIEJA', null)
+          : quieto(estado, ctx, [texto(T.menuVacio)], 'MENU_VACIO', null)
+      }
+      return opcionDeMenu(opcion, estado, evento, ctx)
+    }
 
     case 'puntos':
       // `puntos:pag:N`
