@@ -8,6 +8,7 @@ import {
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, Cog,
+  MapPinned, Route,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -120,6 +121,11 @@ export const navigation: NavModule[] = [
       // `Cog` y no `Wrench`: `Wrench` ya es Maquinaria, que es justo el módulo
       // con el que no hay que confundir este.
       { label: 'Activos', href: '/rondas/activos', icon: Cog, permiso: 'ver_activos_ronda' },
+      // Dónde está la gente ahora y por dónde tiene que pasar. El mapa pide su
+      // propia clave: muestra la ubicación de personas, que es el dato más
+      // sensible del módulo.
+      { label: 'Mapa operativo', href: '/rondas/mapa',  icon: MapPinned, permiso: 'ver_mapa_operativo' },
+      { label: 'Rutas de ronda', href: '/rondas/rutas', icon: Route,     permiso: 'ver_rutas_ronda' },
     ],
   },
   {
