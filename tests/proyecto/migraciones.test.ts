@@ -50,10 +50,16 @@ describe('migraciones de Supabase', () => {
   it('las migraciones destructivas son explícitas y acotadas', () => {
     // DROP TABLE sin IF EXISTS revienta el despliegue si la tabla ya no está;
     // y un DROP SCHEMA public borraría la base entera.
+    //
+    // `ALTER PUBLICATION … DROP TABLE` NO es destructivo: saca la tabla de la
+    // publicación de realtime y no borra nada. Se descarta antes de mirar, y
+    // acotado al statement (sin pasar de un `;`) para no tragarse un DROP TABLE
+    // de verdad que venga más abajo.
     for (const n of nombres) {
       const sql = leer(join(DIR, n))
       expect(sql, `${n} tiene DROP SCHEMA`).not.toMatch(/DROP\s+SCHEMA/i)
-      for (const m of sql.matchAll(/DROP\s+TABLE\s+(?!IF\s+EXISTS)/gi)) {
+      const soloTablas = sql.replace(/ALTER\s+PUBLICATION\s+[^;]*?DROP\s+TABLE/gi, '')
+      for (const m of soloTablas.matchAll(/DROP\s+TABLE\s+(?!IF\s+EXISTS)/gi)) {
         expect.fail(`${n}: DROP TABLE sin IF EXISTS (${m[0].trim()})`)
       }
     }

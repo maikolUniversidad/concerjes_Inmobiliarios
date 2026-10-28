@@ -72,6 +72,23 @@ export default async function PqrsPublicaPage({
     )
   }
 
+  // La placa de un ACTIVO del cliente (F6) también entra por /q/<token>, y desde
+  // F6 esta resolución puede ser de un activo y no de un punto. Radicar una PQRS
+  // sobre un equipo todavía no existe: la novedad de un activo es una orden de
+  // trabajo, que es F7. Así que aquí se dice la verdad en vez de radicar la
+  // novedad contra un punto que no es el que se escaneó.
+  if (r.objeto !== 'PUNTO') {
+    return (
+      <Marco>
+        <Aviso
+          titulo="Por aquí no se reporta este equipo"
+          detalle="Escaneaste la placa de un equipo, y los reportes por el código son de los puntos de control. Avisa al personal del lugar o a tu supervisor."
+        />
+        <Volver token={token} />
+      </Marco>
+    )
+  }
+
   // ¿Este contrato recibe PQRS por el código del punto? Por función y no por
   // lectura de `grupo_reglas`, para que la página pública no tenga que leer una
   // tabla de contrato entera. La RPC lo vuelve a comprobar al escribir.

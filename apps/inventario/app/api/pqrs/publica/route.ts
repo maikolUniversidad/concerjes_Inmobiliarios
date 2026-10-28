@@ -83,6 +83,15 @@ export async function POST(req: NextRequest) {
   if (!r.ok) {
     return NextResponse.json({ error: TEXTO_RECHAZO[r.motivo].titulo, motivo: r.motivo }, { status: 400 })
   }
+  // El token de un ACTIVO del cliente (F6) resuelve bien pero no trae punto, y
+  // una PQRS pública se radica SIEMPRE contra un punto de control. Radicarla
+  // contra otro punto sería mentir sobre dónde pasó la novedad, así que se
+  // rechaza: la novedad de un equipo es una orden de trabajo, que es F7.
+  if (r.objeto !== 'PUNTO') {
+    return NextResponse.json(
+      { error: 'Esa placa es de un equipo, y los reportes por el código son de los puntos de control.' },
+      { status: 400 })
+  }
 
   const sb = getAdmin()
 
