@@ -89,6 +89,8 @@ export function AlistamientoClient({ ordenes }: { ordenes: Fila[] }) {
   const router = useRouter()
   const [filtro, setFiltro] = useState<string>('PENDIENTES')
   // En vivo: nuevas aprobaciones, avances de alistamiento, despachos y stock.
+  // Pantalla de operación: se queda con la espera corta del hook (2,5 s) porque
+  // aquí sí se está mirando el avance mientras alguien alista.
   useEnVivo(['ordenes_insumo', 'orden_insumo_items', 'stock'])
 
   // ── Resumen global de la bodega (todas las órdenes, no el filtro) ──────────

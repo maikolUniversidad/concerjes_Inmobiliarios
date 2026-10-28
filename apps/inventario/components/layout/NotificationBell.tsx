@@ -19,6 +19,9 @@ function tiempoRelativo(iso: string) {
   return new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short' })
 }
 
+/** Cada cuánto se vuelve a contar lo no leído, con la pestaña a la vista. */
+const CADA_MS = 120_000
+
 export function NotificationBell() {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -27,29 +30,54 @@ export function NotificationBell() {
   const [loading, setLoading] = useState(false)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const rootRef = useRef<HTMLDivElement>(null)
+  /** Id del usuario, resuelto una sola vez por montaje (ver `miId`). */
+  const idRef = useRef<string | null>(null)
+
+  /**
+   * Id del usuario sin salir a la red.
+   *
+   * Antes esto era un `auth.getUser()` por cada vuelta del intervalo: un viaje
+   * completo al servidor de Auth, cada 30 s, en cada pestaña, en todas las
+   * páginas del dashboard —la campanita vive en el shell—. En 121 días sumó
+   * 1.082.313 lecturas de `auth.users`, casi el doble que todas las peticiones
+   * de datos reales de la app juntas.
+   *
+   * `getClaims()` verifica la firma del JWT en local contra el JWKS del
+   * proyecto (que usa llaves asimétricas ES256), así que no hay viaje de red; y
+   * el id queda guardado en un ref para no repetirlo en cada vuelta. Aquí el id
+   * solo sirve para filtrar MIS notificaciones: quién puede leer qué lo decide
+   * la RLS en la base, no este valor.
+   */
+  const miId = useCallback(async (supabase: ReturnType<typeof createClient>) => {
+    if (idRef.current) return idRef.current
+    const { data } = await supabase.auth.getClaims()
+    const sub = data?.claims?.sub
+    if (typeof sub === 'string') idRef.current = sub
+    return idRef.current
+  }, [])
 
   const fetchCount = useCallback(async () => {
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const id = await miId(supabase)
+    if (!id) return
     const { count: c } = await supabase
       .from('notificaciones')
       .select('id', { count: 'exact', head: true })
-      .eq('usuario_id', user.id)
+      .eq('usuario_id', id)
       .eq('estado', 'NO_LEIDA')
     setCount(c ?? 0)
-  }, [])
+  }, [miId])
 
   const fetchItems = useCallback(async () => {
     setLoading(true)
     try {
       const supabase = createClient()
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
+      const id = await miId(supabase)
+      if (!id) return
       const { data } = await supabase
         .from('notificaciones')
         .select('*')
-        .eq('usuario_id', user.id)
+        .eq('usuario_id', id)
         .neq('estado', 'ARCHIVADA')
         .order('created_at', { ascending: false })
         .limit(8)
@@ -57,12 +85,45 @@ export function NotificationBell() {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [miId])
 
+  /**
+   * Sondeo solo con la pestaña a la vista.
+   *
+   * Una pestaña de fondo —y la gente deja muchas abiertas— seguía contando cada
+   * 30 s para pintar un número que nadie está mirando. Ahora el intervalo se
+   * apaga al ocultarse la pestaña y, al volver, cuenta de una para que la
+   * campanita esté al día sin esperar el siguiente turno.
+   *
+   * Se queda en sondeo y no en Realtime a propósito: `notificaciones` tiene
+   * 80.675 filas y la escriben los flujos en ráfaga (notifican a varios
+   * usuarios de una). Un canal aquí sería la suscripción más montada de la app
+   * —el shell, en cada pestaña de cada usuario—, y cada INSERT pagaría la
+   * revisión de RLS sobre el WAL contra todos los clientes conectados: justo el
+   * gasto que es hoy el mayor consumidor de la base. El conteo, en cambio, es un
+   * Index Only Scan de 0,14 ms sobre `idx_notif_usuario_estado`, y una
+   * notificación no necesita llegar al instante como un mensaje de chat.
+   */
   useEffect(() => {
-    fetchCount()
-    intervalRef.current = setInterval(fetchCount, 30_000)
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    const activo = () => typeof document === 'undefined' || !document.hidden
+    const arrancar = () => {
+      if (intervalRef.current) return
+      intervalRef.current = setInterval(fetchCount, CADA_MS)
+    }
+    const parar = () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+      intervalRef.current = null
+    }
+    const alCambiarVisibilidad = () => {
+      if (activo()) { fetchCount(); arrancar() } else parar()
+    }
+
+    if (activo()) { fetchCount(); arrancar() }
+    document.addEventListener('visibilitychange', alCambiarVisibilidad)
+    return () => {
+      document.removeEventListener('visibilitychange', alCambiarVisibilidad)
+      parar()
+    }
   }, [fetchCount])
 
   // Cerrar al hacer clic fuera o con Escape
@@ -102,15 +163,15 @@ export function NotificationBell() {
 
   async function marcarTodas() {
     const supabase = createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    const id = await miId(supabase)
+    if (!id) return
     setItems(prev => prev.map(n => (n.estado === 'NO_LEIDA' ? { ...n, estado: 'LEIDA' } : n)))
     setCount(0)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     await (supabase as any)
       .from('notificaciones')
       .update({ estado: 'LEIDA', leido_at: new Date().toISOString() })
-      .eq('usuario_id', user.id)
+      .eq('usuario_id', id)
       .eq('estado', 'NO_LEIDA')
   }
 

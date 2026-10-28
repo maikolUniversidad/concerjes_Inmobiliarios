@@ -65,7 +65,9 @@ export function ProductosClient({ productos, total }: { productos: Producto[]; t
   const [invFilter, setInv]     = useState('')
   const [scannerOpen, setScannerOpen] = useState(false)
   // En vivo: movimientos de stock y órdenes aprobadas/despachadas refrescan la lista.
-  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
+  // Lista de catálogo: la espera larga agrupa la ráfaga de un despacho completo
+  // en un solo refresco en vez de uno por pestaña cada 1,2 s.
+  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'], undefined, 5_000)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()

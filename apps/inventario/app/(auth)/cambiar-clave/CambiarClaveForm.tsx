@@ -100,9 +100,24 @@ export function CambiarClaveForm({ obligatorio, correo, documento, nombre }: Pro
       return
     }
 
+    // Cambiar la contraseña NO reemite el token: `updateUser` solo actualiza el
+    // objeto `user` en memoria y vuelve a guardar el MISMO access token (en
+    // auth-js: `session.user = data.user` y después `_saveSession(session)`).
+    // El proxy lee la marca de los claims del token, así que sin este refresco
+    // la cuenta quedaría girando entre /dashboard y /cambiar-clave hasta que el
+    // token venciera. `refreshSession()` pide uno nuevo, que ya la trae apagada.
+    const { error: refErr } = await supabase.auth.refreshSession()
+    if (refErr) {
+      // Si el refresco falla no se arriesga el bucle: se cierra la sesión y se
+      // vuelve a entrar, ya con la contraseña nueva. El token que emite Auth al
+      // entrar trae la marca apagada, así que no hay forma de quedar atrapado.
+      await supabase.auth.signOut()
+      router.push('/login')
+      router.refresh()
+      return
+    }
+
     setListo(true)
-    // `getUser()` del middleware vuelve a preguntarle a Auth, así que ya verá la
-    // marca apagada y dejará pasar.
     router.push('/dashboard')
     router.refresh()
   }

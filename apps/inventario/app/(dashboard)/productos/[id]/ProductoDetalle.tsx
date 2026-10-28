@@ -114,7 +114,24 @@ export function ProductoDetalle({ producto: initial, movimientos, fotos, cceTipo
   const { puede } = usePermisos()
   const puedeEditar = puede('editar_productos')
   // En vivo: el stock y lo reservado cambian al aprobar/despachar órdenes.
-  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
+  //
+  // Esta es la pantalla de UN producto: el filtro del servidor deja pasar solo
+  // los cambios de ESTE producto. `ordenes_insumo` sale de la lista porque no
+  // tiene producto_id —no se puede filtrar— y lo que de ella se muestra aquí
+  // (reservado y disponible) ya llega por `stock` y por sus ítems.
+  //
+  // Aquí no hace falta la entrada aparte para los DELETE que sí lleva la
+  // pantalla de la orden: si se borra un ítem de una orden que reserva, el
+  // trigger recalcula `stock` de este producto y ese UPDATE sí llega filtrado;
+  // y si la orden aún no reserva, no cambia nada de lo que se muestra.
+  useEnVivo(
+    [
+      { tabla: 'stock', filtro: `producto_id=eq.${initial.id}` },
+      { tabla: 'orden_insumo_items', filtro: `producto_id=eq.${initial.id}` },
+    ],
+    undefined,
+    3_000,
+  )
   const [imagenUrl, setImagenUrl] = useState(initial.imagen_url)
   const [cceOpen, setCceOpen] = useState(false)
   const [cceTipo, setCceTipoState] = useState<CceTipo>(initialCceTipo)

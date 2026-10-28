@@ -23,16 +23,39 @@ function construir(rol: string, permisos: Record<string, boolean>, sinGating: bo
 /**
  * Permisos efectivos del usuario autenticado (rol + overrides).
  * Cacheado por request: varias llamadas en el mismo render = 1 sola consulta.
+ *
+ * El id sale de `getClaims()` y no de `getUser()`. `getUser()` es un viaje de
+ * red al servidor de Auth, y esto corre en CADA render de página; `getClaims()`
+ * verifica la firma del JWT en local contra el JWKS del proyecto, que usa
+ * llaves asimétricas ES256. El JWKS se guarda en una caché de módulo con TTL de
+ * 10 minutos, así que aunque aquí se cree un cliente nuevo por petición, se
+ * paga a lo sumo un fetch cada 10 min por instancia en vez de uno por render.
+ *
+ * Por qué no debilita nada: lo único que se saca del token es el `sub`, para
+ * leer la fila propia de `usuarios`; todo lo que se decide después lo decide la
+ * RLS en la base con ESE MISMO JWT. Lo que `getUser()` añade —ver si la sesión
+ * fue revocada del lado del servidor— no llega a la capa de datos: PostgREST
+ * valida la firma del token en local y no le pregunta al servidor de Auth, así
+ * que un token revocado pero no vencido ya pasa hoy en cualquier consulta de
+ * datos. O sea que quitarlo de aquí no abre ninguna ventana nueva: deja de
+ * pagar un viaje de red por una comprobación que la capa de datos tampoco hace.
+ * Y a diferencia de `getSession()`, `getClaims()` sí rechaza un token forjado,
+ * alterado o vencido.
+ *
+ * Los `getUser()` de las server actions se quedan como están: son uno por
+ * mutación —no uno por render—, ahí el viaje es barato comparado con lo que
+ * cuida, y es donde ocurre la escritura.
  */
 export const getPermisosUsuario = cache(async (): Promise<PermisosUsuario> => {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return construir('', {}, true)
+  const { data: claims } = await supabase.auth.getClaims()
+  const userId = claims?.claims?.sub
+  if (!userId) return construir('', {}, true)
 
   const { data } = await supabase
     .from('usuarios')
     .select('rol, permisos, roles(permisos)')
-    .eq('id', user.id)
+    .eq('id', userId)
     .single()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const u = data as any

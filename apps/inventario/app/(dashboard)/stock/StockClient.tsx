@@ -52,7 +52,9 @@ export function StockClient({ rows }: { rows: StockRow[] }) {
   const [filtro, setFiltro] = useState('')
   const [cceFilter, setCceFilter] = useState('')
   // En vivo: aprobar/anular/despachar una orden o mover stock refresca la tabla.
-  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
+  // Es una lista de consulta, no una pantalla de operación: agrupar la ráfaga en
+  // 5 s de espera se nota mucho menos que volver a correr la página entera.
+  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'], undefined, 5_000)
 
   // Los filtros por columna viven dentro de la tabla; aquí solo quedan los
   // atajos de negocio (alertas de stock e inventario CCE).

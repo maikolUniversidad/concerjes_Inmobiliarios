@@ -89,7 +89,25 @@ export function SolicitudItems({ ordenId, estado, despachadoAt = null, items: it
   }
   // En vivo: si otra orden reserva/libera stock, se despacha o se mueve
   // inventario, la página se refresca y estas cifras se actualizan solas.
-  useEnVivo(['stock', 'ordenes_insumo', 'orden_insumo_items'])
+  //
+  // Esta es la pantalla de UNA orden, así que la orden y sus ítems van
+  // filtrados en el servidor: antes, alistar una orden ajena de 200 ítems
+  // refrescaba esta pestaña 200 veces agrupadas en una. `stock` se queda sin
+  // filtrar —hay que ver la disponibilidad de todos los ítems del pedido— y por
+  // eso lleva un debounce más largo.
+  // El DELETE va aparte y sin filtro: Realtime no puede evaluar `orden_id` en un
+  // borrado (solo conoce la llave primaria), así que con el filtro puesto se
+  // perdería que otra persona quite un ítem de esta orden.
+  useEnVivo(
+    [
+      { tabla: 'ordenes_insumo', filtro: `id=eq.${ordenId}` },
+      { tabla: 'orden_insumo_items', filtro: `orden_id=eq.${ordenId}` },
+      { tabla: 'orden_insumo_items', evento: 'DELETE' },
+      'stock',
+    ],
+    undefined,
+    3_000,
+  )
 
   // Al refrescar, solo se pisa la cantidad de los ítems que cambiaron en el
   // servidor: lo que el usuario está escribiendo y aún no guarda se conserva.

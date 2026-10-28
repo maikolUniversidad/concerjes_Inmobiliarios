@@ -21,7 +21,30 @@ export async function proxy(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  /**
+   * Identidad del usuario SIN viaje de red al servidor de Auth.
+   *
+   * Esto corre en CADA petición que pasa el matcher de abajo: toda navegación,
+   * toda ruta de API y todos los payloads RSC. Con `getUser()` era un viaje al
+   * servidor de Auth ANTES de que la página empezara a renderizar, en cada
+   * clic; de aquí salía el grueso de las 1.082.313 lecturas de `auth.users` de
+   * los últimos 121 días.
+   *
+   * `getClaims()` verifica la firma del JWT en local contra el JWKS del
+   * proyecto (llaves asimétricas ES256), que vive en una caché de módulo con
+   * TTL de 10 minutos. Tres cosas que importan y que están comprobadas en el
+   * código de auth-js, no supuestas:
+   *
+   *   · Sin argumento llama a `getSession()`, que refresca el token si está
+   *     vencido o por vencer. O sea que el `setAll` de cookies de arriba sigue
+   *     cumpliendo su función: renovar la sesión y dejar la cookie nueva en la
+   *     respuesta. Si no refrescara, las sesiones se caerían al vencer.
+   *   · Si el algoritmo fuera simétrico (HS*) o no hubiera WebCrypto, cae por
+   *     su cuenta a `getUser()` en vez de confiar en un token sin verificar.
+   *   · Rechaza un token con firma inválida, alterado o vencido.
+   */
+  const { data: claims } = await supabase.auth.getClaims()
+  const user = claims?.claims ?? null
 
   const path = request.nextUrl.pathname
   const isAuthRoute   = path.startsWith('/login')
@@ -54,8 +77,24 @@ export async function proxy(request: NextRequest) {
   // El bloqueo va aquí y no en cada página porque una contraseña que otro
   // conoce (la cédula, para los colaboradores de planta) deja de ser un
   // problema solo cuando NINGUNA ruta se puede abrir con ella.
-  if (user?.user_metadata?.debe_cambiar_password === true
-      && !isClaveRoute && !isPublicRoute && !isAuthRoute) {
+  //
+  // La marca se lee de los claims del token. OJO: la referencia oficial de
+  // campos del JWT lista `user_metadata` como OPCIONAL, no garantizado, así que
+  // aquí no se da por hecho que venga. Si el token NO la trae, se le pregunta al
+  // servidor de Auth igual que antes; si la trae, se responde sin salir a la
+  // red. La diferencia importa: con esta forma, el peor caso es perder el
+  // ahorro, no apagar el bloqueo en silencio —que es la única falla que no se
+  // podría tolerar—. Un `user_metadata` presente pero sin la llave sí se toma
+  // como «no hay marca», igual que hacía el `=== true` de antes.
+  const enRutaLibre = isClaveRoute || isPublicRoute || isAuthRoute
+  let debeCambiar = false
+  if (user && !enRutaLibre) {
+    debeCambiar = user.user_metadata
+      ? user.user_metadata.debe_cambiar_password === true
+      : (await supabase.auth.getUser()).data.user?.user_metadata?.debe_cambiar_password === true
+  }
+
+  if (debeCambiar) {
     const url = request.nextUrl.clone()
     url.pathname = '/cambiar-clave'
     url.search = ''
