@@ -51,7 +51,9 @@
         "OPENAI_MODEL_TRANSCRIBE",
         "DEEPSEEK_API_KEY",
         "DEEPSEEK_BASE_URL",
-        "DEEPSEEK_MODEL_CHAT"
+        "DEEPSEEK_MODEL_CHAT",
+        "CRM_IA_ACTIVA",
+        "OPENAI_MODEL_CRM"
       ]
     },
     "dev": {

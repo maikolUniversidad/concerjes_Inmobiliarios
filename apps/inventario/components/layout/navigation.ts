@@ -8,7 +8,7 @@ import {
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, Cog,
-  MapPinned, Route, MessagesSquare, Send,
+  MapPinned, Route, MessagesSquare, Send, Inbox,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -133,6 +133,11 @@ export const navigation: NavModule[] = [
       // una pestaña de WhatsApp porque son otra cosa: una se mira (las
       // conversaciones) y la otra se decide (mandarle un mensaje a 800 personas).
       { label: 'Envíos masivos', href: '/rondas/envios', icon: Send, permiso: 'ver_envios_whatsapp' },
+      // El CRM: los casos que salen de esas conversaciones, con su agente,
+      // su SLA y la respuesta que la IA sugiere y una persona aprueba. Va
+      // debajo de WhatsApp porque es lo que sigue en el flujo, y con `Inbox`
+      // porque es una bandeja de trabajo, no un tablero del canal.
+      { label: 'CRM (casos)', href: '/rondas/crm', icon: Inbox, permiso: 'ver_crm' },
     ],
   },
   {

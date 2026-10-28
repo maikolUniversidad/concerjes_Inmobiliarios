@@ -1106,10 +1106,47 @@ async function ejecutar(
     }
 
     case 'DERIVAR_AGENTE':
-    case 'AVISAR_SUPERVISOR':
-      // Queda en la auditoría del módulo, que es la bandeja que mira
-      // supervisión desde la consola. El CRM con casos, etiquetas y asignación
-      // es F11: cuando exista, esto abre un caso en vez de un evento.
+    case 'AVISAR_SUPERVISOR': {
+      // F11: esto ABRE UN CASO en el CRM. Antes solo dejaba un evento, porque
+      // los casos no existían.
+      //
+      // `crm_caso_abrir()` es idempotente Y única por conversación: el bot
+      // deriva varias veces en un mismo hilo (identidad, ubicación, una foto
+      // que no llega) y dos casos abiertos sobre la misma conversación
+      // partirían el SLA en dos, sin que nadie supiera cuál es el que vence.
+      // Si ya hay uno abierto, devuelve ese y no crea otro.
+      //
+      // La prioridad la decide el MOTIVO, no el modelo: derivar porque la
+      // persona lo pidió no es lo mismo que avisar que alguien forzó una
+      // ubicación. Y es determinista a propósito: la IA sugiere después, sobre
+      // el caso ya abierto, y lo que sugiere es una sugerencia.
+      const prioridad = accion.tipo === 'AVISAR_SUPERVISOR' ? 'ALTA' : 'MEDIA'
+      const tipo =
+        accion.motivo.startsWith('IDENTIDAD') ? 'IDENTIDAD'
+        : accion.motivo.includes('CONSENTIMIENTO') ? 'CONSENTIMIENTO'
+        : accion.motivo.includes('UBICACION') || accion.motivo.includes('GEOCERCA')
+          || accion.motivo.includes('FOTO') || e.visitaId ? 'VISITA'
+        : 'CONSULTA'
+
+      const { error: errCaso } = await supabase.rpc('crm_caso_abrir', {
+        p_conversacion: conv.id,
+        p_asunto: null,
+        p_tipo: tipo,
+        p_prioridad: prioridad,
+        p_motivo: accion.motivo,
+        p_descripcion: accion.tipo === 'AVISAR_SUPERVISOR'
+          ? `Aviso del bot al supervisor: ${accion.motivo.toLowerCase().replaceAll('_', ' ')}.`
+          : `El bot derivó la conversación a un agente: ${accion.motivo.toLowerCase().replaceAll('_', ' ')}.`,
+        // Sin usuario: lo abre el BOT, y eso queda escrito en el caso.
+        p_usuario: null,
+        p_canal: 'WHATSAPP',
+      })
+      // Si el CRM no está disponible, el aviso NO se pierde: sigue el evento de
+      // auditoría de abajo, que es lo que había antes de F11.
+      if (errCaso) console.error('[whatsapp/crm-caso]', errCaso.message)
+
+      // Y el evento se sigue escribiendo igual: `ronda_eventos` es la cadena de
+      // auditoría del módulo y no depende de que el CRM funcione.
       await supabase.from('ronda_eventos').insert({
         grupo_id: conv.grupo_id,
         sede_id: conv.sede_id,
@@ -1126,6 +1163,7 @@ async function ejecutar(
         },
       })
       return {}
+    }
 
     case 'TRANSCRIBIR':
       // La transcripción corre después, con el archivo ya en Storage: depende de
