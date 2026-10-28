@@ -28,14 +28,16 @@ const leer = (clave) => {
 const SUPABASE_URL = leer('NEXT_PUBLIC_SUPABASE_URL')
 const SERVICE_KEY = leer('SUPABASE_SERVICE_ROLE_KEY')
 const DB_URL = leer('DIRECT_URL')
-if (!SUPABASE_URL || !SERVICE_KEY || !DB_URL) {
-  console.error('Faltan NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / DIRECT_URL en .env.local')
+// La contraseña del demo tampoco se escribe aquí: el repositorio es público y
+// la cuenta vive en el Supabase de producción.
+const PASSWORD = leer('DEMO_CLIENTE_PASSWORD')
+if (!SUPABASE_URL || !SERVICE_KEY || !DB_URL || !PASSWORD) {
+  console.error('Faltan NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / DIRECT_URL / DEMO_CLIENTE_PASSWORD en .env.local')
   process.exit(1)
 }
 
 const EMAIL = 'comprador.demo@conserjesinmobiliarios.com'
-const PASSWORD = 'Demo-Conserjes-2026'
-const NOMBRE = 'Camila Restrepo'
+const NOMBRE = 'Cliente Demo'
 const borrar = process.argv.includes('--borrar')
 
 const auth = (ruta, opciones = {}) =>

@@ -16,9 +16,11 @@ Flags:
   --dry-run   Muestra qué se haría sin escribir en BD
 """
 
+import re
 import sys
 import uuid
 from datetime import date
+from pathlib import Path
 
 import openpyxl
 import psycopg2
@@ -26,7 +28,25 @@ import psycopg2.extras
 
 # ── Configuración ─────────────────────────────────────────────────────────────
 
-DB_URL = "postgresql://postgres.esehmwmtevwrqxvbzmev:S9qxOMoOZCepMyke@aws-1-us-west-2.pooler.supabase.com:5432/postgres"
+
+def _leer_env(clave):
+    """Lee una clave de la .env.local de la raíz del repositorio.
+
+    Las credenciales no van escritas aquí: .env.local está en .gitignore y el
+    repositorio es público.
+    """
+    ruta = Path(__file__).resolve().parent.parent / ".env.local"
+    try:
+        texto = ruta.read_text(encoding="utf-8")
+    except OSError:
+        sys.exit("No se pudo leer .env.local en la raíz del repositorio.")
+    m = re.search(rf'^{clave}="?([^"\n]+)"?', texto, re.MULTILINE)
+    if not m:
+        sys.exit(f"Falta {clave} en .env.local")
+    return m.group(1).strip()
+
+
+DB_URL = _leer_env("DIRECT_URL")
 
 EXCEL_CLAUDIA = r"C:\Users\maiko\Downloads\052026 Claudia FP - Solicitud de pedidos periodica  AGOSTO.xlsm"
 EXCEL_AIDA    = r"C:\Users\maiko\Downloads\042026 Aida FP - Solicitud de pedidos periodica V2 AGOSTO.xlsm"

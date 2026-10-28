@@ -1,11 +1,12 @@
 import { createRequire } from 'module'
+import { leerEnv } from './_env.mjs'
 const require = createRequire(import.meta.url)
 const pg = require('pg')
 
 const { Pool } = pg
 
 const pool = new Pool({
-  connectionString: 'postgresql://postgres.esehmwmtevwrqxvbzmev:S9qxOMoOZCepMyke@aws-1-us-west-2.pooler.supabase.com:5432/postgres',
+  connectionString: leerEnv('DIRECT_URL'),
   ssl: { rejectUnauthorized: false },
 })
 

@@ -17,10 +17,11 @@
  */
 import ExcelJS from 'exceljs';
 import pg from 'pg';
+import { leerEnv } from './_env.mjs';
 
 const { Client } = pg;
 const EXCEL_PATH = 'C:/Users/MAIKOL/Downloads/INVENTARIO JULIO 2026.xlsx';
-const DB_URL = 'postgresql://postgres.esehmwmtevwrqxvbzmev:S9qxOMoOZCepMyke@aws-1-us-west-2.pooler.supabase.com:5432/postgres';
+const DB_URL = leerEnv('DIRECT_URL');
 
 const cv = cell => {
   const v = cell ? cell.value : null;

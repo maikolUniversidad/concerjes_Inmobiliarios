@@ -8,10 +8,11 @@
  */
 import ExcelJS from 'exceljs';
 import pg from 'pg';
+import { leerEnv } from './_env.mjs';
 
 const { Client } = pg;
 const EXCEL_PATH = 'C:/Users/maiko/Downloads/CMI Reabastecimiento JUNIO V1 (1).xlsx';
-const DB_URL = 'postgresql://postgres.esehmwmtevwrqxvbzmev:S9qxOMoOZCepMyke@aws-1-us-west-2.pooler.supabase.com:5432/postgres';
+const DB_URL = leerEnv('DIRECT_URL');
 
 const client = new Client({ connectionString: DB_URL, ssl: { rejectUnauthorized: false } });
 
