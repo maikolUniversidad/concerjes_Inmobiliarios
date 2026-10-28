@@ -9,7 +9,11 @@
 // márgenes, tamaño de letra, posición del código manual— se acomoda alrededor
 // de ese cuadrado, nunca al contrario.
 
-import { jsPDF } from 'jspdf'
+// Solo el TIPO de jspdf se importa estáticamente (TypeScript lo borra al
+// compilar). La librería —~1,4 MB, 400 KB comprimido— entra por `import()`
+// dentro de `armarPdfDeLote`, que es lo único que la necesita y corre cuando
+// alguien pide el lote de placas, no al abrir la pantalla.
+import type { jsPDF } from 'jspdf'
 import QRCode from 'qrcode'
 import { FORMATOS, formatearManual, urlDelQr, type FormatoLote } from '@/lib/puntos-qr'
 
@@ -225,7 +229,8 @@ export async function armarPdfDeLote(
   // empezar en vez de a medias.
   const qrs = await Promise.all(placas.map((p) => qrDataUrl(p.token, base)))
 
-  const pdf = new jsPDF({
+  const { jsPDF: JsPDF } = await import('jspdf')
+  const pdf = new JsPDF({
     orientation: f.ancho > f.alto ? 'landscape' : 'portrait',
     unit: 'mm',
     format: [f.ancho, f.alto],

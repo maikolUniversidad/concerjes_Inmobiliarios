@@ -1,5 +1,12 @@
 // Utilidades de cliente: generar la plantilla y parsear el archivo cargado.
-import ExcelJS from 'exceljs'
+//
+// exceljs entra por `import()` y no por un import estático: pesa ~910 KB
+// (250 KB comprimido) y de aquí cuelga `BulkImport`, que vive en /importar y en
+// /gestion-humana/personas. Con el import estático esos 910 KB los descargaba
+// todo el que abriera esas pantallas, aunque no cargara ningún archivo. Los
+// TIPOS sí se importan estáticamente: TypeScript los borra al compilar, así
+// que no pesan nada en el navegador.
+import type Excel from 'exceljs'
 import type { EntityConfig, FilaParseada, ColumnDef } from './config'
 import { mapearEncabezados, parsearCSV, type ArchivoParseado } from './csv'
 import { ordenarPorItem } from '@/lib/reportes/orden'
@@ -10,9 +17,12 @@ const VERDE = 'FF2E7D32'
 const GRIS_SUAVE = 'FFF3F4F6'
 
 /** ExcelJS expone `dataValidations` en tiempo de ejecución pero no en sus tipos. */
-type ConValidaciones = ExcelJS.Worksheet & {
-  dataValidations: { add(rango: string, validacion: ExcelJS.DataValidation): void }
+type ConValidaciones = Excel.Worksheet & {
+  dataValidations: { add(rango: string, validacion: Excel.DataValidation): void }
 }
+
+/** Trae exceljs en el momento de usarlo y devuelve un libro nuevo. */
+const nuevoLibro = async () => new (await import('exceljs')).default.Workbook()
 
 /** Formato de celda por tipo de columna, para que Excel no reinterprete los datos. */
 function formatoDe(col: ColumnDef): string | undefined {
@@ -31,7 +41,7 @@ export async function descargarPlantilla(config: EntityConfig) {
 
 /** Arma el libro de la plantilla: encabezados, fila de ejemplo, validaciones e instrucciones. */
 export async function construirPlantilla(config: EntityConfig): Promise<ArrayBuffer> {
-  const wb = new ExcelJS.Workbook()
+  const wb = await nuevoLibro()
   wb.creator = 'Conserjes Inmobiliarios'
 
   // Hoja de datos
@@ -141,7 +151,7 @@ export async function parsearArchivo(file: File, config: EntityConfig): Promise<
 }
 
 /** Convierte el valor crudo de una celda de ExcelJS a algo que sepamos leer. */
-function valorCelda(valor: ExcelJS.CellValue): unknown {
+function valorCelda(valor: Excel.CellValue): unknown {
   if (valor === null || valor === undefined) return null
   if (valor instanceof Date) return valor
   if (typeof valor === 'object') {
@@ -155,7 +165,7 @@ function valorCelda(valor: ExcelJS.CellValue): unknown {
 }
 
 async function parsearXLSX(buffer: ArrayBuffer, config: EntityConfig): Promise<ArchivoParseado> {
-  const wb = new ExcelJS.Workbook()
+  const wb = await nuevoLibro()
   await wb.xlsx.load(buffer)
   // Si el archivo trae la hoja "Datos" de la plantilla, se usa esa.
   const ws = wb.getWorksheet('Datos') ?? wb.worksheets[0]
@@ -198,7 +208,7 @@ export interface FilaInforme {
 export async function descargarInformeCarga(
   config: EntityConfig, archivo: string, filas: FilaInforme[],
 ) {
-  const wb = new ExcelJS.Workbook()
+  const wb = await nuevoLibro()
   wb.creator = 'Conserjes Inmobiliarios'
   const ws = wb.addWorksheet('Resultado')
   ws.columns = [

@@ -1,6 +1,11 @@
 // Exportación a Excel de las tablas del sistema (el "diagrama de datos").
 // Usa exceljs (ya dependencia) y el cliente de navegador de Supabase (respeta RLS).
-import ExcelJS from 'exceljs'
+//
+// exceljs se carga con `import()` y NO con un import estático: pesa ~910 KB
+// (250 KB comprimido) y este módulo lo usa un componente de cliente, así que
+// un import estático lo mete en el paquete inicial de /reportes y lo descarga
+// todo el que abre la pantalla, aunque nunca exporte nada. Así solo baja
+// cuando alguien pulsa descargar.
 import { traerTodo } from '@/lib/supabase/paginado'
 import { ordenarAlfabetico, ordenarFilasPlanas, ordenarPorItem } from './orden'
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -8,6 +13,9 @@ type DB = any
 
 const VERDE = 'FF2E7D32'
 const MAX_FILAS = 10000
+
+/** Trae exceljs en el momento de usarlo y devuelve un libro nuevo. */
+const nuevoLibro = async () => new (await import('exceljs')).default.Workbook()
 
 export interface TablaExport {
   tabla: string
@@ -107,7 +115,7 @@ export async function exportarExcel(
   filename: string,
   onProgress?: (hoja: string, i: number, total: number) => void,
 ): Promise<{ filas: number; error?: string }> {
-  const wb = new ExcelJS.Workbook()
+  const wb = await nuevoLibro()
   wb.creator = 'Conserjes Inmobiliarios'
   let totalFilas = 0
 
@@ -179,7 +187,7 @@ function ordenarTabla(rows: Record<string, unknown>[], t: TablaExport): Record<s
 /** Exporta un conjunto arbitrario de filas (p.ej. actividad por usuario) a una hoja. */
 export async function exportarFilas(filas: Record<string, unknown>[], hoja: string, filename: string) {
   filas = ordenarFilasPlanas(filas).filas
-  const wb = new ExcelJS.Workbook()
+  const wb = await nuevoLibro()
   const ws = wb.addWorksheet(hoja.slice(0, 31))
   if (filas.length === 0) { ws.addRow(['(sin datos)']) }
   else {

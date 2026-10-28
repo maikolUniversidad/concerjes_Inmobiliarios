@@ -3,7 +3,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import QRCode from 'qrcode'
-import { jsPDF } from 'jspdf'
+// jspdf entra por `import()` dentro de `descargarPdf`: pesa ~1,4 MB (400 KB
+// comprimido) y solo hace falta si alguien pulsa «descargar PDF». /carnet es la
+// pantalla a la que cae TODO colaborador de planta al entrar, así que es la
+// última en la que conviene descargar de más. `qrcode` sí se queda estático:
+// el QR es el carnet y tiene que estar en el primer pintado.
 import {
   ArrowLeft, Maximize2, Download, FileText, Loader2, ShieldCheck,
   IdCard, Phone, Briefcase, Building2, MapPin, X, QrCode as QrIcon,
@@ -527,6 +531,7 @@ export function CarnetClient({ data }: { data: CarnetData }) {
       const reverso = await renderCanvas('reverso')
       const wmm = 85
       const hF = (frente.height / frente.width) * wmm
+      const { jsPDF } = await import('jspdf')
       const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [wmm, hF] })
       pdf.addImage(frente.toDataURL('image/png'), 'PNG', 0, 0, wmm, hF)
       const hR = (reverso.height / reverso.width) * wmm

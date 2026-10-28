@@ -8,7 +8,10 @@ import {
 import { createClient } from '@/lib/supabase/server'
 import { getPermisosUsuario } from '@/lib/permisos-server'
 import { type CategoriaRotacion } from '@/lib/types/database'
-import { MovimientosChart, type ChartPoint } from './MovimientosChart'
+import { MovimientosChart } from './MovimientosChartLazy'
+// Solo el tipo viene del componente real: TypeScript lo borra al compilar, así
+// que no arrastra recharts al paquete inicial del tablero.
+import type { ChartPoint } from './MovimientosChart'
 import { PedidosBodegaTabla, type PedidoFila } from './PedidosBodegaTabla'
 import { AlertasStockTabla } from './AlertasStockTabla'
 import { ordenarPorItem } from '@/lib/stock-reservas'
