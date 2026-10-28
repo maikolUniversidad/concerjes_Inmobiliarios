@@ -5,6 +5,7 @@
     { "path": "/api/cron/flujos", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/whatsapp-entrada", "schedule": "* * * * *" },
     { "path": "/api/cron/whatsapp-salida", "schedule": "* * * * *" },
-    { "path": "/api/cron/whatsapp-vencimientos", "schedule": "* * * * *" }
+    { "path": "/api/cron/whatsapp-vencimientos", "schedule": "* * * * *" },
+    { "path": "/api/cron/crm-sla", "schedule": "*/5 * * * *" }
   ]
 }

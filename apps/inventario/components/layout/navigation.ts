@@ -8,7 +8,7 @@ import {
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, Cog,
-  MapPinned, Route, MessagesSquare,
+  MapPinned, Route, MessagesSquare, Inbox,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -129,6 +129,11 @@ export const navigation: NavModule[] = [
       // El bot: las conversaciones, la cola de salida y el estado de las
       // plantillas ante Meta.
       { label: 'WhatsApp', href: '/rondas/whatsapp', icon: MessagesSquare, permiso: 'ver_whatsapp' },
+      // El CRM: los casos que salen de esas conversaciones, con su agente,
+      // su SLA y la respuesta que la IA sugiere y una persona aprueba. Va
+      // debajo de WhatsApp porque es lo que sigue en el flujo, y con `Inbox`
+      // porque es una bandeja de trabajo, no un tablero del canal.
+      { label: 'CRM (casos)', href: '/rondas/crm', icon: Inbox, permiso: 'ver_crm' },
     ],
   },
   {

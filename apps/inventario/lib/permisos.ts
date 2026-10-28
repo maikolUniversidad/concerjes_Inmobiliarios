@@ -227,6 +227,14 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'ver_whatsapp',       label: 'Ver conversaciones y mensajes de WhatsApp' },
       { key: 'gestionar_whatsapp', label: 'Responder por WhatsApp, reencolar lo omitido y gestionar plantillas' },
       { key: 'conectar_whatsapp',  label: 'Conectar o desconectar el número de WhatsApp de la empresa' },
+      // CRM con IA (F11). `parametrizar_crm` va aparte de `gestionar_crm`
+      // porque cambiar un tope de SLA cambia el plazo de todo lo que se abra
+      // después: es una decisión de contrato, no de la atención del día. Ojo:
+      // `ver_whatsapp` da la conversación cruda; estas claves dan el CASO, con
+      // su agente, su reloj y lo que sugirió la IA.
+      { key: 'ver_crm',           label: 'Ver la bandeja del CRM: casos, SLA y lo que sugiere la IA' },
+      { key: 'gestionar_crm',     label: 'Gestionar casos del CRM: asignar, etiquetar, mover el estado y APROBAR la respuesta sugerida' },
+      { key: 'parametrizar_crm',  label: 'Parametrizar el CRM: etiquetas y topes de SLA' },
     ],
   },
   {

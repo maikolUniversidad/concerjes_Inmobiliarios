@@ -1,0 +1,119 @@
+{
+  "_porque": "Tabla de casos del reloj hábil del SLA (F11). La leen DOS cosas: la prueba unitaria tests/inventario/crm-sla.test.ts (que prueba lib/crm/sla.ts) y scripts/verificar-crm-f11.mjs (que corre los MISMOS casos contra crm_sumar_habiles_min y crm_minutos_habiles en PostgreSQL). Vive en un solo archivo justamente para que las dos implementaciones de la misma aritmética no se puedan separar sin que se note.",
+  "_festivos": "2026-11-02 (Todos los Santos trasladado al lunes por la Ley Emiliani) y 2026-11-16 (Independencia de Cartagena trasladada). Son festivos colombianos de verdad y van en pqrs_dias_no_habiles, el calendario que ya comparten PQRS y No conformes.",
+  "franja": { "desdeHora": "08:00", "hastaHora": "17:00", "zona": "America/Bogota" },
+  "noHabiles": ["2026-11-02", "2026-11-16"],
+  "sumar": [
+    {
+      "nombre": "dentro de la franja, una hora",
+      "desde": "2026-10-28T09:00:00-05:00",
+      "minutos": 60,
+      "espera": "2026-10-28T10:00:00-05:00"
+    },
+    {
+      "nombre": "cruza el cierre: 30 min hoy y 30 mañana",
+      "desde": "2026-10-28T16:30:00-05:00",
+      "minutos": 60,
+      "espera": "2026-10-29T08:30:00-05:00"
+    },
+    {
+      "nombre": "entra de noche: el reloj arranca cuando abre",
+      "desde": "2026-10-28T22:00:00-05:00",
+      "minutos": 30,
+      "espera": "2026-10-29T08:30:00-05:00"
+    },
+    {
+      "nombre": "un dia habil exacto cae en el cierre, no al dia siguiente",
+      "desde": "2026-10-28T08:00:00-05:00",
+      "minutos": 540,
+      "espera": "2026-10-28T17:00:00-05:00"
+    },
+    {
+      "nombre": "un minuto mas que un dia habil ya es manana",
+      "desde": "2026-10-28T08:00:00-05:00",
+      "minutos": 541,
+      "espera": "2026-10-29T08:01:00-05:00"
+    },
+    {
+      "nombre": "sabado: salta el fin de semana Y el festivo del lunes",
+      "desde": "2026-10-31T10:00:00-05:00",
+      "minutos": 30,
+      "espera": "2026-11-03T08:30:00-05:00"
+    },
+    {
+      "nombre": "viernes tarde: 1 h el viernes y el resto el martes, porque el lunes es festivo",
+      "desde": "2026-10-30T16:00:00-05:00",
+      "minutos": 120,
+      "espera": "2026-11-03T09:00:00-05:00"
+    },
+    {
+      "nombre": "cero minutos fuera de franja: se normaliza a la apertura habil siguiente",
+      "desde": "2026-10-31T10:00:00-05:00",
+      "minutos": 0,
+      "espera": "2026-11-03T08:00:00-05:00"
+    },
+    {
+      "nombre": "cuatro dias habiles (el tope MEDIA) saltando fin de semana y festivo",
+      "desde": "2026-10-28T09:00:00-05:00",
+      "minutos": 2160,
+      "espera": "2026-11-04T09:00:00-05:00"
+    },
+    {
+      "nombre": "CRITICA: 30 min encolados a las 16:50 terminan a las 08:20 del dia siguiente",
+      "desde": "2026-10-28T16:50:00-05:00",
+      "minutos": 30,
+      "espera": "2026-10-29T08:20:00-05:00"
+    },
+    {
+      "nombre": "la semana del segundo festivo: 2 dias habiles desde el viernes 13",
+      "desde": "2026-11-13T09:00:00-05:00",
+      "minutos": 1080,
+      "espera": "2026-11-18T09:00:00-05:00"
+    },
+    {
+      "nombre": "otra franja (06:00-20:00, 840 min/dia): el parametro se respeta",
+      "franja": { "desdeHora": "06:00", "hastaHora": "20:00", "zona": "America/Bogota" },
+      "desde": "2026-10-28T19:30:00-05:00",
+      "minutos": 60,
+      "espera": "2026-10-29T06:30:00-05:00"
+    }
+  ],
+  "transcurrido": [
+    {
+      "nombre": "la pausa del viernes al martes son 2 horas habiles, no 65 de reloj",
+      "desde": "2026-10-30T16:00:00-05:00",
+      "hasta": "2026-11-03T09:00:00-05:00",
+      "espera": 120
+    },
+    {
+      "nombre": "mismo dia, dos horas y media",
+      "desde": "2026-10-28T09:00:00-05:00",
+      "hasta": "2026-10-28T11:30:00-05:00",
+      "espera": 150
+    },
+    {
+      "nombre": "de noche a la manana siguiente solo cuenta lo habil",
+      "desde": "2026-10-28T22:00:00-05:00",
+      "hasta": "2026-10-29T09:00:00-05:00",
+      "espera": 60
+    },
+    {
+      "nombre": "un fin de semana completo no cuenta nada",
+      "desde": "2026-10-31T08:00:00-05:00",
+      "hasta": "2026-11-01T20:00:00-05:00",
+      "espera": 0
+    },
+    {
+      "nombre": "hasta antes que desde da cero, no negativo",
+      "desde": "2026-10-28T11:00:00-05:00",
+      "hasta": "2026-10-28T09:00:00-05:00",
+      "espera": 0
+    },
+    {
+      "nombre": "una semana entera con festivo: 4 dias habiles",
+      "desde": "2026-11-02T00:00:00-05:00",
+      "hasta": "2026-11-07T00:00:00-05:00",
+      "espera": 2160
+    }
+  ]
+}
