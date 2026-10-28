@@ -48,7 +48,7 @@ export default async function ActivoFichaPage({
 
   const [
     { data: hijos }, { data: documentos }, { data: medidores },
-    { data: lecturas }, { data: qrs },
+    { data: lecturas }, { data: qrs }, { data: ordenes },
   ] = await Promise.all([
     sb.from('activos').select('id, codigo, nombre, estado')
       .eq('padre_id', id).order('codigo'),
@@ -66,6 +66,12 @@ export default async function ActivoFichaPage({
     sb.from('ronda_qr')
       .select('id, version, token, codigo_manual, estado, motivo_cambio, instalado_at, impresiones, created_at')
       .eq('activo_id', id).order('version', { ascending: false }),
+    // Las órdenes de trabajo del activo (F7). Las últimas 50: el histórico
+    // entero de un ascensor a diez años no cabe en los 8 s de Supabase, y la
+    // ficha no es el sitio donde se consulta ese histórico.
+    sb.from('mantenimiento_tickets')
+      .select('id, numero, estado, tipo, titulo, created_at')
+      .eq('activo_id', id).order('created_at', { ascending: false }).limit(50),
   ])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -172,6 +178,24 @@ export default async function ActivoFichaPage({
         puedeGestionar={permisos.puede('gestionar_activos_ronda')}
         puedeLeer={permisos.puede('registrar_lecturas_activos') || permisos.puede('gestionar_activos_ronda')}
         puedeQr={permisos.puede('gestionar_qr_ronda')}
+        // F7: desde aquí entra el mantenimiento del activo. Las claves son las
+        // del módulo de mantenimiento, no las de activos: quien ve la ficha no
+        // tiene por qué poder reportar, y al revés tampoco.
+        puedeReportarFalla={permisos.puede('reportar_falla_maquinaria')
+          || permisos.puede('atender_mantenimiento')
+          || permisos.puede('gestionar_mantenimiento')
+          || permisos.puede('ejecutar_rondas')}
+        puedeVerMantenimiento={permisos.puede('ver_mantenimiento')
+          || permisos.puede('atender_mantenimiento')
+          || permisos.puede('gestionar_mantenimiento')}
+        ordenes={(ordenes ?? []).map((o: Record<string, unknown>) => ({
+          id: String(o.id),
+          numero: String(o.numero),
+          estado: String(o.estado),
+          tipo: String(o.tipo),
+          titulo: String(o.titulo),
+          createdAt: String(o.created_at),
+        }))}
       />
     </div>
   )

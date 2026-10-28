@@ -10,7 +10,8 @@ import {
 } from 'lucide-react'
 import { ESTADO_MAQ_META } from '../../maquinaria/estados'
 import {
-  CONDICION_META, ESTADO_TICKET_META, PRIORIDAD_META, TIPO_ACTIVIDAD_META, TIPO_TICKET_META, fechaHora, haceCuanto,
+  CONDICION_META, ESTADO_TICKET_META, ESTADOS_TICKET_ACTIVOS, PRIORIDAD_META,
+  TIPO_ACTIVIDAD_META, TIPO_TICKET_META, fechaHora, haceCuanto,
 } from '@/lib/mantenimiento'
 import { ReportarFallaForm } from '@/components/mantenimiento/ReportarFallaForm'
 import { ActividadForm } from '@/components/mantenimiento/ActividadForm'
@@ -51,7 +52,9 @@ const EVENTO_ICON: Record<string, { icon: typeof Wrench; cls: string }> = {
   COMENTARIO: { icon: MessageSquare, cls: 'bg-purple-100 text-purple-600' },
 }
 
-const ACTIVOS = new Set(['ABIERTO', 'RECIBIDO', 'EN_PROCESO', 'EN_ESPERA', 'RESUELTO'])
+// La lista sale de `lib/mantenimiento`, no escrita aquí: un estado nuevo del
+// enum tiene que aparecer en «abiertos» sin tocar esta pantalla.
+const ACTIVOS = new Set<string>(ESTADOS_TICKET_ACTIVOS)
 type Tab = 'tickets' | 'actividades' | 'traza'
 
 export function EquipoCampoClient({ maquina, tickets, actividades, eventos, permisos }: {

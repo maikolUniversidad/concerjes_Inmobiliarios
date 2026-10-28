@@ -11,7 +11,10 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import { ESTADO_MAQ_META } from '../maquinaria/estados'
-import { CONDICION_META, ESTADO_TICKET_META, PRIORIDAD_META, TIPO_TICKET_META, haceCuanto } from '@/lib/mantenimiento'
+import {
+  CONDICION_META, ESTADO_TICKET_META, PRIORIDAD_META, TIPO_TICKET_META, haceCuanto,
+  ESTADOS_TICKET_EN_CURSO, faseTicket, type FaseTicket,
+} from '@/lib/mantenimiento'
 import { PERIODOS, type Periodo } from './periodos'
 
 export interface TicketFila {
@@ -19,6 +22,9 @@ export interface TicketFila {
   reportado_nombre: string | null; asignado_a: string | null; asignado_nombre: string | null
   created_at: string; recibido_at: string | null; iniciado_at: string | null; resuelto_at: string | null; cerrado_at: string | null
   programado_para: string | null; ultimo_mensaje_at: string | null; costo: number | null
+  // Una orden de trabajo cuelga de un activo del cliente y NO tiene maquinaria
+  // (F7). Las dos se tipan nullable porque solo una de las dos existe.
+  origen: string; activo_codigo: string | null; activo_nombre: string | null
   maquinaria: { id: string; codigo: string; nombre: string } | null
   sede: { id: string; nombre: string } | null
 }
@@ -26,17 +32,25 @@ export interface EquipoAlerta {
   id: string; codigo: string; nombre: string; estado: string; condicion: string
   proximo_mant: string | null; sedes: { nombre: string } | null
 }
-export interface Backlog { porRecibir: number; enCurso: number; criticos: number; porConfirmar: number; mios: number }
+/** Lo cuenta `vw_mant_backlog` en SQL: Supabase corta a los 8 s y traer todas
+ *  las filas pendientes para contarlas en JavaScript no escala. */
+export interface Backlog {
+  por_recibir: number; en_curso: number; criticos: number
+  por_aprobar: number; por_cerrar: number; aprobacion_vencida: number; mios: number
+  sla_respuesta_vencido: number; sla_solucion_vencido: number
+}
 
-type Vista = 'todos' | 'atender' | 'curso' | 'resueltos' | 'historial'
-const VISTAS: { k: Vista; label: string; estados: string[] | null }[] = [
-  { k: 'todos', label: 'Todos', estados: null },
-  { k: 'atender', label: 'Por recibir', estados: ['ABIERTO'] },
-  { k: 'curso', label: 'En curso', estados: ['RECIBIDO', 'EN_PROCESO', 'EN_ESPERA'] },
-  { k: 'resueltos', label: 'Por confirmar', estados: ['RESUELTO'] },
-  { k: 'historial', label: 'Cerrados', estados: ['CERRADO', 'CANCELADO'] },
+// Las pestañas salen de `FASES_TICKET` por `faseTicket()`, no de listas de
+// estados escritas aquí. Así un estado nuevo del enum cae siempre en alguna
+// pestaña: el ticket que desaparecía sin dejar rastro ya no es posible.
+type Vista = 'todos' | FaseTicket
+const VISTAS: { k: Vista; label: string }[] = [
+  { k: 'todos', label: 'Todos' },
+  { k: 'atender', label: 'Por recibir' },
+  { k: 'curso', label: 'En curso' },
+  { k: 'resueltos', label: 'Por confirmar' },
+  { k: 'historial', label: 'Cerrados' },
 ]
-const ACTIVOS = ['ABIERTO', 'RECIBIDO', 'EN_PROCESO', 'EN_ESPERA']
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 const fechaHora = (iso: string) => new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: '2-digit', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' })
 const minutos = (a: string | null, b: string | null) => (a && b ? Math.max(0, (new Date(b).getTime() - new Date(a).getTime()) / 60000) : null)
@@ -111,13 +125,13 @@ export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta
   }, [tickets])
 
   const datos = useMemo(() => {
-    const estados = VISTAS.find((v) => v.k === vista)?.estados
     return tickets
-      .filter((t) => !estados || estados.includes(t.estado))
+      .filter((t) => vista === 'todos' || faseTicket(t.estado) === vista)
       .filter((t) => !mios || t.asignado_a === usuarioId)
       .sort((a, b) => {
         // Lo pendiente primero, por prioridad; lo demás, lo más reciente primero.
-        const pa = ACTIVOS.includes(a.estado) ? 0 : 1, pb = ACTIVOS.includes(b.estado) ? 0 : 1
+        const pa = ESTADOS_TICKET_EN_CURSO.includes(a.estado) ? 0 : 1
+        const pb = ESTADOS_TICKET_EN_CURSO.includes(b.estado) ? 0 : 1
         if (pa !== pb) return pa - pb
         if (pa === 0) {
           const p = (PRIORIDAD_META[a.prioridad]?.orden ?? 9) - (PRIORIDAD_META[b.prioridad]?.orden ?? 9)
@@ -140,12 +154,20 @@ export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta
     })
   }
 
+  // Un botón, no el cron de cinco minutos: §10.2 avisa que ese cron «no es una
+  // cola». Hace las dos tareas programadas del módulo de una vez, porque las
+  // dos son idempotentes y pulsarlas por separado no aporta nada.
   function generarPreventivos() {
     startTransition(async () => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data, error } = await (createClient() as any).rpc('mant_generar_preventivos', { p_dias: 7 })
+      const sb = createClient() as any
+      const { data, error } = await sb.rpc('mant_generar_preventivos', { p_dias: 7 })
       if (error) { toast.error(error.message); return }
-      toast.success(data > 0 ? `${data} preventivo(s) programado(s).` : 'No hay preventivos pendientes por programar.')
+      const { data: tacitas } = await sb.rpc('mant_aprobar_tacitos')
+      const partes: string[] = []
+      if (data > 0) partes.push(`${data} preventivo(s) programado(s)`)
+      if (tacitas > 0) partes.push(`${tacitas} orden(es) aprobada(s) por vencimiento del plazo`)
+      toast.success(partes.length > 0 ? partes.join(' · ') + '.' : 'Nada pendiente por programar ni por aprobar.')
       router.refresh()
     })
   }
@@ -171,15 +193,25 @@ export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta
     },
     { id: 'tipo', header: 'Tipo', valor: (t) => TIPO_TICKET_META[t.tipo]?.label ?? t.tipo, prioridad: 2, tarjeta: 'meta', className: 'text-xs text-gray-600 whitespace-nowrap' },
     {
-      id: 'equipo', header: 'Equipo', valor: (t) => `${t.maquinaria?.codigo ?? ''} ${t.maquinaria?.nombre ?? ''}`.trim(), prioridad: 2, tarjeta: 'meta',
-      celda: (t) => <span className="text-xs text-gray-700"><span className="font-mono text-gray-500">{t.maquinaria?.codigo}</span> {t.maquinaria?.nombre}</span>,
+      // El objeto es un equipo propio O un activo del cliente, nunca los dos.
+      id: 'equipo', header: 'Equipo / activo', prioridad: 2, tarjeta: 'meta',
+      valor: (t) => `${t.maquinaria?.codigo ?? t.activo_codigo ?? ''} ${t.maquinaria?.nombre ?? t.activo_nombre ?? ''}`.trim(),
+      celda: (t) => (
+        <span className="text-xs text-gray-700">
+          <span className="font-mono text-gray-500">{t.maquinaria?.codigo ?? t.activo_codigo}</span>{' '}
+          {t.maquinaria?.nombre ?? t.activo_nombre}
+          {!t.maquinaria && t.activo_codigo && (
+            <span className="ml-1 rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700">del cliente</span>
+          )}
+        </span>
+      ),
     },
     { id: 'sede', header: 'Sede', valor: (t) => t.sede?.nombre ?? 'Bodega', prioridad: 2, tarjeta: 'meta', className: 'text-xs text-gray-600 max-w-[200px] truncate' },
     { id: 'reporto', header: 'Reportó', valor: (t) => t.reportado_nombre ?? '', prioridad: 3, tarjeta: 'oculto', className: 'text-xs text-gray-600 whitespace-nowrap' },
     {
       id: 'tecnico', header: 'Técnico', valor: (t) => t.asignado_nombre ?? 'Sin asignar', prioridad: 2, tarjeta: 'meta',
       celda: (t) => t.asignado_nombre ? <span className="text-xs text-gray-700 whitespace-nowrap">{t.asignado_nombre}</span>
-        : ACTIVOS.includes(t.estado) ? <span className="text-xs text-red-500">Sin asignar</span> : <span className="text-gray-300">—</span>,
+        : ESTADOS_TICKET_EN_CURSO.includes(t.estado) ? <span className="text-xs text-red-500">Sin asignar</span> : <span className="text-gray-300">—</span>,
     },
     { id: 'creado', header: 'Creado', valor: (t) => t.created_at, copiaTexto: (t) => fechaHora(t.created_at), celda: (t) => <span className="text-xs text-gray-600 whitespace-nowrap">{fechaHora(t.created_at)}</span>, prioridad: 2, tarjeta: 'meta', filtrable: false },
     { id: 'respuesta', header: 'Respuesta', align: 'right', valor: (t) => minutos(t.created_at, t.recibido_at), copiaTexto: (t) => duracion(minutos(t.created_at, t.recibido_at)), celda: (t) => <span className="text-xs text-gray-600">{duracion(minutos(t.created_at, t.recibido_at))}</span>, prioridad: 3, tarjeta: 'oculto', filtrable: false },
@@ -203,13 +235,35 @@ export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta
       <div>
         <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-gray-400">Pendiente ahora</p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-          <Kpi icon={Inbox} label="Por recibir" valor={backlog.porRecibir} cls="bg-red-50 text-red-600" onClick={() => irPeriodo('todo', '', '', 'atender')} />
-          <Kpi icon={Wrench} label="En curso" valor={backlog.enCurso} cls="bg-amber-50 text-amber-600" onClick={() => irPeriodo('todo', '', '', 'curso')} />
+          <Kpi icon={Inbox} label="Por recibir" valor={backlog.por_recibir} cls="bg-red-50 text-red-600" onClick={() => irPeriodo('todo', '', '', 'atender')} />
+          <Kpi icon={Wrench} label="En curso" valor={backlog.en_curso} cls="bg-amber-50 text-amber-600" onClick={() => irPeriodo('todo', '', '', 'curso')} />
           <Kpi icon={Siren} label="Alta / crítica activos" valor={backlog.criticos} cls="bg-orange-50 text-orange-600" />
-          <Kpi icon={CheckCircle2} label="Por confirmar en sede" valor={backlog.porConfirmar} cls="bg-emerald-50 text-emerald-600" onClick={() => irPeriodo('todo', '', '', 'resueltos')} />
+          <Kpi icon={CheckCircle2} label="Por confirmar" valor={backlog.por_aprobar + backlog.por_cerrar} cls="bg-emerald-50 text-emerald-600"
+            detalle={backlog.por_cerrar > 0 ? `${backlog.por_cerrar} ya aprobada(s) por el cliente` : undefined}
+            onClick={() => irPeriodo('todo', '', '', 'resueltos')} />
           <Kpi icon={AlertTriangle} label="Equipos fuera de servicio" valor={equipos.filter((e) => e.estado === 'DANADA' || e.estado === 'MANTENIMIENTO').length} cls="bg-gray-100 text-gray-600" />
           <Kpi icon={CalendarClock} label="Preventivos vencidos" valor={equipos.filter((e) => e.proximo_mant && new Date(e.proximo_mant + 'T00:00:00') <= new Date()).length} cls="bg-purple-50 text-purple-600" />
         </div>
+        {/* Los plazos del contrato: solo aparecen cuando hay algo que corre. */}
+        {(backlog.sla_respuesta_vencido > 0 || backlog.sla_solucion_vencido > 0 || backlog.aprobacion_vencida > 0) && (
+          <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+            {backlog.sla_respuesta_vencido > 0 && (
+              <span className="rounded-full bg-red-50 px-2 py-1 font-medium text-red-700">
+                {backlog.sla_respuesta_vencido} sin responder dentro del plazo del contrato
+              </span>
+            )}
+            {backlog.sla_solucion_vencido > 0 && (
+              <span className="rounded-full bg-orange-50 px-2 py-1 font-medium text-orange-700">
+                {backlog.sla_solucion_vencido} sin resolver dentro del plazo del contrato
+              </span>
+            )}
+            {backlog.aprobacion_vencida > 0 && (
+              <span className="rounded-full bg-teal-50 px-2 py-1 font-medium text-teal-700">
+                {backlog.aprobacion_vencida} con el plazo de aprobación vencido · «Programar» las aprueba
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Periodo */}
@@ -257,7 +311,7 @@ export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta
         <div className="space-y-3 min-w-0">
           <div className="flex overflow-x-auto no-scrollbar rounded-xl border border-gray-100 bg-white text-sm shadow-sm">
             {VISTAS.map((v) => {
-              const n = v.estados ? tickets.filter((t) => v.estados!.includes(t.estado)).length : tickets.length
+              const n = v.k === 'todos' ? tickets.length : tickets.filter((t) => faseTicket(t.estado) === v.k).length
               return (
                 <button key={v.k} onClick={() => setVista(v.k)}
                   className={`shrink-0 px-4 py-2.5 font-medium ${vista === v.k ? 'text-brand-green border-b-2 border-brand-green' : 'text-gray-500 hover:text-gray-700'}`}>
@@ -281,7 +335,7 @@ export function TableroClient({ tickets, backlog, equipos, periodo, desde, hasta
             onFilaClick={(t) => router.push(`/mantenimiento/${t.id}`)}
             textoDetalle="Abrir ticket"
             anchoAcciones="w-24"
-            filaClassName={(t) => t.prioridad === 'CRITICA' && ACTIVOS.includes(t.estado) ? 'bg-red-50/40' : ''}
+            filaClassName={(t) => t.prioridad === 'CRITICA' && ESTADOS_TICKET_EN_CURSO.includes(t.estado) ? 'bg-red-50/40' : ''}
             acciones={(t) => permisos.tecnico && t.estado === 'ABIERTO' ? (
               <button onClick={() => recibir(t.id)} disabled={pending}
                 className="inline-flex items-center gap-1 rounded-lg bg-brand-green px-2 py-1 text-[11px] font-semibold text-white hover:bg-brand-green-dark disabled:opacity-50">

@@ -832,15 +832,24 @@ export interface MaquinariaEvento {
   created_at: string
 }
 
-// ── Mantenimiento de maquinaria ──────────────────────────────────────────────
-export type EstadoTicketMant = 'ABIERTO' | 'RECIBIDO' | 'EN_PROCESO' | 'EN_ESPERA' | 'RESUELTO' | 'CERRADO' | 'CANCELADO'
+// ── Mantenimiento de maquinaria y órdenes de trabajo ────────────────────────
+// Once estados desde F7: los cuatro nuevos son de la orden de trabajo sobre un
+// activo del cliente y son opcionales. El orden es el del enum en la base.
+export type EstadoTicketMant =
+  | 'ABIERTO' | 'RECIBIDO' | 'ACEPTADO' | 'EN_CAMINO' | 'EN_SITIO' | 'EN_PROCESO'
+  | 'EN_ESPERA' | 'RESUELTO' | 'APROBADO_CLIENTE' | 'CERRADO' | 'CANCELADO'
 export type TipoTicketMant = 'CORRECTIVO' | 'PREVENTIVO' | 'INSPECCION' | 'SOPORTE_REMOTO'
 export type PrioridadMant = 'BAJA' | 'MEDIA' | 'ALTA' | 'CRITICA'
+export type OrigenTicketMant = 'TICKET' | 'PLAN' | 'VISITA' | 'PQRS' | 'CLIENTE' | 'BOT' | 'IOT'
+export type FrecuenciaPlanMant = 'DIAS' | 'SEMANAS' | 'MESES' | 'MEDIDOR'
 
 export interface MantenimientoTicket {
   id: string
   numero: string
-  maquinaria_id: string
+  // Uno de los dos, nunca los dos ni ninguno (CHECK `mant_tickets_objeto`):
+  // `maquinaria_id` es el equipo propio, `activo_id` el activo del cliente.
+  maquinaria_id: string | null
+  activo_id: string | null
   sede_id: string | null
   tipo: TipoTicketMant
   prioridad: PrioridadMant
@@ -867,6 +876,112 @@ export interface MantenimientoTicket {
   ultimo_mensaje_at: string | null
   created_at: string
   updated_at: string
+
+  // ── Orden de trabajo (F7) ────────────────────────────────────────────────
+  /** Contrato del activo. NULL en los tickets de maquinaria propia: la empresa
+   *  no tiene un contrato interno en `grupos_contrato` y no se inventó uno. */
+  grupo_id: string | null
+  plan_id: string | null
+  visita_id: string | null
+  pqrs_id: string | null
+  proveedor_id: string | null
+  origen: OrigenTicketMant
+  activo_codigo: string | null
+  activo_nombre: string | null
+  estado_activo_reportado: string | null
+  estado_activo_final: string | null
+  /** Marcas de los tres estados opcionales. No asumir que están las tres. */
+  aceptado_at: string | null
+  en_camino_at: string | null
+  en_sitio_at: string | null
+  /** QR = la placa se escaneó. MANUAL = salida para el QR ilegible. */
+  en_sitio_modo: 'QR' | 'MANUAL' | null
+  /** Columna generada: la primera señal de respuesta que exista. */
+  respondido_at: string | null
+  sla_respuesta_vence_at: string | null
+  sla_solucion_vence_at: string | null
+  /** Columnas generadas: no se escriben, se calculan. */
+  sla_respuesta_cumplido: boolean | null
+  sla_solucion_cumplido: boolean | null
+  aprobado_cliente_at: string | null
+  aprobado_cliente_nombre: string | null
+  aprobado_cliente_cargo: string | null
+  /** TRUE si se aprobó por vencimiento del plazo y no por firma del cliente. */
+  aprobado_tacito: boolean
+  aprobacion_vence_at: string | null
+  firma_tecnico_id: string | null
+  firma_cliente_id: string | null
+  costo_mano_obra: number | null
+  costo_materiales: number
+  reabierto_de: string | null
+  reaperturas: number
+  medidor_id: string | null
+  medidor_valor: number | null
+}
+
+export interface MantPlan {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  /** NULL = el plan vale para todos los contratos. */
+  grupo_id: string | null
+  /** Exactamente uno de los tres (CHECK `mant_planes_objeto`). */
+  activo_tipo_id: string | null
+  activo_id: string | null
+  maquinaria_id: string | null
+  frecuencia_tipo: FrecuenciaPlanMant
+  frecuencia_valor: number
+  medidor_id: string | null
+  anticipacion_dias: number
+  tolerancia_dias: number
+  vence_alerta_dias: number
+  obligatorio_normativo: boolean
+  normativa: string | null
+  tipo_ticket: 'PREVENTIVO' | 'INSPECCION'
+  prioridad: PrioridadMant
+  duracion_estimada_min: number | null
+  asignado_a: string | null
+  rol_id: string | null
+  proveedor_id: string | null
+  activo: boolean
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface MantPlanTarea {
+  id: string
+  plan_id: string
+  orden: number
+  plantilla_id: string | null
+  plantilla_codigo: string | null
+  descripcion: string | null
+  created_at: string
+}
+
+export interface MantPlanMaterial {
+  id: string
+  plan_id: string
+  producto_id: string
+  cantidad: number
+  created_at: string
+}
+
+export interface MantMaterial {
+  id: string
+  ticket_id: string
+  producto_id: string
+  producto_nombre: string | null
+  cantidad: number
+  costo_unitario: number | null
+  /** Columna generada. */
+  costo_total: number
+  /** El movimiento de SALIDA que descontó el inventario. */
+  movimiento_id: string | null
+  usuario_id: string | null
+  usuario_nombre: string | null
+  created_at: string
 }
 
 export interface MantenimientoMensaje {
