@@ -8,6 +8,7 @@ import {
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
   ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock,
+  MapPinned, Route,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -114,6 +115,11 @@ export const navigation: NavModule[] = [
       { label: 'Plantillas',   href: '/rondas/plantillas',   icon: ClipboardList, permiso: 'ver_catalogo_rondas' },
       { label: 'Instructivos', href: '/rondas/instructivos', icon: BookOpen,      permiso: 'ver_catalogo_rondas' },
       { label: 'Asignaciones', href: '/rondas/asignaciones', icon: CalendarClock, permiso: 'ver_asignaciones_rondas' },
+      // Dónde está la gente ahora y por dónde tiene que pasar. El mapa pide su
+      // propia clave: muestra la ubicación de personas, que es el dato más
+      // sensible del módulo.
+      { label: 'Mapa operativo', href: '/rondas/mapa',  icon: MapPinned, permiso: 'ver_mapa_operativo' },
+      { label: 'Rutas de ronda', href: '/rondas/rutas', icon: Route,     permiso: 'ver_rutas_ronda' },
     ],
   },
   {

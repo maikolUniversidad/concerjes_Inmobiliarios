@@ -7,6 +7,10 @@ import { clasificarEntrada, formatearManual } from '@conserjes/ronda-core'
 import { crearPuente, estadoCola, sincronizar } from '@/lib/campo/cola'
 import { EscanerQr } from './EscanerQr'
 import { PuertaConsentimientos } from './PuertaConsentimientos'
+import {
+  TurnoYUbicacion,
+  type ProximaParada, type SedeTurno, type TurnoAbierto,
+} from './TurnoYUbicacion'
 import type { TipoConsentimiento } from '@/lib/campo/consentimientos'
 
 export interface ActorPwa {
@@ -25,10 +29,20 @@ export interface ActorPwa {
  */
 export function InicioCampo({
   actor, faltanConsentimientos, bloqueantes,
+  turno = null, parada = null, sedesTurno = [],
+  consienteSeguimiento = false, seguimientoHabilitado = false, intervaloSeg = 120,
 }: {
   actor: ActorPwa
   faltanConsentimientos: TipoConsentimiento[]
   bloqueantes: TipoConsentimiento[]
+  // F8: el turno y la ubicación. Opcionales para que la pantalla siga
+  // funcionando igual donde no se pasen.
+  turno?: TurnoAbierto | null
+  parada?: ProximaParada | null
+  sedesTurno?: SedeTurno[]
+  consienteSeguimiento?: boolean
+  seguimientoHabilitado?: boolean
+  intervaloSeg?: number
 }) {
   const router = useRouter()
   const [escaneando, setEscaneando] = useState(false)
@@ -37,6 +51,9 @@ export function InicioCampo({
   const [cola, setCola] = useState<{ visitas: number; medios: number }>({ visitas: 0, medios: 0 })
   const [enviando, setEnviando] = useState(false)
   const [pidiendo, setPidiendo] = useState(bloqueantes.length > 0)
+  // Para volver a ofrecer un consentimiento que se dijo que no (F8: el de
+  // seguimiento se puede reconsiderar sin tener que salir y volver a entrar).
+  const [repreguntar, setRepreguntar] = useState<TipoConsentimiento[]>([])
 
   const refrescarCola = async () => {
     try {
@@ -87,13 +104,22 @@ export function InicioCampo({
     router.push(`/campo/punto/${c.codigo}`)
   }
 
-  if (pidiendo) {
+  if (pidiendo || repreguntar.length > 0) {
+    const pedir = repreguntar.length > 0 ? repreguntar : faltanConsentimientos
     return (
       <PuertaConsentimientos
         actor={actor}
-        pedir={faltanConsentimientos}
-        obligatorios={bloqueantes}
-        alTerminar={() => setPidiendo(false)}
+        pedir={pedir}
+        obligatorios={repreguntar.length > 0 ? [] : bloqueantes}
+        alTerminar={() => {
+          setPidiendo(false)
+          if (repreguntar.length > 0) {
+            setRepreguntar([])
+            // La respuesta la tiene que volver a leer el servidor: el estado
+            // del consentimiento no se adivina desde el navegador.
+            router.refresh()
+          }
+        }}
       />
     )
   }
@@ -110,6 +136,21 @@ export function InicioCampo({
           {actor.modo === 'cuenta' ? 'Entraste con tu cuenta' : 'Entraste con enlace y PIN'}
         </p>
       </header>
+
+      {/* El turno y la ubicación (F8). Va ARRIBA del escáner a propósito: lo
+          primero del día es entrar a turno, y el indicador de que se está
+          compartiendo la ubicación tiene que verse sin desplazar la pantalla. */}
+      <div className="mb-6">
+        <TurnoYUbicacion
+          turnoInicial={turno}
+          paradaInicial={parada}
+          sedes={sedesTurno}
+          consienteSeguimiento={consienteSeguimiento}
+          seguimientoHabilitado={seguimientoHabilitado}
+          intervaloSeg={intervaloSeg}
+          alPedirConsentimiento={(tipo) => setRepreguntar([tipo])}
+        />
+      </div>
 
       {escaneando ? (
         <EscanerQr

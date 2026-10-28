@@ -14,7 +14,8 @@
 // La versión es parte del texto: si el texto cambia, la versión sube y hay que
 // volver a pedirlo. Nunca se edita un texto dejando la versión igual.
 
-export type TipoConsentimiento = 'UBICACION' | 'FOTOS' | 'AUDIO' | 'BIOMETRIA' | 'WHATSAPP'
+export type TipoConsentimiento =
+  'UBICACION' | 'FOTOS' | 'AUDIO' | 'BIOMETRIA' | 'WHATSAPP' | 'SEGUIMIENTO'
 
 export interface TextoConsentimiento {
   tipo: TipoConsentimiento
@@ -42,6 +43,29 @@ export const CONSENTIMIENTOS: TextoConsentimiento[] = [
     siNo:
       'Puedes trabajar igual: la visita se abre sin ubicación y queda marcada como «sin GPS», que '
       + 'tu supervisor puede revisar.',
+    necesario: false,
+  },
+  {
+    // F8. APARTE de UBICACION, y no por formalismo: el texto de UBICACION
+    // promete que «no se sigue tu ubicación entre visitas ni fuera de tu
+    // turno», así que reutilizar ese «sí» para el seguimiento durante el turno
+    // sería usarlo para algo que no autorizó. §10.3 del complemento 2 lo exige
+    // explícitamente: «el seguimiento continuo exige consentimiento explícito
+    // aparte y un indicador visible para el trabajador».
+    tipo: 'SEGUIMIENTO',
+    version: '2026-10-28.1',
+    titulo: 'Ver tu ubicación durante el turno',
+    texto:
+      'Es APARTE de lo anterior y puedes decir que no. Si lo autorizas, mientras tengas el turno '
+      + 'abierto en la aplicación tu supervisor puede ver en un mapa dónde estás, para coordinar el '
+      + 'trabajo del día. Se guarda la coordenada cada pocos minutos, SOLO mientras el turno está '
+      + 'abierto: al salir de turno dejas de aparecer en el mapa en el acto, y fuera del turno no se '
+      + 'registra nada. Mientras esté activo, la aplicación te lo muestra en pantalla todo el tiempo. '
+      + 'El recorrido se conserva los meses que tenga pactado el contrato de la sede (3 por defecto) '
+      + 'y después se borra. Puedes retirar esta autorización cuando quieras.',
+    siNo:
+      'Puedes trabajar igual y abrir tus visitas como siempre: simplemente no apareces en el mapa '
+      + 'del turno. No afecta tu trabajo ni tu evaluación.',
     necesario: false,
   },
   {

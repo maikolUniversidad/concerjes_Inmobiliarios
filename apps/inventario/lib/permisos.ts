@@ -187,6 +187,27 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_catalogo_rondas',      label: 'Crear, publicar y versionar plantillas de tarea e instructivos' },
       { key: 'ver_asignaciones_rondas',        label: 'Ver qué tareas aplican en cada punto de control' },
       { key: 'gestionar_asignaciones_rondas',  label: 'Asignar tareas a puntos: frecuencia, ventana, responsable y ANS' },
+      // Ejecución de la visita (F4). Las cuatro claves las exigen las RPC y las
+      // políticas de F4 (`ronda_visitas_acceso()`, `ronda_ejecuta()`, …), pero
+      // se quedaron fuera de este catálogo: una clave que no está aquí no
+      // aparece en /roles, nadie la puede marcar, y lo que la exija rechaza a
+      // todo el mundo menos a ADMIN. Se agregan desde F8 porque sin
+      // `ejecutar_rondas` tampoco se puede reportar la ubicación.
+      { key: 'ver_visitas_rondas',             label: 'Ver las visitas ejecutadas, su evidencia y sus reportes' },
+      { key: 'gestionar_visitas_rondas',       label: 'Anular visitas, corregir lo cerrado y purgar evidencia vencida' },
+      { key: 'ejecutar_rondas',                label: 'Ejecutar rondas desde la app de campo (trabajador)' },
+      { key: 'gestionar_accesos_campo',        label: 'Enviar el enlace de acceso y el PIN a quien no tiene cuenta' },
+      // Ubicación y mapa operativo (F8). `ver_recorrido_personas` va APARTE de
+      // `ver_mapa_operativo` y es la más restrictiva de todo el módulo:
+      // coordinar el trabajo de hoy no es lo mismo que reconstruir por dónde
+      // anduvo una persona, que es tratamiento de datos de desempeño. Ojo:
+      // `gestionar_rutas` y `ver_ubicacion_conductores` son de Logística
+      // (rutas de entrega y GPS de conductores) y no sirven aquí.
+      { key: 'ver_mapa_operativo',             label: 'Ver el mapa operativo: quién está en turno y dónde' },
+      { key: 'ver_recorrido_personas',         label: 'Reproducir el recorrido de un turno pasado (dato de desempeño: dar con criterio)' },
+      { key: 'ver_rutas_ronda',                label: 'Ver las rutas de ronda y sus paradas' },
+      { key: 'gestionar_rutas_ronda',          label: 'Crear rutas de ronda, ordenar sus paradas y asignarlas' },
+      { key: 'reportar_ubicacion_campo',       label: 'Enviar su propia ubicación durante el turno (trabajador)' },
     ],
   },
   {
