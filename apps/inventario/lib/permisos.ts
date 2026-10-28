@@ -187,6 +187,14 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_catalogo_rondas',      label: 'Crear, publicar y versionar plantillas de tarea e instructivos' },
       { key: 'ver_asignaciones_rondas',        label: 'Ver qué tareas aplican en cada punto de control' },
       { key: 'gestionar_asignaciones_rondas',  label: 'Asignar tareas a puntos: frecuencia, ventana, responsable y ANS' },
+      // Activos del cliente (F6). Ojo: NO es `maquinaria` —que es el equipo
+      // propio de la empresa y va con `ver_maquinaria` / `ver_mantenimiento`—
+      // sino la instalación fija de la sede del cliente (extintor, ascensor,
+      // bomba). Registrar lecturas va aparte porque es lo que hace el técnico
+      // en sitio, que no tiene por qué poder editar la ficha del activo.
+      { key: 'ver_activos_ronda',              label: 'Ver los activos del cliente: ficha, documentos y medidores' },
+      { key: 'gestionar_activos_ronda',        label: 'Crear / editar activos y tipos, subir documentos y definir medidores' },
+      { key: 'registrar_lecturas_activos',     label: 'Registrar lecturas de los medidores de un activo' },
     ],
   },
   {

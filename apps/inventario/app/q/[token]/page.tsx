@@ -16,12 +16,17 @@
 
 import type { Metadata } from 'next'
 import { headers } from 'next/headers'
-import { MapPin, Building2, ShieldCheck, ShieldAlert, Keyboard, Layers } from 'lucide-react'
+import {
+  MapPin, Building2, ShieldCheck, ShieldAlert, Keyboard, Layers, Cog, Tag,
+} from 'lucide-react'
 import { formatearManual } from '@/lib/puntos-qr'
+import { ESTADO_ACTIVO } from '@/lib/activos'
 import { resolverCodigo, TEXTO_RECHAZO } from '../decidir'
 import { puertaSupabase } from '../puerta-supabase'
 
 export const metadata: Metadata = {
+  // El mismo título para los dos casos: la etiqueta de la pestaña no tiene por
+  // qué decir si lo que se escaneó es un punto o un equipo.
   title: 'Punto de control',
   robots: { index: false, follow: false },
 }
@@ -61,6 +66,89 @@ export default async function PuntoPublicoPage({
           <p className="font-body mt-2 text-sm text-gray-600">{t.detalle}</p>
           <p className="font-body mt-4 text-[11px] uppercase tracking-wide text-gray-400">
             Código de referencia: {r.motivo}
+          </p>
+        </div>
+      </Marco>
+    )
+  }
+
+  // ── La placa de un ACTIVO del cliente (F6) ──────────────────────────────────
+  // Se muestra lo mismo que de un punto: lo que ya va impreso en la placa más el
+  // nombre del equipo y el de la sede. Los documentos, los medidores y las
+  // lecturas NO son públicos; para eso está /rondas/activos, con sesión.
+  if (r.objeto === 'ACTIVO') {
+    const a = r.activo
+    return (
+      <Marco>
+        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <div className="bg-brand-green px-5 py-4 text-white">
+            <p className="font-body text-[11px] uppercase tracking-wide text-white/70">
+              Equipo {a.codigo}
+            </p>
+            <h1 className="font-heading text-xl font-bold leading-tight">{a.nombre}</h1>
+          </div>
+
+          <dl className="divide-y divide-gray-100">
+            <Dato icono={<Building2 className="h-4 w-4" />} titulo="Sede">
+              {a.sedeNombre}
+              {a.sedeDireccion && (
+                <span className="block text-xs text-gray-500">{a.sedeDireccion}</span>
+              )}
+              {a.sedeCiudad && !a.sedeDireccion && (
+                <span className="block text-xs text-gray-500">{a.sedeCiudad}</span>
+              )}
+            </Dato>
+
+            {a.lugar && (
+              <Dato icono={<Layers className="h-4 w-4" />} titulo="Dónde está">
+                {a.lugar}
+              </Dato>
+            )}
+
+            {(a.tipo || a.marca || a.modelo) && (
+              <Dato icono={<Tag className="h-4 w-4" />} titulo="Qué es">
+                {[a.tipo, [a.marca, a.modelo].filter(Boolean).join(' ')]
+                  .filter(Boolean).join(' · ')}
+              </Dato>
+            )}
+
+            <Dato icono={<Cog className="h-4 w-4" />} titulo="Estado">
+              {ESTADO_ACTIVO[a.estado].label}
+              <span className="block text-xs text-gray-500">
+                {ESTADO_ACTIVO[a.estado].detalle}
+              </span>
+            </Dato>
+
+            {a.descripcion && (
+              <Dato icono={<MapPin className="h-4 w-4" />} titulo="Detalle">
+                {a.descripcion}
+              </Dato>
+            )}
+
+            <Dato
+              icono={r.aperturaModo === 'QR'
+                ? <ShieldCheck className="h-4 w-4" />
+                : <Keyboard className="h-4 w-4" />}
+              titulo={r.aperturaModo === 'QR' ? 'Código verificado' : 'Abierto con el código impreso'}
+            >
+              <span className="font-mono">{formatearManual(r.codigoManual)}</span>
+              <span className="block text-xs text-gray-500">
+                {r.aperturaModo === 'QR'
+                  ? `Versión ${r.version} de la placa, con firma válida.`
+                  : `Versión ${r.version} de la placa. Se abrió tecleando el código, no escaneando.`}
+              </span>
+            </Dato>
+          </dl>
+        </div>
+
+        {/* Lo que sigue para un activo es de F7 (la orden de trabajo sobre este
+            equipo) y de F5 (radicar una PQRS desde su placa). No se construye
+            ninguna de las dos aquí. */}
+        <div className="rounded-2xl border border-dashed border-gray-200 bg-white/60 p-5">
+          <p className="font-heading text-sm font-semibold text-gray-700">¿Qué quieres hacer?</p>
+          <p className="font-body mt-1 text-sm text-gray-500">
+            Reportar una falla de este equipo y ver su mantenimiento todavía no está disponible:
+            se habilita en la siguiente entrega del módulo. Por ahora, avisa a tu supervisor.
           </p>
         </div>
       </Marco>
@@ -116,6 +204,31 @@ export default async function PuntoPublicoPage({
           </Dato>
         </dl>
       </div>
+
+      {/* Los activos del cliente que están en ESTE punto (F6, §2.1): así un
+          equipo que está justo donde ya hay una placa no necesita placa propia
+          y se llega a él por la del punto. */}
+      {r.activos.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+          <p className="font-body border-b border-gray-100 px-5 py-2.5 text-[11px] uppercase tracking-wide text-gray-400">
+            Equipos en este punto
+          </p>
+          <ul className="divide-y divide-gray-100">
+            {r.activos.map((a) => (
+              <li key={a.id} className="flex items-start gap-3 px-5 py-3">
+                <Cog className="mt-0.5 h-4 w-4 shrink-0 text-brand-green" />
+                <div className="min-w-0">
+                  <p className="font-body text-sm text-gray-800">{a.nombre}</p>
+                  <p className="font-body text-xs text-gray-500">
+                    <span className="font-mono">{a.codigo}</span>
+                    {a.tipo && <> · {a.tipo}</>}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ───────────────────────────────────────────────────────────────────
           Lo que sigue — EL PUNTO DE BIFURCACIÓN.

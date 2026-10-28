@@ -18,7 +18,10 @@
 //   3. FIRMA (solo para el token: el código manual no la lleva);
 //   4. estado del QR (activo / revocado / reemplazado / borrador);
 //   5. vigencia del contrato (ronda_qr_vigente, §2.5 del complemento 2);
-//   6. estado del punto.
+//   6. estado del objeto: el del punto, o el del activo si la placa es de un
+//      activo del cliente (F6). Los cinco primeros pasos son IGUALES para los
+//      dos tipos de placa, y eso es a propósito: si el orden cambiara según el
+//      tipo, el tipo se podría deducir sondeando la ruta.
 // Si algo falla, no se abre nada y queda un evento en `ronda_eventos` con el
 // motivo. Ese registro es la señal de fraude más barata que tiene el módulo y
 // hoy no existe en ningún otro lado.
@@ -37,6 +40,9 @@ export type MotivoRechazo =
   | 'QR_BORRADOR'
   | 'CONTRATO_NO_VIGENTE'
   | 'PUNTO_RETIRADO'
+  // F6: el activo del cliente retirado de la operación. Va aparte de
+  // PUNTO_RETIRADO porque lo que hay que decirle a quien escanea es distinto.
+  | 'ACTIVO_RETIRADO'
 
 export const TEXTO_RECHAZO: Record<MotivoRechazo, { titulo: string; detalle: string }> = {
   FORMA_INVALIDA: {
@@ -71,6 +77,10 @@ export const TEXTO_RECHAZO: Record<MotivoRechazo, { titulo: string; detalle: str
     titulo: 'Este punto de control está retirado',
     detalle: 'El punto ya no hace parte de la operación. Avisa a tu supervisor.',
   },
+  ACTIVO_RETIRADO: {
+    titulo: 'Este equipo está retirado',
+    detalle: 'El equipo ya no hace parte de la operación, así que su placa no abre nada. Avisa a tu supervisor.',
+  },
 }
 
 export interface FilaQr {
@@ -82,6 +92,31 @@ export interface FilaQr {
   estado: EstadoQr
   firma_llave_id: string
   codigo_manual: string
+  // F6: qué se escaneó. Se lee con un valor por omisión de 'PUNTO' para que una
+  // puerta de datos que no traiga la columna siga funcionando igual que en F2.
+  tipo_objeto?: 'PUNTO' | 'ACTIVO'
+  activo_id?: string | null
+}
+
+/** La ficha del activo del cliente que ve quien escanea su placa (F6). Es el
+ *  mismo nivel de detalle que la del punto: lo que ya está impreso en la placa
+ *  más el nombre del equipo y el de la sede. Los documentos, los medidores y
+ *  las lecturas NO son públicos: para eso está /rondas/activos. */
+export interface FilaActivo {
+  id: string
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  estado: 'OPERATIVO' | 'DEGRADADO' | 'FUERA_SERVICIO' | 'RETIRADO'
+  ubicacion_texto: string | null
+  piso: string | null
+  marca: string | null
+  modelo: string | null
+  tipo_nombre: string | null
+  zona_nombre: string | null
+  sede_nombre: string
+  sede_ciudad: string | null
+  sede_direccion: string | null
 }
 
 export interface FilaPunto {
@@ -118,16 +153,27 @@ export interface PuertaDatos {
   qrVigente(qrId: string): Promise<boolean>
   buscarPunto(puntoId: string): Promise<FilaPunto | null>
   registrarEvento(e: EventoAuditoria): Promise<void>
+  /** F6. Opcional para no romper una puerta de datos escrita antes de F6: sin
+   *  ella, un token de activo se rechaza como NO_EXISTE en vez de reventar. */
+  buscarActivo?(activoId: string): Promise<FilaActivo | null>
+  /** F6, §2.1: los activos que cuelgan de un punto, para que la placa del punto
+   *  los muestre sin que cada uno necesite su propia placa. */
+  activosDePunto?(puntoId: string): Promise<{ id: string; codigo: string; nombre: string; tipo_nombre: string | null }[]>
 }
 
 export interface PuntoResuelto {
   ok: true
+  /** Qué se escaneó. Discrimina esta resolución de la del activo (F6). */
+  objeto: 'PUNTO'
   /** Cómo se abrió: escaneando el QR o tecleando el código impreso. La manual
    *  pesa menos en el puntaje del antifraude (ADR-B), y por eso se registra. */
   aperturaModo: 'QR' | 'MANUAL'
   qrId: string
   version: number
   codigoManual: string
+  /** F6, §2.1: los activos del cliente que están en este punto. Vacío si no hay
+   *  ninguno o si la puerta de datos no sabe buscarlos. */
+  activos: { id: string; codigo: string; nombre: string; tipo: string | null }[]
   punto: {
     id: string
     codigo: string
@@ -143,12 +189,37 @@ export interface PuntoResuelto {
   }
 }
 
+/** Lo que se devuelve cuando el token es de un activo del cliente (F6). */
+export interface ActivoResuelto {
+  ok: true
+  objeto: 'ACTIVO'
+  aperturaModo: 'QR' | 'MANUAL'
+  qrId: string
+  version: number
+  codigoManual: string
+  activo: {
+    id: string
+    codigo: string
+    nombre: string
+    descripcion: string | null
+    estado: FilaActivo['estado']
+    tipo: string | null
+    marca: string | null
+    modelo: string | null
+    lugar: string | null
+    zona: string | null
+    sedeNombre: string
+    sedeCiudad: string | null
+    sedeDireccion: string | null
+  }
+}
+
 export interface PuntoRechazado {
   ok: false
   motivo: MotivoRechazo
 }
 
-export type Resolucion = PuntoResuelto | PuntoRechazado
+export type Resolucion = PuntoResuelto | ActivoResuelto | PuntoRechazado
 
 /**
  * Resuelve lo que venga en /q/<codigo>.
@@ -213,6 +284,11 @@ export async function resolverCodigo(
   // Solo el token la lleva. El código manual no puede llevarla: ocho caracteres
   // no dan para un HMAC, y por eso vale menos — abre el mismo flujo, pero queda
   // marcado como apertura manual para que el antifraude lo pese distinto.
+  // Sobre qué UUID se firmó: el del punto o el del activo (F6). Es el objeto al
+  // que pertenece la placa, y por eso un token no se puede mover de objeto.
+  const objeto: 'PUNTO' | 'ACTIVO' = qr.tipo_objeto === 'ACTIVO' ? 'ACTIVO' : 'PUNTO'
+  const objetoId = objeto === 'ACTIVO' ? (qr.activo_id ?? null) : qr.punto_id
+
   if (esQr) {
     const partes = partirToken(c)!
     const secreto = secretoDeLlave(qr.firma_llave_id)
@@ -224,7 +300,7 @@ export async function resolverCodigo(
     if (partes.version !== Number(qr.version)) {
       return rechazar('FIRMA_INVALIDA', { detalle: 'version_cruzada' })
     }
-    if (!qr.punto_id || !verificarFirma(c, qr.punto_id, partes.version, secreto)) {
+    if (!objetoId || !verificarFirma(c, objetoId, partes.version, secreto)) {
       return rechazar('FIRMA_INVALIDA', { llave: qr.firma_llave_id })
     }
   }
@@ -242,19 +318,73 @@ export async function resolverCodigo(
   // el QR vuelve a servir sin que nadie toque una fila (§2.5).
   if (!(await puerta.qrVigente(qr.id))) return rechazar('CONTRATO_NO_VIGENTE')
 
+  // ── La placa de un ACTIVO del cliente (F6) ──────────────────────────────────
+  // Entra aquí y no antes a propósito: la forma, la existencia, la firma, el
+  // estado del QR y la vigencia del contrato se comprueban IGUAL para los dos
+  // tipos de placa, y ese orden es lo único que impide que alguien aprenda algo
+  // sondeando la ruta.
+  if (objeto === 'ACTIVO') {
+    if (!objetoId) return rechazar('NO_EXISTE', { detalle: 'qr_sin_activo' })
+    if (!puerta.buscarActivo) return rechazar('NO_EXISTE', { detalle: 'puerta_sin_activos' })
+    const activo = await puerta.buscarActivo(objetoId)
+    if (!activo) return rechazar('NO_EXISTE', { detalle: 'activo_borrado' })
+    if (activo.estado === 'RETIRADO') return rechazar('ACTIVO_RETIRADO')
+
+    await evento('APERTURA', qr, { modo, version: qr.version, activo: activo.codigo })
+
+    return {
+      ok: true,
+      objeto: 'ACTIVO',
+      aperturaModo: modo,
+      qrId: qr.id,
+      version: Number(qr.version),
+      codigoManual: qr.codigo_manual,
+      activo: {
+        id: activo.id,
+        codigo: activo.codigo,
+        nombre: activo.nombre,
+        descripcion: activo.descripcion,
+        estado: activo.estado,
+        tipo: activo.tipo_nombre,
+        marca: activo.marca,
+        modelo: activo.modelo,
+        lugar: [activo.zona_nombre, activo.piso, activo.ubicacion_texto]
+          .filter(Boolean).join(' · ') || null,
+        zona: activo.zona_nombre,
+        sedeNombre: activo.sede_nombre,
+        sedeCiudad: activo.sede_ciudad,
+        sedeDireccion: activo.sede_direccion,
+      },
+    }
+  }
+
   if (!qr.punto_id) return rechazar('NO_EXISTE', { detalle: 'qr_sin_punto' })
   const punto = await puerta.buscarPunto(qr.punto_id)
   if (!punto) return rechazar('NO_EXISTE', { detalle: 'punto_borrado' })
   if (punto.estado === 'RETIRADO') return rechazar('PUNTO_RETIRADO')
 
+  // Los activos que están en este punto (F6, §2.1). Que falle esta consulta no
+  // puede impedir que la placa abra: el punto es lo que se escaneó.
+  let activosDelPunto: { id: string; codigo: string; nombre: string; tipo: string | null }[] = []
+  if (puerta.activosDePunto) {
+    try {
+      activosDelPunto = (await puerta.activosDePunto(punto.id))
+        .map((a) => ({ id: a.id, codigo: a.codigo, nombre: a.nombre, tipo: a.tipo_nombre }))
+    } catch (e) {
+      console.error('[q] no se pudieron leer los activos del punto', e)
+    }
+  }
+
   await evento('APERTURA', qr, { modo, version: qr.version, punto: punto.codigo })
 
   return {
     ok: true,
+    objeto: 'PUNTO',
     aperturaModo: modo,
     qrId: qr.id,
     version: Number(qr.version),
     codigoManual: qr.codigo_manual,
+    activos: activosDelPunto,
     punto: {
       id: punto.id,
       codigo: punto.codigo,
