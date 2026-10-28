@@ -8,7 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { ArchivosPendientes, VeloSoltar } from '@/components/ui/ArchivosPendientes'
 import { useAdjuntosPegables } from '@/lib/adjuntos-chat'
 import {
-  CALIDAD_PQRS_META, CALIDADES_PQRS, CANAL_PQRS_META, CANALES_PQRS, MAX_ADJUNTO_PQRS,
+  CALIDAD_PQRS_META, CALIDADES_PQRS, CANAL_PQRS_META, CANALES_PQRS_CONSOLA, MAX_ADJUNTO_PQRS,
   PRIORIDAD_PQRS_META, PRIORIDADES_PQRS, TIPO_PQRS_META, TIPOS_PQRS,
   subirArchivoPqrs,
   type AdjuntoPqrs, type CalidadPqrs, type CanalPqrs, type SedePqrs, type TipoPqrs,
@@ -202,7 +202,7 @@ export function FormularioPqrs({ sedes, plazos, coordina }: {
           </Campo>
           <Campo etiqueta="Por dónde llegó">
             <select value={canal} onChange={(e) => setCanal(e.target.value as CanalPqrs)} className={CLASE_CONTROL}>
-              {CANALES_PQRS.map((c) => <option key={c} value={c}>{CANAL_PQRS_META[c].label}</option>)}
+              {CANALES_PQRS_CONSOLA.map((c) => <option key={c} value={c}>{CANAL_PQRS_META[c].label}</option>)}
             </select>
           </Campo>
         </div>

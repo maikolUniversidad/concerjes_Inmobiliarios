@@ -22,6 +22,7 @@
         "RONDA_HMAC_LLAVE_ACTUAL",
         "RONDA_HMAC_*",
         "RONDA_SESION_SECRETO",
+        "PQRS_IP_SALT",
         "CRON_SECRET",
         "FACIAL_SERVICE_URL",
         "FACIAL_SERVICE_TOKEN",

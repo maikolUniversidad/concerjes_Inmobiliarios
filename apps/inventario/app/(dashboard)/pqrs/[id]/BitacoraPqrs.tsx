@@ -14,6 +14,25 @@ import {
 
 const hora = horaCortaPqrs
 
+/** De dónde vino un mensaje que NO escribió alguien en la consola (F5). Lo que
+ *  entra por el QR, por correo o por WhatsApp cae en el MISMO hilo, y quien
+ *  atiende tiene que poder distinguirlo de un seguimiento interno. */
+const CANAL_BITACORA: Record<string, string> = {
+  QR: 'Por el QR del punto',
+  CORREO: 'Por correo',
+  WHATSAPP: 'Por WhatsApp',
+}
+
+function DeDonde({ m }: { m: PqrsMensaje }) {
+  const label = CANAL_BITACORA[m.canal]
+  if (!label) return null
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-1.5 py-px text-[9px] font-semibold text-sky-700">
+      {label}{m.direccion === 'ENTRADA' ? ' · entrada' : ''}
+    </span>
+  )
+}
+
 function Etiqueta({ estado, chica = false }: { estado: EstadoPqrs; chica?: boolean }) {
   const meta = ESTADO_PQRS_META[estado]
   if (!meta) return null
@@ -145,6 +164,7 @@ export function BitacoraPqrs({ sb, pqrs, usuarioId, mensajes, urls, puedeEscribi
                   {legibleEstadosPqrs(extra) && <span className="text-gray-600">{legibleEstadosPqrs(extra)} · </span>}
                   {m.usuario_nombre ?? 'Sistema'} · {hora(m.created_at)}
                 </p>
+                <DeDonde m={m} />
                 {comentario && (
                   <div className={`max-w-[92%] rounded-xl border px-3 py-2 font-body text-xs shadow-sm ${
                     esRespuesta ? 'border-emerald-200 bg-emerald-50 text-emerald-900' : 'border-gray-100 bg-white text-gray-700'}`}>
@@ -164,7 +184,16 @@ export function BitacoraPqrs({ sb, pqrs, usuarioId, mensajes, urls, puedeEscribi
             <div key={m.id} id={`msj-${m.id}`} className={`flex ${mio ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[85%] rounded-2xl px-3 py-2 shadow-sm ${
                 mio ? 'rounded-br-sm bg-brand-green text-white' : 'rounded-bl-sm bg-white text-gray-800'}`}>
-                {!mio && <p className="mb-0.5 font-body text-[11px] font-semibold text-brand-green">{m.usuario_nombre ?? 'Usuario'}</p>}
+                {!mio ? (
+                  <p className="mb-0.5 flex flex-wrap items-center gap-1 font-body text-[11px] font-semibold text-brand-green">
+                    {m.usuario_nombre ?? (CANAL_BITACORA[m.canal] ? 'Quien reportó' : 'Usuario')}
+                    <DeDonde m={m} />
+                  </p>
+                ) : (
+                  // Un mensaje propio que entró por otro canal (lo mandé por
+                  // correo o por WhatsApp, F9) también dice por dónde salió.
+                  CANAL_BITACORA[m.canal] && <p className="mb-0.5"><DeDonde m={m} /></p>
+                )}
                 {m.adjunto_path && (
                   esImagen ? (
                     url ? (
