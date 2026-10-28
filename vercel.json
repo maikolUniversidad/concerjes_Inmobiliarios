@@ -2,6 +2,9 @@
   "framework": "nextjs",
   "crons": [
     { "path": "/api/cron/correo", "schedule": "*/5 * * * *" },
-    { "path": "/api/cron/flujos", "schedule": "*/5 * * * *" }
+    { "path": "/api/cron/flujos", "schedule": "*/5 * * * *" },
+    { "path": "/api/cron/whatsapp-entrada", "schedule": "* * * * *" },
+    { "path": "/api/cron/whatsapp-salida", "schedule": "* * * * *" },
+    { "path": "/api/cron/whatsapp-vencimientos", "schedule": "* * * * *" }
   ]
 }

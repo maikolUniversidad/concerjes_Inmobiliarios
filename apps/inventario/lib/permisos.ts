@@ -187,6 +187,13 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
       { key: 'gestionar_catalogo_rondas',      label: 'Crear, publicar y versionar plantillas de tarea e instructivos' },
       { key: 'ver_asignaciones_rondas',        label: 'Ver qué tareas aplican en cada punto de control' },
       { key: 'gestionar_asignaciones_rondas',  label: 'Asignar tareas a puntos: frecuencia, ventana, responsable y ANS' },
+      // Bot de WhatsApp (F9). `conectar_whatsapp` va aparte de las otras dos
+      // porque conectar el número desvincula los dispositivos acompañantes de
+      // quien usaba WhatsApp Web y deja el canal de toda la operación en manos
+      // de quien lo haga: no es la misma decisión que leer conversaciones.
+      { key: 'ver_whatsapp',       label: 'Ver conversaciones y mensajes de WhatsApp' },
+      { key: 'gestionar_whatsapp', label: 'Responder por WhatsApp, reencolar lo omitido y gestionar plantillas' },
+      { key: 'conectar_whatsapp',  label: 'Conectar o desconectar el número de WhatsApp de la empresa' },
     ],
   },
   {

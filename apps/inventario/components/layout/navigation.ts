@@ -7,7 +7,7 @@ import {
   MapPin, Navigation, AlertTriangle, Clock, Map, Radio,
   Home, CalendarDays, Star, DollarSign, Wrench, Wallet, MailPlus, Workflow, UsersRound,
   ScanLine, HardHat, ClipboardPlus, FileSignature, BookUser, Bug, MessageSquareWarning,
-  ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock,
+  ShoppingCart, QrCode, ListChecks, BookOpen, CalendarClock, MessagesSquare,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -114,6 +114,9 @@ export const navigation: NavModule[] = [
       { label: 'Plantillas',   href: '/rondas/plantillas',   icon: ClipboardList, permiso: 'ver_catalogo_rondas' },
       { label: 'Instructivos', href: '/rondas/instructivos', icon: BookOpen,      permiso: 'ver_catalogo_rondas' },
       { label: 'Asignaciones', href: '/rondas/asignaciones', icon: CalendarClock, permiso: 'ver_asignaciones_rondas' },
+      // El bot: las conversaciones, la cola de salida y el estado de las
+      // plantillas ante Meta.
+      { label: 'WhatsApp', href: '/rondas/whatsapp', icon: MessagesSquare, permiso: 'ver_whatsapp' },
     ],
   },
   {
