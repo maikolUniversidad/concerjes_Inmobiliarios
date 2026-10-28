@@ -968,7 +968,11 @@ export interface FlujoNotificacion {
   updated_at: string
 }
 
-export type TipoPasoFlujo = 'EMAIL' | 'APP' | 'ESPERA' | 'WEBHOOK'
+// `WHATSAPP` lo agrega F9/F10 (Puntos QR): el canal es un valor MÁS de
+// `flujo_pasos.tipo` y un caso más en el worker, no un motor aparte (§8.1 punto
+// 6 del complemento 2). La columna es VARCHAR(20) sin CHECK, así que no hizo
+// falta migración; lo que faltaba era que la consola lo pudiera elegir.
+export type TipoPasoFlujo = 'EMAIL' | 'APP' | 'ESPERA' | 'WEBHOOK' | 'WHATSAPP'
 
 export interface DestinatariosPaso {
   roles: RolUsuario[]
@@ -1091,6 +1095,7 @@ export const TIPO_PASO_LABELS: Record<TipoPasoFlujo, { label: string; descripcio
   APP:     { label: 'Notificar en la app',  descripcion: 'Deja la notificación en la bandeja de los usuarios destino.' },
   ESPERA:  { label: 'Esperar',              descripcion: 'Pausa el flujo el tiempo indicado antes del siguiente paso.' },
   WEBHOOK: { label: 'Llamar un webhook',    descripcion: 'Envía el payload del evento a una URL externa (POST JSON).' },
+  WHATSAPP:{ label: 'Enviar por WhatsApp',  descripcion: 'Encola un WhatsApp a la persona del evento. Exige su opt-in, respeta su jornada y, fuera de la ventana de 24 h, necesita una plantilla aprobada: el nombre de la plantilla va en el asunto.' },
 }
 
 export const ESTADO_EJECUCION_LABELS: Record<EstadoEjecucion, { label: string; color: string }> = {

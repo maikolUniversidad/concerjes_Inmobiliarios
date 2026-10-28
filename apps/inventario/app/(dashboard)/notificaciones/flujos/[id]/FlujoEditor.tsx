@@ -6,7 +6,7 @@ import Link from 'next/link'
 import { toast } from 'sonner'
 import {
   Plus, Save, Trash2, Loader2, X, ChevronUp, ChevronDown, Mail, Bell, Clock, Webhook,
-  FlaskConical, History, ShieldQuestion, Ban,
+  FlaskConical, History, ShieldQuestion, Ban, MessageCircle,
 } from 'lucide-react'
 import {
   ESTADO_EJECUCION_LABELS, ESTADO_PASO_LABELS, OPERADOR_LABELS, TIPO_PASO_LABELS,
@@ -29,7 +29,7 @@ const TIPOS = Object.keys(TIPO_PASO_LABELS) as TipoPasoFlujo[]
 const OPERADORES = Object.keys(OPERADOR_LABELS) as OperadorCondicion[]
 
 const ICONO_TIPO: Record<TipoPasoFlujo, typeof Mail> = {
-  EMAIL: Mail, APP: Bell, ESPERA: Clock, WEBHOOK: Webhook,
+  EMAIL: Mail, APP: Bell, ESPERA: Clock, WEBHOOK: Webhook, WHATSAPP: MessageCircle,
 }
 
 type PlantillaLite = Pick<PlantillaCorreo, 'id' | 'codigo' | 'nombre' | 'asunto' | 'activa'>
@@ -227,6 +227,14 @@ export function FlujoEditor({
                     )}
                     {p.tipo === 'WEBHOOK' && (
                       <p className="font-body text-xs text-gray-500 mt-1 truncate">POST a {p.webhook_url}</p>
+                    )}
+                    {p.tipo === 'WHATSAPP' && (
+                      <p className="font-body text-xs text-gray-500 mt-1">
+                        {p.asunto
+                          ? <>Plantilla <strong>{p.asunto}</strong></>
+                          : 'Sin plantilla: solo sale si la persona escribió en las últimas 24 h'}
+                        {destinos.length > 0 && ` → ${destinos.join(', ')}`}
+                      </p>
                     )}
 
                     {p.verificacion?.tabla && p.verificacion?.campo && (
@@ -454,6 +462,28 @@ function EditorPaso({
             </div>
           )}
 
+          {/* WhatsApp (F9/F10): el canal es un paso más, no un motor aparte. */}
+          {tipo === 'WHATSAPP' && (
+            <div className="space-y-4 border border-gray-100 rounded-xl p-3">
+              <label className="block"><span className={labelCls}>Plantilla aprobada en Meta</span>
+                <input name="asunto" defaultValue={paso?.asunto ?? ''} placeholder="ronda_asignada_hoy"
+                  className={inputCls + ' mt-1'} />
+                <span className="font-body text-[11px] text-gray-400">
+                  El nombre exacto de la plantilla. Sin ella, el mensaje solo sale si la persona
+                  escribió en las últimas 24 horas; fuera de esa ventana queda omitido con su motivo.
+                </span>
+              </label>
+              <label className="block"><span className={labelCls}>Mensaje</span>
+                <textarea name="mensaje" rows={3} defaultValue={paso?.mensaje ?? ''}
+                  placeholder="Texto del WhatsApp. Puedes usar {{variables}} del evento."
+                  className={inputCls + ' mt-1'} /></label>
+              <p className="font-body text-[11px] text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-2 py-1.5">
+                Solo le llega a quien dio su permiso de WhatsApp y dentro de su jornada: fuera de
+                ella el mensaje no sale y queda registrado el motivo.
+              </p>
+            </div>
+          )}
+
           {/* Webhook */}
           {tipo === 'WEBHOOK' && (
             <label className="block"><span className={labelCls}>URL del webhook *</span>
@@ -463,7 +493,7 @@ function EditorPaso({
           )}
 
           {/* Destinatarios */}
-          {(tipo === 'EMAIL' || tipo === 'APP') && (
+          {(tipo === 'EMAIL' || tipo === 'APP' || tipo === 'WHATSAPP') && (
             <div className="border border-gray-100 rounded-xl p-3 space-y-3">
               <span className={labelCls}>¿A quién se le avisa?</span>
 

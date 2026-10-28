@@ -181,6 +181,31 @@ export const T = {
   ayudaEncabezado: 'Qué podés hacer',
   sinPermiso: (que: string) =>
     `Ese comando necesita permiso de ${que}. Si lo necesitás, pedíselo a tu supervisor.`,
+
+  // ── Menú configurable y próxima ubicación (F10, §4.2 y §4.3) ─────────────
+  menuEncabezado: 'Menú',
+  menuCuerpo: 'Elegí una opción. También podés escribirme lo que necesitás.',
+  menuBoton: 'Ver opciones',
+  menuVacio:
+    'Todavía no hay un menú configurado para tu contrato. Escribí *AYUDA* y te cuento qué puedo hacer.',
+  /** Una opción del menú que apunta a algo que el bot todavía no hace por acá.
+   *  Se dice, en vez de dejar un botón que no responde. */
+  menuOpcionSinCanal: (etiqueta: string) =>
+    `*${etiqueta}* todavía no se puede hacer desde WhatsApp. Si es urgente, escribí ` +
+    '*HABLAR CON SUPERVISOR* y te atiende una persona.',
+  proximaParada: (codigo: string, nombre: string, comoLlegar: string | null, piso: string | null) =>
+    [
+      `Tu próximo punto es *${codigo}* — ${nombre}.`,
+      piso ? `Piso: ${piso}.` : null,
+      comoLlegar ? `Cómo llegar: ${comoLlegar}` : null,
+      'Cuando llegues, escaneá su QR o escribí su código.',
+    ]
+      .filter(Boolean)
+      .join('\n'),
+  proximaSinRuta:
+    'Hoy no tenés una ruta armada, así que no te puedo decir cuál es el próximo punto. ' +
+    'Escribí *MIS PUNTOS* para ver los que tenés asignados.',
+  proximaRutaTerminada: '¡Listo! Ya no te quedan paradas pendientes en la ruta de hoy 👏',
 } as const
 
 /** Los cuatro textos de consentimiento, VERSIONADOS. El texto íntegro es la
@@ -231,7 +256,9 @@ export type TipoConsentimiento = keyof typeof CONSENTIMIENTOS
  *  mitad de una visita no ayuda, estorba. */
 export function ayuda(estado: string, puedeCrearQr: boolean): string {
   const comun = [
+    '*MENÚ* — las opciones de tu contrato, en una lista',
     '*MIS PUNTOS* — los puntos que tenés hoy',
+    '*MI PRÓXIMO PUNTO* — a dónde seguís y cómo llegar',
     '*NOVEDAD* — reportar algo que viste',
     '*HABLAR CON SUPERVISOR* — que te atienda una persona',
     '*PRIVACIDAD* — ver o retirar tus permisos',

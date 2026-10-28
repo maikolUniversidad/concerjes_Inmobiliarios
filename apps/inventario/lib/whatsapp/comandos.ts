@@ -11,6 +11,12 @@
 
 export type Comando =
   | 'AYUDA'
+  // F10: el menú configurable por contrato y rol (§4.2 del complemento 2) y la
+  // próxima parada de la ruta (§4.3). Van APARTE de AYUDA: la ayuda es un texto
+  // fijo que explica qué se puede hacer, y el menú es una lista de opciones que
+  // cada contrato configura y que se puede tocar.
+  | 'MENU'
+  | 'PROXIMA_UBICACION'
   | 'MIS_PUNTOS'
   | 'SIGUIENTE'
   | 'NOVEDAD'
@@ -50,6 +56,27 @@ const FRASES: { comando: Comando; frases: string[] }[] = [
       'NECESITO UN SUPERVISOR',
       'AGENTE',
     ],
+  },
+  {
+    // Antes que MIS_PUNTOS y que SIGUIENTE: «mi próximo punto» no es «mis
+    // puntos», y «siguiente ubicación» no es «ya terminé este punto».
+    comando: 'PROXIMA_UBICACION',
+    frases: [
+      'MI PROXIMO PUNTO',
+      'PROXIMO PUNTO',
+      'PROXIMA UBICACION',
+      'SIGUIENTE UBICACION',
+      'A DONDE SIGO',
+      'A DONDE VOY',
+      'DONDE SIGO',
+      'CUAL ES MI PROXIMO PUNTO',
+      'MI SIGUIENTE PUNTO',
+      'PROXIMA PARADA',
+    ],
+  },
+  {
+    comando: 'MENU',
+    frases: ['MENU', 'OPCIONES', 'VER OPCIONES', 'VER EL MENU', 'QUE PUEDO HACER'],
   },
   {
     comando: 'MIS_PUNTOS',
@@ -107,8 +134,6 @@ const FRASES: { comando: Comando; frases: string[] }[] = [
       'NO ENTIENDO',
       'QUE HAGO',
       'COMO FUNCIONA',
-      'MENU',
-      'OPCIONES',
       'HELP',
     ],
   },
