@@ -128,6 +128,10 @@ export interface PuntoResuelto {
   qrId: string
   version: number
   codigoManual: string
+  /** Contrato y sede del QR. Los necesita quien decide qué más ofrecer en la
+   *  página: F5 pregunta por `grupo_reglas.pqrs_publico` de ESTE contrato. */
+  grupoId: string
+  sedeId: string
   punto: {
     id: string
     codigo: string
@@ -255,6 +259,8 @@ export async function resolverCodigo(
     qrId: qr.id,
     version: Number(qr.version),
     codigoManual: qr.codigo_manual,
+    grupoId: qr.grupo_id,
+    sedeId: qr.sede_id,
     punto: {
       id: punto.id,
       codigo: punto.codigo,

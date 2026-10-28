@@ -168,6 +168,10 @@ export const GRUPOS_PERMISOS: GrupoPermiso[] = [
     permisos: [
       { key: 'ver_pqrs',                       label: 'Ver PQRS' },
       { key: 'gestionar_pqrs',                 label: 'Radicar / gestionar PQRS' },
+      // F5 de Puntos QR: el catálogo de categorías es lo que ve un residente en
+      // la calle al escanear una placa, así que cambiarlo no es lo mismo que
+      // atender una PQRS.
+      { key: 'parametrizar_pqrs',              label: 'Parametrizar PQRS: categorías del QR público' },
       { key: 'ver_no_conformes',               label: 'Ver no conformes' },
       { key: 'gestionar_no_conformes',         label: 'Reportar / gestionar no conformes' },
       { key: 'ver_contratos_conserjeria',      label: 'Ver contratos de conserjería (vigencia, servicios, reglas)' },

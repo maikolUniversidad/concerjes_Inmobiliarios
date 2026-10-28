@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Plus, MessageSquare, AlarmClock, TriangleAlert, Gauge } from 'lucide-react'
+import { Plus, MessageSquare, AlarmClock, TriangleAlert, Gauge, Tags } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { TablaEstandar, type ColumnaTabla } from '@/components/ui/tabla'
 import {
@@ -23,11 +23,13 @@ const VISTAS: { k: Vista; label: string }[] = [
   { k: 'todas', label: 'Todas' },
 ]
 
-export function ListaPqrs({ filas, usuarioId, puedeRadicar, verIndicadores }: {
+export function ListaPqrs({ filas, usuarioId, puedeRadicar, verIndicadores, puedeParametrizar }: {
   filas: PqrsFila[]
   usuarioId: string
   puedeRadicar: boolean
   verIndicadores: boolean
+  /** F5: entra al catálogo de categorías del QR público (`parametrizar_pqrs`). */
+  puedeParametrizar?: boolean
 }) {
   const router = useRouter()
   const [vista, setVista] = useState<Vista>('activas')
@@ -101,6 +103,20 @@ export function ListaPqrs({ filas, usuarioId, puedeRadicar, verIndicadores }: {
       valor: (p) => solicitante(p),
     },
     {
+      // F5: lo que llegó por el QR de un punto trae punto y categoría. Los dos
+      // vienen desnormalizados en la fila, así que el Conserje los ve sin
+      // necesitar `ver_puntos_ronda`. El `min-w` no sobra: sin él, el nombre
+      // del punto se parte en tres renglones y la fila crece.
+      id: 'punto', header: 'Punto / categoría', ancho: 'min-w-[180px]', prioridad: 2, tarjeta: 'meta',
+      valor: (p) => [p.punto_nombre, p.categoria_nombre].filter(Boolean).join(' · ') || '—',
+      celda: (p) => p.punto_nombre || p.categoria_nombre ? (
+        <span className="text-xs text-gray-600">
+          {p.punto_nombre ?? '—'}
+          {p.categoria_nombre && <span className="block text-gray-400">{p.categoria_nombre}</span>}
+        </span>
+      ) : <span className="text-xs text-gray-300">—</span>,
+    },
+    {
       id: 'canal', header: 'Canal', prioridad: 3,
       valor: (p) => CANAL_PQRS_META[p.canal]?.label ?? p.canal,
     },
@@ -168,9 +184,15 @@ export function ListaPqrs({ filas, usuarioId, puedeRadicar, verIndicadores }: {
             </button>
           ))}
         </div>
+        {puedeParametrizar && (
+          <Link href="/pqrs/categorias"
+            className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-gray-200 px-3 py-2 font-body text-sm font-semibold text-gray-600 hover:bg-gray-50">
+            <Tags className="w-4 h-4" /> Categorías
+          </Link>
+        )}
         {puedeRadicar && (
           <Link href="/pqrs/nueva"
-            className="ml-auto inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-2 font-body text-sm font-semibold text-white hover:bg-brand-green-dark">
+            className={`${puedeParametrizar ? '' : 'ml-auto '}inline-flex items-center gap-1.5 rounded-lg bg-brand-green px-3 py-2 font-body text-sm font-semibold text-white hover:bg-brand-green-dark`}>
             <Plus className="w-4 h-4" /> Radicar PQRS
           </Link>
         )}

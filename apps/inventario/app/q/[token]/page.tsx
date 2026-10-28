@@ -15,9 +15,13 @@
 // reportar por WhatsApp es F9. No se construye ninguna de las tres aquí.
 
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { headers } from 'next/headers'
-import { MapPin, Building2, ShieldCheck, ShieldAlert, Keyboard, Layers } from 'lucide-react'
+import {
+  MapPin, Building2, ShieldCheck, ShieldAlert, Keyboard, Layers, MessageSquareWarning, Search,
+} from 'lucide-react'
 import { formatearManual } from '@/lib/puntos-qr'
+import { getAdmin } from '@/lib/supabase/admin'
 import { resolverCodigo, TEXTO_RECHAZO } from '../decidir'
 import { puertaSupabase } from '../puerta-supabase'
 
@@ -47,9 +51,30 @@ export default async function PuntoPublicoPage({
   params,
 }: { params: Promise<{ token: string }> }) {
   const { token } = await params
-  const r = await resolverCodigo(
-    decodeURIComponent(token), await ipDelSolicitante(), puertaSupabase(),
-  )
+  // Si la base no contesta (el corte de 8 s de Supabase, por ejemplo), esta
+  // página no puede responder un 500: la está mirando alguien parado frente a
+  // una placa pegada a una pared. Se le dice que vuelva a intentar.
+  let r
+  try {
+    r = await resolverCodigo(
+      decodeURIComponent(token), await ipDelSolicitante(), puertaSupabase(),
+    )
+  } catch (e) {
+    console.error('[q] no se pudo resolver el código', e)
+    return (
+      <Marco>
+        <div className="rounded-2xl border border-amber-100 bg-white p-6 text-center shadow-sm">
+          <ShieldAlert className="mx-auto h-10 w-10 text-amber-500" />
+          <h1 className="font-heading mt-3 text-lg font-bold text-gray-900">
+            No pudimos abrir el punto
+          </h1>
+          <p className="font-body mt-2 text-sm text-gray-600">
+            Hubo un problema de conexión. Vuelve a intentarlo en un momento.
+          </p>
+        </div>
+      </Marco>
+    )
+  }
 
   if (!r.ok) {
     const t = TEXTO_RECHAZO[r.motivo]
@@ -68,6 +93,16 @@ export default async function PuntoPublicoPage({
   }
 
   const p = r.punto
+  // F5: ¿este contrato recibe PQRS por el QR? Si no, no se ofrece el botón.
+  // Una sola llamada, y la página sigue sirviendo si la base no contesta.
+  let pqrsPublica = false
+  try {
+    const { data } = await getAdmin().rpc('pqrs_publica_activa', { p_qr: r.qrId })
+    pqrsPublica = data === true
+  } catch (e) {
+    console.error('[q] no se pudo saber si el contrato recibe PQRS pública', e)
+  }
+
   return (
     <Marco>
       <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
@@ -126,18 +161,40 @@ export default async function PuntoPublicoPage({
             · F4 — ejecutar la ronda: identidad por enlace + PIN (ADR-A), tareas
               del punto, evidencia y cierre del reporte. Conserva el destino
               (/q/<token>) al pasar por la identificación.
-            · F5 — radicar una PQRS pública desde este mismo QR, si
-              `grupo_reglas.pqrs_publico` está activo para el contrato.
+            · F5 — HECHO: radicar una PQRS pública desde este mismo QR, cuando
+              `grupo_reglas.pqrs_publico` está activo para el contrato. Entra por
+              /q/<token>/pqrs y escribe por /api/pqrs/publica.
             · F9 — reportar por WhatsApp: abre wa.me con el código del punto.
-          NO construir ninguna de las tres aquí.
+          NO construir las otras dos aquí.
          ─────────────────────────────────────────────────────────────────── */}
       <div className="rounded-2xl border border-dashed border-gray-200 bg-white/60 p-5">
         <p className="font-heading text-sm font-semibold text-gray-700">¿Qué quieres hacer?</p>
-        <p className="font-body mt-1 text-sm text-gray-500">
-          Las tareas de este punto, el reporte con evidencia y la radicación de una PQRS
-          todavía no están disponibles: se habilitan en las siguientes entregas del módulo.
-          Por ahora, informa a tu supervisor que llegaste al punto.
-        </p>
+        {pqrsPublica ? (
+          <>
+            <p className="font-body mt-1 text-sm text-gray-500">
+              Si viste algo que hay que arreglar en este lugar, cuéntanoslo: queda radicado y con
+              fecha de respuesta. No necesitas cuenta.
+            </p>
+            <Link
+              href={`/q/${encodeURIComponent(token)}/pqrs`}
+              className="font-body mt-3 flex h-14 w-full items-center justify-center gap-2 rounded-xl bg-brand-green text-base font-bold text-white"
+            >
+              <MessageSquareWarning className="h-5 w-5" /> Reportar una novedad
+            </Link>
+            <Link
+              href="/q/estado"
+              className="font-body mt-2 flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-gray-200 text-sm font-semibold text-gray-600"
+            >
+              <Search className="h-4 w-4" /> Consultar un reporte que ya hice
+            </Link>
+          </>
+        ) : (
+          <p className="font-body mt-1 text-sm text-gray-500">
+            Las tareas de este punto y el reporte con evidencia todavía no están disponibles: se
+            habilitan en las siguientes entregas del módulo. Por ahora, informa a tu supervisor que
+            llegaste al punto.
+          </p>
+        )}
       </div>
     </Marco>
   )

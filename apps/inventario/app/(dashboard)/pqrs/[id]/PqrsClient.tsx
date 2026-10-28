@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  AlarmClock, Building2, CheckCircle2, Camera, Loader2, Mail, MessageSquareWarning,
+  AlarmClock, Building2, CheckCircle2, Camera, Loader2, Mail, MapPin, MessageSquareWarning,
   Paperclip, Phone, User, UserCog,
 } from 'lucide-react'
 import { toast } from 'sonner'
@@ -104,6 +104,15 @@ export function PqrsClient({ pqrs: inicial, mensajes: mensajesIniciales, gestore
             <Dato etiqueta="Llegó por">{CANAL_PQRS_META[pqrs.canal]?.label ?? pqrs.canal}</Dato>
             <Dato etiqueta="En calidad de">{CALIDAD_PQRS_META[pqrs.solicitante_calidad]?.label ?? '—'}</Dato>
             <Dato icon={UserCog} etiqueta="Colaborador señalado">{pqrs.persona_nombre ?? 'Ninguno'}</Dato>
+            {/* F5: lo que entró por el QR de un punto. Se muestran los nombres
+                desnormalizados de la propia fila, no un join a ronda_puntos:
+                quien atiende puede no tener `ver_puntos_ronda`. */}
+            {pqrs.punto_nombre && (
+              <Dato icon={MapPin} etiqueta="Punto de control">{pqrs.punto_nombre}</Dato>
+            )}
+            {pqrs.categoria_nombre && (
+              <Dato etiqueta="De qué se trata">{pqrs.categoria_nombre}</Dato>
+            )}
             <Dato etiqueta="Responsable">{pqrs.responsable_nombre ?? 'Sin asignar'}</Dato>
             <Dato etiqueta="Radicada">
               {fechaHoraPqrs(pqrs.created_at)}{pqrs.radicada_nombre ? ` · por ${pqrs.radicada_nombre}` : ''}

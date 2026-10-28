@@ -11,7 +11,7 @@ export const ZONA_PQRS = 'America/Bogota'
 
 export type TipoPqrs = 'PETICION' | 'QUEJA' | 'RECLAMO' | 'SUGERENCIA' | 'FELICITACION'
 export type EstadoPqrs = 'RADICADA' | 'EN_TRAMITE' | 'EN_ESPERA' | 'RESPONDIDA' | 'CERRADA' | 'ANULADA'
-export type CanalPqrs = 'SEDE' | 'TELEFONO' | 'CORREO' | 'WHATSAPP' | 'PORTAL' | 'OTRO'
+export type CanalPqrs = 'SEDE' | 'TELEFONO' | 'CORREO' | 'WHATSAPP' | 'PORTAL' | 'QR' | 'OTRO'
 export type CalidadPqrs =
   | 'RESIDENTE' | 'PROPIETARIO' | 'ADMINISTRACION' | 'EMPRESA_USUARIA' | 'COLABORADOR' | 'PROVEEDOR' | 'OTRO'
 
@@ -52,9 +52,15 @@ export const CANAL_PQRS_META: Record<CanalPqrs, { label: string }> = {
   CORREO:   { label: 'Correo' },
   WHATSAPP: { label: 'WhatsApp' },
   PORTAL:   { label: 'Portal del cliente' },
+  // F5: la radicó un residente escaneando la placa de un punto de control.
+  QR:       { label: 'QR del punto' },
   OTRO:     { label: 'Otro' },
 }
 export const CANALES_PQRS = Object.keys(CANAL_PQRS_META) as CanalPqrs[]
+/** Los que se pueden elegir al radicar DESDE LA CONSOLA. `QR` no está: ese
+ *  canal lo pone `pqrs_radicar_publica()` cuando alguien escanea una placa, y
+ *  la base exige que una PQRS con canal `QR` lleve punto (F5). */
+export const CANALES_PQRS_CONSOLA = CANALES_PQRS.filter((c) => c !== 'QR')
 
 export const CALIDAD_PQRS_META: Record<CalidadPqrs, { label: string }> = {
   RESIDENTE:       { label: 'Residente' },
@@ -85,6 +91,16 @@ export interface Pqrs {
   grupo_id: string | null
   persona_id: string | null
   persona_nombre: string | null
+  // Puntos QR (F5). Van con nombre desnormalizado porque quien atiende la PQRS
+  // puede no tener `ver_puntos_ronda` y la RLS no le dejaría leer el punto.
+  punto_id: string | null
+  punto_nombre: string | null
+  zona_id: string | null
+  qr_id: string | null
+  categoria_id: string | null
+  categoria_nombre: string | null
+  satisfaccion: number | null
+  satisfaccion_at: string | null
   asunto: string
   descripcion: string
   responsable_id: string | null
@@ -109,7 +125,8 @@ export type PqrsFila = Omit<Pqrs, 'descripcion' | 'respuesta'>
 export const SELECT_PQRS_LISTA =
   'id, numero, tipo, canal, estado, prioridad, anonima, solicitante_nombre, solicitante_calidad, ' +
   'solicitante_doc, solicitante_telefono, solicitante_email, sede_id, sede_nombre, grupo_id, persona_id, ' +
-  'persona_nombre, asunto, responsable_id, responsable_nombre, dias_plazo, fecha_limite, respondida_at, respondida_por, ' +
+  'persona_nombre, punto_id, punto_nombre, categoria_id, categoria_nombre, ' +
+  'asunto, responsable_id, responsable_nombre, dias_plazo, fecha_limite, respondida_at, respondida_por, ' +
   'respondida_nombre, cerrada_at, radicada_por, radicada_nombre, ultimo_mensaje_at, created_at, updated_at'
 
 export interface PqrsMensaje {
@@ -125,16 +142,39 @@ export interface PqrsMensaje {
   adjunto_nombre: string | null
   adjunto_mime: string | null
   adjunto_bytes: number | null
+  /** F5: por dónde entró o salió el mensaje, y hacia dónde. La consola escribe
+   *  PLATAFORMA/SALIDA; el QR, el correo y WhatsApp llenan los otros. */
+  canal: 'PLATAFORMA' | 'CORREO' | 'WHATSAPP' | 'QR'
+  direccion: 'ENTRADA' | 'SALIDA'
   created_at: string
 }
 
 export const SELECT_PQRS_BITACORA =
   'id, pqrs_id, usuario_id, usuario_nombre, tipo, mensaje, estado_anterior, estado_nuevo, ' +
-  'adjunto_path, adjunto_nombre, adjunto_mime, adjunto_bytes, created_at'
+  'adjunto_path, adjunto_nombre, adjunto_mime, adjunto_bytes, canal, direccion, created_at'
 
 export interface AdjuntoPqrs { path: string; nombre: string; mime: string | null; bytes: number }
 
 export interface SedePqrs { id: string; nombre: string; codigo_interno: string | null; zona: string | null; ciudad: string | null }
+
+/** Categoría del catálogo de PQRS (F5). `grupo_id` nulo = aplica a todos los
+ *  contratos; una del contrato con el mismo `codigo` la reemplaza. */
+export interface CategoriaPqrs {
+  id: string
+  grupo_id: string | null
+  codigo: string
+  nombre: string
+  descripcion: string | null
+  tipo_sugerido: TipoPqrs
+  prioridad_sugerida: string
+  orden: number
+  activo: boolean
+  created_at: string
+  updated_at: string
+}
+
+export const SELECT_PQRS_CATEGORIAS =
+  'id, grupo_id, codigo, nombre, descripcion, tipo_sugerido, prioridad_sugerida, orden, activo, created_at, updated_at'
 export interface GestorPqrs { id: string; nombre: string; rol_nombre: string | null }
 
 // ── Fechas y plazos ─────────────────────────────────────────────────────────

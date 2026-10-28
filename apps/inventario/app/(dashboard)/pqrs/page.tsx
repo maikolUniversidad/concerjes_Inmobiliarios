@@ -43,6 +43,7 @@ export default async function PqrsPage() {
         usuarioId={user?.id ?? ''}
         puedeRadicar={perm.puede('gestionar_pqrs')}
         verIndicadores={perm.puede('ver_panel_gerencia')}
+        puedeParametrizar={perm.puede('parametrizar_pqrs')}
       />
     </div>
   )
