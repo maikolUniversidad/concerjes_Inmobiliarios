@@ -6,7 +6,6 @@ import {
   ClipboardList, PackageCheck, Truck, ClipboardCheck, CheckCircle2, ChevronRight,
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/server'
-import { traerTodo } from '@/lib/supabase/paginado'
 import { getPermisosUsuario } from '@/lib/permisos-server'
 import { type CategoriaRotacion } from '@/lib/types/database'
 import { MovimientosChart, type ChartPoint } from './MovimientosChart'
@@ -20,11 +19,21 @@ export const dynamic = 'force-dynamic'
 const cop = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 })
 const num = (n: number) => n.toLocaleString('es-CO')
 
-interface ProductoDash {
-  id: string; codigo: number | null; nombre_estandar: string; presentacion: string | null
-  cat_rotacion: CategoriaRotacion; stock_minimo_def: number; precio_lista: number | null
-  stock: { cantidad_real: number; cantidad_disp: number } | null
+/** Fila única de `v_dashboard_inventario`: los totales ya sumados por la base. */
+interface TotalesInventario {
+  n_productos: number; unidades_real: number; unidades_disp: number
+  valor_inventario: number; n_criticos: number
 }
+
+/** Fila de `v_stock_critico` (sólo los productos bajo el mínimo). */
+interface CriticoDash {
+  id: string; codigo: number | null; nombre_estandar: string; presentacion: string | null
+  cat_rotacion: CategoriaRotacion; stock_minimo_def: number
+  cantidad_real: number; cantidad_disp: number
+}
+
+/** Cuántos críticos se listan en la tabla; el KPI usa el total exacto de la vista. */
+const MAX_CRITICOS = 200
 
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -43,7 +52,7 @@ export default async function DashboardPage() {
   // Las tres secciones del tablero no dependen una de otra, así que se piden a
   // la vez. Antes iban encadenadas con `await` y la página tardaba la SUMA de
   // todas (y cada viaje a Supabase se paga entero, ida y vuelta).
-  const [estadosRes, activasRes, productos, diasRes] = await Promise.all([
+  const [estadosRes, activasRes, totalesRes, criticosRes, diasRes] = await Promise.all([
     // Cuentas por estado: las hace la base (v_ordenes_insumo_por_estado). Antes
     // se traía una fila por cada orden que existe solo para contarlas.
     verPedidos
@@ -60,15 +69,26 @@ export default async function DashboardPage() {
           .limit(100)
       : Promise.resolve({ data: [] }),
 
-    // Inventario. Paginado: el valor del inventario suma el catálogo COMPLETO.
+    // Inventario: los cuatro totales los suma la base (v_dashboard_inventario,
+    // UNA fila). Antes se traía el catálogo activo COMPLETO —paginado de 1.000
+    // en 1.000, con el stock anidado— para sumarlo aquí: 498 filas para sacar
+    // cuatro números y encontrar diez críticos.
     verInventario
-      ? (traerTodo((desde, hasta) => supabase
-          .from('productos')
-          .select('id, codigo, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, precio_lista, stock ( cantidad_real, cantidad_disp )')
-          .eq('activo', true)
-          .order('id')
-          .range(desde, hasta)) as unknown as Promise<ProductoDash[]>)
-      : Promise.resolve([] as ProductoDash[]),
+      ? supabase
+          .from('v_dashboard_inventario')
+          .select('n_productos, unidades_real, unidades_disp, valor_inventario, n_criticos')
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+
+    // Los críticos, acotados: hoy son 10. El KPI usa el total exacto de la
+    // vista de arriba, así que la tabla puede estar topada sin mentir.
+    verInventario
+      ? supabase
+          .from('v_stock_critico')
+          .select('id, codigo, nombre_estandar, presentacion, cat_rotacion, stock_minimo_def, cantidad_real, cantidad_disp')
+          .order('codigo', { nullsFirst: false })
+          .limit(MAX_CRITICOS)
+      : Promise.resolve({ data: [] }),
 
     // Movimientos ya agrupados por día (14 filas en vez de ~1.400).
     verMovs
@@ -108,20 +128,24 @@ export default async function DashboardPage() {
     }
   }
 
-  // ── Inventario (productos + stock) ───────────────────────────────────────
+  // ── Inventario (totales + críticos) ──────────────────────────────────────
   // "Con cuánto se cuenta" = DISPONIBLE REAL (stock real − lo reservado por
   // pedidos aprobados sin despachar; lo fija la BD en stock.cantidad_disp).
   // El crítico se mide contra el disponible; las unidades y el valor del
-  // inventario siguen siendo lo físico en bodega. Los numeric llegan como string.
-  const realDe = (p: ProductoDash) => Number(p.stock?.cantidad_real ?? 0)
-  const dispDe = (p: ProductoDash) => (p.stock ? Number(p.stock.cantidad_disp) : 0)
+  // inventario siguen siendo lo físico en bodega. Esa es la semántica de las
+  // vistas: aquí sólo se convierten los numeric, que llegan como string.
+  const tot = (totalesRes.data ?? null) as TotalesInventario | null
+  const totalProductos = Number(tot?.n_productos ?? 0)
+  const unidadesStock = Number(tot?.unidades_real ?? 0)
+  const unidadesDisp = Number(tot?.unidades_disp ?? 0)
+  const valorInventario = Number(tot?.valor_inventario ?? 0)
+  const totalCriticos = Number(tot?.n_criticos ?? 0)
+
+  // Orden por ítem y luego alfabético (la regla de todo el sistema).
   const criticos = ordenarPorItem(
-    productos.filter((p) => (p.stock_minimo_def > 0) && dispDe(p) <= p.stock_minimo_def),
+    ((criticosRes.data ?? []) as unknown as CriticoDash[]),
     (p) => ({ codigo: p.codigo, nombre: p.nombre_estandar }),
   )
-  const unidadesStock = productos.reduce((a, p) => a + realDe(p), 0)
-  const unidadesDisp = productos.reduce((a, p) => a + dispDe(p), 0)
-  const valorInventario = productos.reduce((a, p) => a + realDe(p) * Number(p.precio_lista ?? 0), 0)
 
   // ── Movimientos (14 días + hoy) ──────────────────────────────────────────
   // Las sumas por día las hace la vista v_movimientos_dia, y corta el día en
@@ -199,10 +223,10 @@ export default async function DashboardPage() {
             <Package className="w-4 h-4" /> Inventario
           </h2>
           <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
-            <Kpi label="Productos" value={productos.length} sub="en catálogo activo" icon={Package} color="bg-blue-50 text-blue-600" href="/productos" />
+            <Kpi label="Productos" value={totalProductos} sub="en catálogo activo" icon={Package} color="bg-blue-50 text-blue-600" href="/productos" />
             <Kpi label="Disponible real" value={unidadesDisp} sub={`${num(unidadesStock)} en bodega · ${num(unidadesStock - unidadesDisp)} reservado`} icon={Boxes} color="bg-indigo-50 text-indigo-600" href="/stock" />
             <Kpi label="Valor inventario" valueText={cop.format(valorInventario)} sub="COP estimado" icon={TrendingUp} color="bg-emerald-50 text-emerald-600" href="/reportes" />
-            <Kpi label="Stock crítico" value={criticos.length} sub="disponible bajo mínimo" icon={AlertTriangle} color="bg-red-50 text-red-600" href="/aprovisionamiento" alerta={criticos.length > 0} />
+            <Kpi label="Stock crítico" value={totalCriticos} sub="disponible bajo mínimo" icon={AlertTriangle} color="bg-red-50 text-red-600" href="/aprovisionamiento" alerta={totalCriticos > 0} />
           </div>
         </section>
       )}
@@ -234,7 +258,7 @@ export default async function DashboardPage() {
         <div className="bg-white border border-gray-100 rounded-2xl p-6 shadow-sm">
           <div className="flex items-center justify-between mb-4">
             <h2 className="font-heading font-semibold text-lg text-gray-900">Alertas de stock crítico</h2>
-            {criticos.length > 0 && (
+            {totalCriticos > 0 && (
               <Link href="/aprovisionamiento" className="flex items-center gap-1 text-xs font-body font-semibold text-brand-green hover:underline">
                 Ver plan de compras <ChevronRight className="w-3.5 h-3.5" />
               </Link>
@@ -246,10 +270,10 @@ export default async function DashboardPage() {
               nombre_estandar: p.nombre_estandar,
               presentacion: p.presentacion,
               cat_rotacion: p.cat_rotacion,
-              stock_minimo_def: p.stock_minimo_def,
+              stock_minimo_def: Number(p.stock_minimo_def),
               codigo: p.codigo,
-              real: realDe(p),
-              disp: dispDe(p),
+              real: Number(p.cantidad_real),
+              disp: Number(p.cantidad_disp),
             }))}
           />
         </div>

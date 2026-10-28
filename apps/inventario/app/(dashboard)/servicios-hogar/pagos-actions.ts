@@ -88,27 +88,22 @@ export async function eliminarMetodoPago(id: string) {
 
 export async function getResumenPagos() {
   const s = await db()
-  const hoy = new Date().toISOString().split('T')[0]
 
-  const [porCobrar, vencidos, porVerificar, cobrosPagados] = await Promise.all([
-    s.from('cobros_servicio_hogar').select('saldo').in('estado', ['EMITIDO', 'PARCIAL']),
-    s.from('cobros_servicio_hogar').select('id', { count: 'exact', head: true })
-      .in('estado', ['EMITIDO', 'PARCIAL']).lt('fecha_vencimiento', hoy),
-    s.from('pagos_hogar').select('id', { count: 'exact', head: true }).eq('estado', 'REPORTADO'),
-    s.from('cobros_servicio_hogar').select('total').eq('estado', 'PAGADO'),
-  ])
-
-  const saldo = ((porCobrar.data ?? []) as { saldo: number }[])
-    .reduce((a, c) => a + Number(c.saldo ?? 0), 0)
-  const recaudado = ((cobrosPagados.data ?? []) as { total: number }[])
-    .reduce((a, c) => a + Number(c.total ?? 0), 0)
+  // Toda la cartera en una fila (v_pagos_hogar_resumen). Antes eran cuatro
+  // viajes, y dos de ellos se traían TODAS las filas de cobros —una vez las
+  // emitidas, otra las pagadas— nada más que para sumarlas aquí.
+  // El vencimiento se compara en hora de Bogotá, no en UTC como antes.
+  const { data } = await s
+    .from('v_pagos_hogar_resumen')
+    .select('por_cobrar, saldo_pendiente, vencidos, recaudado, por_verificar')
+    .maybeSingle()
 
   return {
-    porCobrar: porCobrar.data?.length ?? 0,
-    saldoPendiente: saldo,
-    vencidos: vencidos.count ?? 0,
-    porVerificar: porVerificar.count ?? 0,
-    recaudado,
+    porCobrar: Number(data?.por_cobrar ?? 0),
+    saldoPendiente: Number(data?.saldo_pendiente ?? 0),
+    vencidos: Number(data?.vencidos ?? 0),
+    porVerificar: Number(data?.por_verificar ?? 0),
+    recaudado: Number(data?.recaudado ?? 0),
   }
 }
 

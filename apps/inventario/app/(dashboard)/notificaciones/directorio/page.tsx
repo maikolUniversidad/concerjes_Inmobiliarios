@@ -15,8 +15,7 @@ export default async function DirectorioPage() {
   const permisos = await requirePermiso('ver_directorio_correos')
   const supabase = (await createClient()) as any
 
-  const conteo = (q: any) => q.then((r: any) => (r.error ? null : (r.count ?? 0)))
-  const [ips, listas, contactos, empresa, usos, cuenta, eu, ee, usuarios, proveedores, proveedoresConCorreo, clientes, clientesConCorreo] =
+  const [ips, listas, contactos, empresa, usos, cuenta, eu, ee, totales] =
     await Promise.all([
       supabase.from('ips').select('*').order('orden').order('nombre'),
       supabase.from('directorio_listas').select('*').order('orden').order('nombre'),
@@ -26,12 +25,26 @@ export default async function DirectorioPage() {
       supabase.rpc('correo_envio_configurado'),
       supabase.from('empresas_usuarias').select('id, nombre, email, activo').order('nombre'),
       supabase.from('empresas_emisoras').select('id, razon_social, email, activo').order('razon_social'),
-      conteo(supabase.from('usuarios').select('id', { count: 'exact', head: true }).eq('activo', true)),
-      conteo(supabase.from('proveedores').select('id', { count: 'exact', head: true })),
-      conteo(supabase.from('proveedores').select('id', { count: 'exact', head: true }).not('email', 'is', null).neq('email', '')),
-      conteo(supabase.from('clientes').select('id', { count: 'exact', head: true })),
-      conteo(supabase.from('clientes').select('id', { count: 'exact', head: true }).not('email', 'is', null).neq('email', '')),
+      // Los cinco totales de destinatarios los trae la base en una fila
+      // (v_directorio_totales). Antes eran cinco conteos, o sea cinco viajes.
+      supabase
+        .from('v_directorio_totales')
+        .select('usuarios, proveedores, proveedores_con_correo, clientes, clientes_con_correo')
+        .maybeSingle(),
     ])
+
+  // Si la vista no se pudo leer, los totales quedan en null y la tabla los
+  // muestra vacíos (igual que antes, que cada conteo devolvía null al fallar).
+  const t = (totales.error ? null : totales.data) as {
+    usuarios: number; proveedores: number; proveedores_con_correo: number
+    clientes: number; clientes_con_correo: number
+  } | null
+  const n = (v: number | undefined) => (t ? Number(v ?? 0) : null)
+  const usuarios = n(t?.usuarios)
+  const proveedores = n(t?.proveedores)
+  const proveedoresConCorreo = n(t?.proveedores_con_correo)
+  const clientes = n(t?.clientes)
+  const clientesConCorreo = n(t?.clientes_con_correo)
 
   // Otros correos que ya tiene la plataforma: se editan en su propio módulo.
   const otras: OtraFuente[] = [

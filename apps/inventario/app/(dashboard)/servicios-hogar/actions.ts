@@ -13,20 +13,21 @@ async function db() {
 
 export async function getResumenServiciosHogar() {
   const s = await db()
-  const hoy = new Date().toISOString().split('T')[0]
 
-  const [pendientes, confirmadas, hoyResult, completadas] = await Promise.all([
-    s.from('solicitudes_servicio_hogar').select('id', { count: 'exact', head: true }).eq('estado', 'PENDIENTE'),
-    s.from('solicitudes_servicio_hogar').select('id', { count: 'exact', head: true }).eq('estado', 'CONFIRMADA'),
-    s.from('solicitudes_servicio_hogar').select('id', { count: 'exact', head: true }).eq('fecha_deseada', hoy),
-    s.from('solicitudes_servicio_hogar').select('id', { count: 'exact', head: true }).eq('estado', 'COMPLETADA'),
-  ])
+  // Los cuatro contadores los hace la base en una fila (v_servicios_hogar_resumen).
+  // Antes eran cuatro conteos sobre la misma tabla, o sea cuatro viajes a
+  // Supabase. «Hoy» lo corta la vista en hora de Bogotá: aquí se calculaba con
+  // `toISOString()`, que es UTC, y en Vercel el día cambiaba a las 7 de la noche.
+  const { data } = await s
+    .from('v_servicios_hogar_resumen')
+    .select('pendientes, confirmadas, hoy, completadas')
+    .maybeSingle()
 
   return {
-    pendientes: pendientes.count ?? 0,
-    confirmadas: confirmadas.count ?? 0,
-    hoy:         hoyResult.count ?? 0,
-    completadas: completadas.count ?? 0,
+    pendientes:  Number(data?.pendientes ?? 0),
+    confirmadas: Number(data?.confirmadas ?? 0),
+    hoy:         Number(data?.hoy ?? 0),
+    completadas: Number(data?.completadas ?? 0),
   }
 }
 

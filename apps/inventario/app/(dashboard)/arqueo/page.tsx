@@ -74,14 +74,22 @@ export default async function ArqueoPage() {
 
   const arqueos = (data as unknown as ArqueoRow[]) ?? []
 
-  // `items_contados` solo se actualiza al cerrar: para los abiertos se cuenta en vivo
+  // `items_contados` solo se actualiza al cerrar: para los abiertos se cuenta en
+  // vivo. Lo cuenta la base (v_arqueo_items_contados, una fila por arqueo); antes
+  // era UN viaje a Supabase POR arqueo abierto, y cada viaje se paga entero.
+  const abiertos = arqueos.filter(a => a.estado === 'ABIERTO').map(a => a.id)
   const contadosVivos = new Map<string, number>()
-  await Promise.all(arqueos.filter(a => a.estado === 'ABIERTO').map(async a => {
-    const { count } = await supabase.from('arqueo_items')
-      .select('id', { count: 'exact', head: true })
-      .eq('arqueo_id', a.id).neq('estado', 'PENDIENTE')
-    contadosVivos.set(a.id, count ?? 0)
-  }))
+  if (abiertos.length > 0) {
+    const { data: vivos } = await supabase
+      .from('v_arqueo_items_contados')
+      .select('arqueo_id, contados')
+      .in('arqueo_id', abiertos)
+    for (const v of ((vivos ?? []) as unknown as { arqueo_id: string; contados: number }[])) {
+      contadosVivos.set(v.arqueo_id, Number(v.contados))
+    }
+    // Un arqueo sin ningún ítem contado no sale en la vista: cuenta como 0.
+    for (const id of abiertos) if (!contadosVivos.has(id)) contadosVivos.set(id, 0)
+  }
 
   const tarjetas: Tarjeta[] = [
     ...arqueos.map(a => ({ tipo: 'PLATAFORMA' as const, fecha: a.created_at, a, contados: contadosVivos.get(a.id) ?? a.items_contados })),

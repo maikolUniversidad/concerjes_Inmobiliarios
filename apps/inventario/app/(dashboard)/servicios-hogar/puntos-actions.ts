@@ -203,16 +203,18 @@ export async function buscarClientes(texto: string) {
 
 export async function getResumenPuntos() {
   const s = await db()
-  const [pendientes, entregadas, saldo] = await Promise.all([
-    s.from('redenciones').select('id', { count: 'exact', head: true }).eq('estado', 'SOLICITADA'),
-    s.from('redenciones').select('id', { count: 'exact', head: true }).eq('estado', 'ENTREGADA'),
-    s.from('clientes').select('puntos'),
-  ])
-  const filas = (saldo.data as { puntos: number }[]) ?? []
+
+  // Los cuatro números en una fila (v_puntos_resumen). Antes eran tres viajes,
+  // y el tercero se traía los puntos de TODOS los clientes para sumarlos aquí.
+  const { data } = await s
+    .from('v_puntos_resumen')
+    .select('por_entregar, entregadas, puntos_en_circulacion, clientes_con_puntos')
+    .maybeSingle()
+
   return {
-    porEntregar: pendientes.count ?? 0,
-    entregadas: entregadas.count ?? 0,
-    puntosEnCirculacion: filas.reduce((a, c) => a + Number(c.puntos ?? 0), 0),
-    clientesConPuntos: filas.filter((c) => Number(c.puntos ?? 0) > 0).length,
+    porEntregar: Number(data?.por_entregar ?? 0),
+    entregadas: Number(data?.entregadas ?? 0),
+    puntosEnCirculacion: Number(data?.puntos_en_circulacion ?? 0),
+    clientesConPuntos: Number(data?.clientes_con_puntos ?? 0),
   }
 }
