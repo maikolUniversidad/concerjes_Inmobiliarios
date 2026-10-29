@@ -61,6 +61,10 @@ const SQL_F8 = mig('20261028000800_puntos_qr_f8_ubicacion_mapa.sql')
 // funciones del replay en su forma vieja (con el hueco), así que si se aplicara
 // al revés el arreglo quedaría deshecho dentro de la transacción de prueba.
 const SQL_F8_FLAG = mig('20261028000811_puntos_qr_f8_recorrido_respeta_contrato.sql')
+// Y la ventana hacia atrás va después del arreglo del flag, por lo mismo: vuelve
+// a crear las dos funciones del replay, así que aplicarla antes dejaría el
+// arreglo del flag encima sin la ventana.
+const SQL_F8_VENTANA = mig('20261028000813_puntos_qr_f8_ventana_recorrido.sql')
 
 const c = new Client({ connectionString: cadena(), ssl: { rejectUnauthorized: false } })
 await c.connect()
@@ -103,6 +107,10 @@ try {
   await c.query(SQL_F8_FLAG)
   check('el arreglo del flag se aplica sobre la fase ya aplicada', true)
   await c.query(SQL_F8_FLAG)
+  check('y también dos veces seguidas', true)
+  await c.query(SQL_F8_VENTANA)
+  check('la ventana hacia atrás se aplica encima', true)
+  await c.query(SQL_F8_VENTANA)
   check('y también dos veces seguidas', true)
 
   // ── 2. Estructura ─────────────────────────────────────────────────────────
@@ -700,6 +708,40 @@ try {
     (await una(`SELECT ronda_seguimiento_activo($1) b`, [g3])).b === false)
   check('y con fila y el flag en true, sí',
     (await una(`SELECT ronda_seguimiento_activo($1) b`, [g1])).b === true)
+
+  // ── La ventana hacia atrás del replay (20261028000813) ────────────────────
+  // Que el selector esconda un turno viejo no basta: quien se haya guardado el
+  // id lo reproduciría igual. Por eso se prueban las DOS puertas, y que subir
+  // la ventana lo devuelva — la ventana acota lo que se mira, no borra nada.
+  console.log('\n9) La ventana hacia atrás del replay')
+  await comoDueno()
+  check('un contrato sin número propio hereda los 30 días',
+    (await una(`SELECT ronda_recorrido_ventana_dias($1) n`, [g3])).n === 30)
+  check('y el de g1 también, que no lo ha cambiado nadie',
+    (await una(`SELECT ronda_recorrido_ventana_dias($1) n`, [g1])).n === 30)
+
+  await c.query(`UPDATE ronda_turnos SET inicio_at = now() - interval '45 days' WHERE id = $1`, [t1])
+  await como(authA)
+  check('un turno más viejo que la ventana desaparece del selector',
+    (await todas(recorribles)).every((r) => r.turno_id !== t1))
+  const fuera = await enSavepoint(() => c.query(`SELECT * FROM ronda_recorrido($1, 100)`, [t1]))
+  check('y reproducirlo se niega aunque alguien se haya guardado el id', !fuera.ok,
+    (fuera.error ?? '').slice(0, 70))
+  check('el mensaje habla de la VENTANA, no de un permiso ni del contrato apagado',
+    /ventana/i.test(fuera.error ?? '') && !/permiso|desactivado/i.test(fuera.error ?? ''))
+
+  await comoDueno()
+  await c.query(`UPDATE grupo_reglas SET recorrido_ventana_dias = 90 WHERE grupo_id = $1`, [g1])
+  await como(authA)
+  check('subir la ventana del contrato lo devuelve al selector: no se borró nada',
+    (await todas(recorribles)).some((r) => r.turno_id === t1))
+  check('y el replay vuelve a responder',
+    (await todas(`SELECT * FROM ronda_recorrido($1, 5000)`, [t1])).length > 0)
+
+  await comoDueno()
+  const ventanaMala = await enSavepoint(() =>
+    c.query(`UPDATE grupo_reglas SET recorrido_ventana_dias = 0 WHERE grupo_id = $1`, [g1]))
+  check('una ventana de 0 días la rechaza la base', !ventanaMala.ok)
 
   console.log(`\n${fail === 0 ? 'TODO BIEN' : 'HAY FALLAS'} — ${ok} OK, ${fail} fallas`)
 } catch (e) {
