@@ -57,6 +57,10 @@ function cadena() {
 
 const mig = (f) => readFileSync(join(raiz, 'supabase', 'migrations', f), 'utf8')
 const SQL_F8 = mig('20261028000800_puntos_qr_f8_ubicacion_mapa.sql')
+// El arreglo del flag va DESPUÉS de 800 a propósito: 800 vuelve a crear las
+// funciones del replay en su forma vieja (con el hueco), así que si se aplicara
+// al revés el arreglo quedaría deshecho dentro de la transacción de prueba.
+const SQL_F8_FLAG = mig('20261028000811_puntos_qr_f8_recorrido_respeta_contrato.sql')
 
 const c = new Client({ connectionString: cadena(), ssl: { rejectUnauthorized: false } })
 await c.connect()
@@ -96,6 +100,10 @@ try {
   check('primera pasada', true)
   await c.query(SQL_F8)
   check('segunda pasada sin error', true)
+  await c.query(SQL_F8_FLAG)
+  check('el arreglo del flag se aplica sobre la fase ya aplicada', true)
+  await c.query(SQL_F8_FLAG)
+  check('y también dos veces seguidas', true)
 
   // ── 2. Estructura ─────────────────────────────────────────────────────────
   console.log('\n2) Estructura')
@@ -165,8 +173,19 @@ try {
        AND tablename IN ('ronda_turnos','ronda_rutas','ronda_ruta_paradas',
                          'persona_ubicacion_actual','persona_ubicacion_historial')`)
   check('las 5 políticas de LECTURA existen y exigen permiso', lecturas.length === 5
-    && lecturas.every((p) => /auth_permiso|ronda_ubicacion_puede_ver|ronda_recorrido_acceso/.test(p.qual)),
+    && lecturas.every((p) => /auth_permiso|ronda_mapa_acceso|ronda_ubicacion_puede_ver|ronda_recorrido_acceso/.test(p.qual)),
     `${lecturas.length} políticas`)
+  // Guardia contra el hueco de 20261028000811: las dos lecturas de ubicación y
+  // las dos funciones del replay tienen que preguntar por el flag del contrato.
+  // Si alguien vuelve a escribir una de las cuatro sin él, esto falla.
+  check('las 2 políticas de ubicación exigen el flag del contrato',
+    lecturas.filter((p) => p.tablename.startsWith('persona_ubicacion')
+      && /ronda_seguimiento_activo/.test(p.qual)).length === 2)
+  check('y las 2 funciones del replay también',
+    (await todas(`
+      SELECT p.proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+       WHERE n.nspname='public' AND p.proname IN ('ronda_recorrido','ronda_turnos_recorribles')
+         AND pg_get_functiondef(p.oid) LIKE '%ronda_seguimiento_activo%'`)).length === 2)
   check('la ubicación NO tiene ninguna política de escritura (solo por RPC)',
     (await todas(`SELECT 1 FROM pg_policies WHERE schemaname='public'
                    AND tablename IN ('persona_ubicacion_actual','persona_ubicacion_historial')
@@ -604,6 +623,83 @@ try {
     `SELECT ronda_registrar_ubicacion(4.6804, -74.0504, 7, NULL, NULL, 'APP_VIVO',
                                       NULL, NULL, NULL, $1, NULL)`, [pB]))
   check('pero NO la de otra persona', !ajena.ok, ajena.error?.slice(0, 50))
+
+  // ── 14. El replay respeta el interruptor del contrato ────────────────────
+  // El hueco que arregla 20261028000811: `ronda_recorrido()` y
+  // `ronda_turnos_recorribles()` son SECURITY DEFINER, así que la RLS no se les
+  // aplica, y por dentro no comprobaban `comparte_seguimiento_vivo`. Un
+  // contrato que apagaba el seguimiento dejaba de mostrar el mapa en vivo pero
+  // su rastro PASADO seguía reproduciéndose.
+  //
+  // Se prueban las DOS direcciones, porque esto es código en producción: que
+  // encendido siga haciendo lo mismo que antes, y que apagado deje de hacerlo.
+  console.log('\n14) El replay respeta comparte_seguimiento_vivo (20261028000811)')
+  await comoDueno()
+  await c.query(`UPDATE grupo_reglas SET comparte_seguimiento_vivo=true WHERE grupo_id=$1`, [g1])
+
+  const recorribles = `SELECT * FROM ronda_turnos_recorribles(NULL,NULL,NULL,NULL,500)`
+  await como(authA)
+  const conFlag = await todas(`SELECT * FROM ronda_recorrido($1, 5000)`, [t1])
+  check('ENCENDIDO: el replay devuelve el rastro del turno igual que antes',
+    conFlag.length === 13, `${conFlag.length} puntos`)
+  check('ENCENDIDO: el selector lista el turno',
+    (await todas(recorribles)).some((t) => t.turno_id === t1))
+  check('ENCENDIDO: y el historial se lee por la tabla',
+    (await todas(`SELECT * FROM persona_ubicacion_historial`)).length > 0)
+
+  // El mapa en vivo de quien SOLO tiene ver_mapa_operativo no se toca.
+  await como(authM)
+  const mapaOn = await todas(`SELECT * FROM ronda_mapa_personas(NULL, NULL)`)
+  check('ENCENDIDO: el mapa en vivo de ver_mapa_operativo sigue mostrando a quien está en turno',
+    mapaOn.length === 1 && mapaOn[0].persona_id === pR, `${mapaOn.length} personas`)
+
+  // Y ahora el contrato retira el seguimiento.
+  await comoDueno()
+  await c.query(`UPDATE grupo_reglas SET comparte_seguimiento_vivo=false WHERE grupo_id=$1`, [g1])
+  await como(authA)
+  const negado = await enSavepoint(() => c.query(`SELECT * FROM ronda_recorrido($1, 5000)`, [t1]))
+  check('APAGADO: ronda_recorrido() se niega', !negado.ok, negado.error?.slice(0, 60))
+  check('APAGADO: y el mensaje dice que es el contrato, no un permiso que falte',
+    /seguimiento/i.test(negado.error ?? ''))
+  check('APAGADO: el selector ya no lista el turno',
+    !(await todas(recorribles)).some((t) => t.turno_id === t1))
+  check('APAGADO: ni se lee el historial por la tabla',
+    (await todas(`SELECT * FROM persona_ubicacion_historial`)).length === 0)
+  await como(authM)
+  check('APAGADO: el mapa en vivo también se apaga (como ya hacía)',
+    (await todas(`SELECT * FROM ronda_mapa_personas(NULL, NULL)`)).length === 0)
+
+  // El dueño del dato no pierde su derecho porque el contrato cambie de idea.
+  await como(authP)
+  check('APAGADO: la persona SIGUE viendo su propio rastro (Ley 1581)',
+    (await todas(`SELECT * FROM persona_ubicacion_historial`)).length === 13)
+
+  // Y encenderlo otra vez lo devuelve: apagar no borró ni una fila.
+  await comoDueno()
+  await c.query(`UPDATE grupo_reglas SET comparte_seguimiento_vivo=true WHERE grupo_id=$1`, [g1])
+  await como(authA)
+  check('volver a encenderlo devuelve el replay intacto: apagar no borra nada',
+    (await todas(`SELECT * FROM ronda_recorrido($1, 5000)`, [t1])).length === 13)
+
+  // Lo que el arreglo NO debía hacer: abrir el replay a la clave del mapa.
+  await como(authM)
+  const soloMapaOtra = await enSavepoint(() => c.query(`SELECT * FROM ronda_recorrido($1, 100)`, [t1]))
+  check('el arreglo no abrió la clave: con solo ver_mapa_operativo sigue sin poder reproducir',
+    !soloMapaOtra.ok, soloMapaOtra.error?.slice(0, 50))
+  check('y a ese le dice que le falta PERMISO, no que el contrato esté apagado',
+    /permiso/i.test(soloMapaOtra.error ?? ''))
+  check('el selector tampoco le devuelve turnos', (await todas(recorribles)).length === 0)
+
+  // Un contrato sin fila de reglas no permite nada: es como está hoy la base.
+  await comoDueno()
+  const g3 = (await una(`
+    INSERT INTO grupos_contrato (codigo, nombre, estado, vigencia_desde, activo)
+    VALUES ('ZZF8C', 'Contrato de prueba F8 C', 'VIGENTE', CURRENT_DATE - 30, true)
+    RETURNING id`)).id
+  check('un contrato SIN fila en grupo_reglas no permite el seguimiento',
+    (await una(`SELECT ronda_seguimiento_activo($1) b`, [g3])).b === false)
+  check('y con fila y el flag en true, sí',
+    (await una(`SELECT ronda_seguimiento_activo($1) b`, [g1])).b === true)
 
   console.log(`\n${fail === 0 ? 'TODO BIEN' : 'HAY FALLAS'} — ${ok} OK, ${fail} fallas`)
 } catch (e) {

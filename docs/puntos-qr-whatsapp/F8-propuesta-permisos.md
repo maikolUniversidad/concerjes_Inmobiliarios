@@ -1,8 +1,13 @@
 # F8 · Propuesta de reparto por rol de `ver_recorrido_personas` y `gestionar_accesos_campo`
 
-Estado: **propuesta. Nada de esto está aplicado.** La migración que la acompaña
-(`supabase/migrations/20261028000810_puntos_qr_f8_roles_ubicacion.sql`) está
-escrita y sin aplicar, a la espera de la decisión.
+Estado, al 29 de octubre de 2026:
+
+- La propuesta **fue aprobada**, y el hueco que se encontró al revisarla (punto
+  6.1) **está arreglado y aplicado**:
+  `20261028000811_puntos_qr_f8_recorrido_respeta_contrato.sql`.
+- El reparto en sí,
+  `20261028000810_puntos_qr_f8_roles_ubicacion.sql`, **está escrito y sin
+  aplicar todavía**.
 
 Las dos claves son las únicas del módulo que hoy **no las tiene ningún rol**, así
 que las dos funciones que protegen son hoy solo-ADMIN. Comprobado contra la base
@@ -206,10 +211,13 @@ sin acotar primero, por lo mismo del punto 3.
 
 ## 6. Lo que conviene acotar en el código ANTES de dar el permiso
 
-Tres cosas del recorrido, en orden de importancia. **La primera es un hueco
-real, no una mejora.**
+Tres cosas del recorrido, en orden de importancia. **La primera era un hueco
+real, no una mejora, y ya está arreglada** (migración
+`20261028000811_puntos_qr_f8_recorrido_respeta_contrato.sql`, aplicada el 29 de
+octubre de 2026, antes del reparto).
 
-1. **Las dos RPC del recorrido no comprueban `comparte_seguimiento_vivo`.**
+1. ~~**Las dos RPC del recorrido no comprueban `comparte_seguimiento_vivo`.**~~
+   **ARREGLADO.**
    La política RLS de `persona_ubicacion_historial` sí lo exige, pero
    `ronda_recorrido()` y `ronda_turnos_recorribles()` son `SECURITY DEFINER` y
    por tanto se saltan la RLS: solo comprueban el permiso y el alcance de
@@ -223,8 +231,10 @@ real, no una mejora.**
 2. **Enganchar la purga al cron.** `ronda_purgar_ubicacion()` y
    `ronda_turnos_cerrar_vencidos()` están escritas y probadas, pero ninguna ruta
    las llama. Mientras no se enganchen, la retención de 3 meses **no existe** y
-   el rastro es perpetuo: dar la clave del recorrido sin esto es dar acceso a una
-   ventana que nunca se cierra.
+   el rastro es perpetuo. **Hoy no urge** —cero registros de ubicación y el
+   seguimiento apagado en todos los contratos, así que no hay nada que
+   retener— pero **se vuelve obligatorio el día que se encienda el primer
+   contrato**. Lo que haría falta, exactamente, está en el punto 9.
 3. **Una ventana de días para el replay.** Hoy
    `ronda_turnos_recorribles(p_desde, p_hasta)` acepta cualquier rango hacia
    atrás. Un tope por contrato —del estilo `recorrido_ventana_dias`, 30 por
@@ -289,3 +299,40 @@ No son de esta tarea y no las toqué:
   Mantenimiento, pero no el Conserje.** Si el conserje es quien hace la ronda
   desde una cuenta de usuario (no desde la PWA con enlace y PIN), le falta.
   Con la PWA no estorba, porque ahí el actor es la sesión de campo.
+
+---
+
+## 9. Qué haría falta para enganchar la purga al cron
+
+Escrito aquí para que la decisión se tome con el costo delante. **No está
+hecho.** Son dos archivos y ningún secreto nuevo:
+
+1. **Una ruta**, `apps/inventario/app/api/cron/rondas-ubicacion/route.ts`, con el
+   mismo molde que las siete que ya existen (`/api/cron/whatsapp-vencimientos`
+   es el más parecido): `runtime = 'nodejs'`, `maxDuration = 60`, comprobación
+   `Bearer ${process.env.CRON_SECRET}` en la cabecera `authorization`, y un
+   cliente de Supabase con `SUPABASE_SERVICE_ROLE_KEY`. **Basta con el
+   `CRON_SECRET` que ya está puesto**: no hace falta ninguna variable nueva ni
+   ninguna llave nueva.
+2. **Una entrada en `apps/inventario/vercel.json`**, en el arreglo `crons` que
+   ya tiene siete.
+
+Dentro, las dos llamadas que ya existen y están probadas:
+
+- `ronda_turnos_cerrar_vencidos(500)` — **esta conviene que corra seguido**, no
+  una vez al día: el índice único de «un turno abierto por persona» mira el
+  estado y no la hora, así que un turno vencido sin cerrar **impide abrir el
+  siguiente**. Si alguien cierra mal su turno a las 6 de la mañana, con un cron
+  diario no puede volver a abrir hasta el día siguiente.
+- `ronda_purgar_ubicacion(5000)` — borra un lote y devuelve cuántas filas
+  borró, para saber si hay que volver a llamar.
+
+Por eso propongo **una sola ruta cada 15 minutos** (`*/15 * * * *`) que haga las
+dos cosas en cada pasada, en vez de dos entradas con horarios distintos: cerrar
+turnos necesita frecuencia, y purgar un lote de 5.000 cada 15 minutos son hasta
+480.000 filas al día, muchísimo más de lo que esta tabla va a generar. Así no
+hay que escribir lógica de «solo purga si son las 4 de la mañana», que es el
+tipo de condición que un día falla en silencio.
+
+Costo: 96 invocaciones al día de una función que, con la base vacía, hace dos
+consultas que no devuelven nada.
