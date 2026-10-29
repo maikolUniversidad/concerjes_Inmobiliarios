@@ -34,6 +34,7 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
       activo:activo_id(id, codigo, nombre, estado, criticidad, ubicacion_texto, piso, punto_id, fotos,
                        tipo:activo_tipo_id(nombre, normativa)),
       plan:plan_id(id, codigo, nombre, frecuencia_tipo, frecuencia_valor, obligatorio_normativo, normativa),
+      medidor:medidor_id(id, nombre, unidad),
       proveedor:proveedor_id(id, nombre),
       sede:sede_id(id, nombre)`)
     .eq('id', id).maybeSingle()

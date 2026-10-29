@@ -4,7 +4,9 @@ import {
   faseTicket, ESTADOS_TICKET_ACTIVOS, ESTADOS_TICKET_EN_CURSO,
   ESTADOS_TICKET_FINALES, FILTRO_NO_FINAL,
   ACCIONES_TICKET, FRECUENCIA_PLAN_META, FRECUENCIAS_PLAN, textoFrecuencia,
+  clasificarEscaneoOT, extraerReferenciaEquipo,
 } from '@/lib/mantenimiento'
+import { formatearManual } from '@/lib/puntos-qr'
 
 // Los once valores del enum `estado_ticket_mant` tal como quedaron en la base
 // después de F7, en el orden del ciclo de vida. Está escrito a mano aquí a
@@ -66,6 +68,44 @@ describe('el reparto en pestañas', () => {
   })
 })
 
+// `/mantenimiento` estaba en producción antes de F7, y lo que se le cambió son
+// justo las pestañas y los KPI. Esto reproduce EXACTAMENTE la aritmética del
+// tablero (`TableroClient.tsx`: la pestaña «Todos» no filtra, y cada otra
+// cuenta `faseTicket(estado) === v.k`) sobre los once estados reales más uno
+// inventado, para fijar la única cosa que no puede fallar: que ningún ticket
+// quede fuera de todas las pestañas.
+describe('la aritmética de las pestañas del tablero', () => {
+  const PESTANAS = ['atender', 'curso', 'resueltos', 'historial'] as const
+  const tickets = [...ESTADOS_TICKET, 'UN_ESTADO_QUE_NADIE_CLASIFICO']
+    .map((estado, i) => ({ id: String(i), estado }))
+
+  const contar = (p: string) => tickets.filter((t) => faseTicket(t.estado) === p).length
+
+  it('la suma de las cuatro pestañas es igual al total de «Todos»', () => {
+    const suma = PESTANAS.reduce((a, p) => a + contar(p), 0)
+    expect(suma).toBe(tickets.length)
+  })
+
+  it('ningún ticket se cuenta dos veces', () => {
+    const vistos = PESTANAS.flatMap((p) => tickets.filter((t) => faseTicket(t.estado) === p).map((t) => t.id))
+    expect(vistos.length).toBe(new Set(vistos).size)
+  })
+
+  it('el reparto concreto de los once estados es el esperado', () => {
+    // Si alguien mueve un estado de pestaña, esta prueba lo dice con nombres.
+    expect(contar('atender')).toBe(1)    // ABIERTO
+    expect(contar('curso')).toBe(7)      // los 6 de curso + el no clasificado
+    expect(contar('resueltos')).toBe(2)  // RESUELTO, APROBADO_CLIENTE
+    expect(contar('historial')).toBe(2)  // CERRADO, CANCELADO
+  })
+
+  it('el ticket con un estado desconocido SÍ aparece en una pestaña', () => {
+    const cual = PESTANAS.filter((p) => faseTicket('UN_ESTADO_QUE_NADIE_CLASIFICO') === p)
+    expect(cual).toHaveLength(1)
+    expect(cual[0]).toBe('curso')
+  })
+})
+
 describe('las listas derivadas', () => {
   it('lo pendiente es todo lo que no es final', () => {
     expect([...ESTADOS_TICKET_ACTIVOS].sort()).toEqual(
@@ -123,5 +163,79 @@ describe('la frecuencia de un plan preventivo', () => {
   it('la de medidor usa la unidad del contador', () => {
     expect(textoFrecuencia('MEDIDOR', 500, 'horas')).toBe('cada 500 horas')
     expect(textoFrecuencia('MEDIDOR', 500, null)).toBe('cada 500 unidades')
+  })
+})
+
+// El fallo que F7 trajo y que solo se vio probando la pantalla: se le pasaba a
+// la base la URL ENTERA de la placa en vez del token, y `ronda_qr` se busca por
+// token exacto. El técnico escaneaba una placa buena, recibía «esa placa no
+// está registrada» y quedaba empujado a la apertura manual — justo la
+// distinción que el estado EN_SITIO existe para proteger.
+//
+// Las cuatro formas que tiene que aguantar, fijadas aquí para que no se repita.
+describe('qué se escaneó al abrir una orden en sitio', () => {
+  // Token de 21 caracteres con la forma del ADR-B: <v><clave 8><version 2><firma 10>.
+  const TOKEN = '1K7M4QX9T01A9F3C1B7E2'
+  const MANUAL = 'K7M4QX9T'
+
+  it('1 · la URL de una placa de activo o de punto → el token limpio', () => {
+    const r = clasificarEscaneoOT(`https://inventario.example.com/q/${TOKEN}`)
+    expect(r).toEqual({ tipo: 'QR', codigo: TOKEN, modo: 'QR' })
+  })
+
+  it('1b · aguanta la URL con query, ancla o barra final', () => {
+    for (const u of [
+      `https://inventario.example.com/q/${TOKEN}?v=2`,
+      `https://inventario.example.com/q/${TOKEN}#arriba`,
+      `http://localhost:3000/q/${TOKEN}`,
+    ]) {
+      const r = clasificarEscaneoOT(u)
+      expect(r.tipo, u).toBe('QR')
+      if (r.tipo === 'QR') expect(r.codigo, u).toBe(TOKEN)
+    }
+  })
+
+  it('2 · la URL de un equipo propio → la referencia del equipo, no un token', () => {
+    const r = clasificarEscaneoOT('https://inventario.example.com/equipo/MAQ-0012')
+    expect(r).toEqual({ tipo: 'EQUIPO', referencia: 'MAQ-0012' })
+  })
+
+  it('3 · el token suelto, tecleado o leído sin URL', () => {
+    expect(clasificarEscaneoOT(TOKEN)).toEqual({ tipo: 'QR', codigo: TOKEN, modo: 'QR' })
+    expect(clasificarEscaneoOT(`  ${TOKEN.toLowerCase()}  `))
+      .toEqual({ tipo: 'QR', codigo: TOKEN, modo: 'QR' })
+  })
+
+  it('4 · el código manual con guion, que es como está impreso bajo el QR', () => {
+    expect(formatearManual(MANUAL)).toBe('K7M4-QX9T')
+    const r = clasificarEscaneoOT('K7M4-QX9T')
+    // Se reconoce como manual, NO como token: pesa distinto en el informe.
+    expect(r).toEqual({ tipo: 'QR', codigo: MANUAL, modo: 'MANUAL' })
+    expect(clasificarEscaneoOT('k7m4 qx9t')).toEqual({ tipo: 'QR', codigo: MANUAL, modo: 'MANUAL' })
+  })
+
+  it('lo que no tiene forma de nada se dice, no se adivina', () => {
+    for (const basura of ['', '   ', 'hola', 'https://example.com/otra/cosa', '12']) {
+      expect(clasificarEscaneoOT(basura).tipo, JSON.stringify(basura)).toBe('DESCONOCIDO')
+    }
+  })
+
+  it('NUNCA devuelve una URL como si fuera un código (el fallo original)', () => {
+    for (const u of [
+      `https://inventario.example.com/q/${TOKEN}`,
+      'https://inventario.example.com/equipo/MAQ-0012',
+      'https://example.com/otra/cosa',
+    ]) {
+      const r = clasificarEscaneoOT(u)
+      const valor = r.tipo === 'QR' ? r.codigo : r.tipo === 'EQUIPO' ? r.referencia : ''
+      expect(valor, u).not.toContain('/')
+      expect(valor, u).not.toContain('http')
+    }
+  })
+
+  it('el extractor de equipo sigue intacto para /equipo', () => {
+    // No se tocó: lo usan /equipo y la ficha de campo.
+    expect(extraerReferenciaEquipo('https://x/equipo/MAQ-0012')).toBe('MAQ-0012')
+    expect(extraerReferenciaEquipo('MAQ-0012')).toBe('MAQ-0012')
   })
 })

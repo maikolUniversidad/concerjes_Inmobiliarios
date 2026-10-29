@@ -2,6 +2,11 @@
 // Se usan tanto en la vista de campo (/equipo) como en el tablero (/mantenimiento).
 // Las transiciones y reglas viven en la BD (RPC `mant_*`); aquí solo está lo visual.
 
+// La forma del código de una placa la define `packages/ronda-core` y la
+// comparten esta app y la móvil (§1.1 del complemento 2): aquí se usa, no se
+// reimplementa.
+import { clasificarEntrada, codigoDeEscaneo } from '@/lib/puntos-qr'
+
 export const BUCKET_MANT = 'mantenimiento'
 
 // Zona fija: el servidor (UTC en Vercel) y el navegador deben formatear igual
@@ -224,7 +229,56 @@ export async function firmarRutas(sb: any, rutas: string[], segundos = 3600): Pr
   return out
 }
 
-/** Lo que devuelve un QR o lo que alguien digita → referencia del equipo. */
+/**
+ * Qué se escaneó cuando se abre una orden de trabajo en sitio.
+ *
+ * Hay DOS clases de placa en este sistema y se confunden fácil, que es
+ * exactamente el error que tenía F7:
+ *   · la del equipo propio de la empresa abre `/equipo/<ref>` y lo que lleva
+ *     dentro es el CÓDIGO del equipo (`MAQ-0012`);
+ *   · la de un punto de control o de un activo del cliente abre `/q/<token>` y
+ *     lo que lleva es un TOKEN FIRMADO de 21 caracteres (o, impreso debajo, el
+ *     código manual de 8 que se teclea de noche).
+ *
+ * Una orden de trabajo se ejecuta sobre un activo, así que lo que vale es la
+ * segunda. Pasarle la URL entera a la base no encuentra nada —`ronda_qr` se
+ * busca por token EXACTO— y el técnico recibía «esa placa no está registrada»
+ * con una placa perfectamente buena, empujado a la apertura manual, que es
+ * justo la distinción que el estado `EN_SITIO` existe para proteger.
+ *
+ * El trabajo de sacar el código de la URL ya lo hace `codigoDeEscaneo` de
+ * `packages/ronda-core` (la comparten esta app y la móvil), así que aquí NO se
+ * reimplementa: solo se decide cuál de las dos clases es, para poder decir qué
+ * pasó cuando alguien escanea la placa equivocada.
+ */
+export type EscaneoOT =
+  | { tipo: 'QR'; codigo: string; modo: 'QR' | 'MANUAL' }
+  | { tipo: 'EQUIPO'; referencia: string }
+  | { tipo: 'DESCONOCIDO'; crudo: string }
+
+export function clasificarEscaneoOT(valor: string): EscaneoOT {
+  const v = (valor ?? '').trim()
+
+  // ¿Es la placa de un equipo propio? Se mira ANTES de normalizar, porque
+  // normalizar le quita las barras a la URL y ya no se sabría.
+  try {
+    const partes = new URL(v).pathname.split('/').filter(Boolean)
+    const i = partes.findIndex((p) => p === 'equipo' || p === 'maquinaria')
+    if (i >= 0 && partes[i + 1]) {
+      return { tipo: 'EQUIPO', referencia: decodeURIComponent(partes[i + 1]) }
+    }
+  } catch { /* no es URL: sigue */ }
+
+  const c = codigoDeEscaneo(v)
+  const clase = clasificarEntrada(c)
+  if (clase.tipo === 'TOKEN')  return { tipo: 'QR', codigo: clase.codigo, modo: 'QR' }
+  if (clase.tipo === 'MANUAL') return { tipo: 'QR', codigo: clase.codigo, modo: 'MANUAL' }
+  return { tipo: 'DESCONOCIDO', crudo: v }
+}
+
+/** Lo que devuelve un QR o lo que alguien digita → referencia del equipo.
+ *  Solo para la placa de un equipo PROPIO (`/equipo/<ref>`): para la de un
+ *  punto o un activo hay que usar `clasificarEscaneoOT`. */
 export function extraerReferenciaEquipo(valor: string): string {
   const v = valor.trim()
   try {

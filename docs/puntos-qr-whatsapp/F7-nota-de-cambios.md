@@ -457,13 +457,6 @@ dice /roles»*, sin discrepancias.
 
 Para no dar por probado lo que no lo está:
 
-- **Abrir la visita con el QR de verdad.** La rama que valida que el código
-  escaneado sea la placa de ese activo (`ronda_qr.activo_id`) no se ejercitó:
-  **no hay ningún QR emitido en la base**, porque emitirlo exige la llave HMAC
-  en el servidor y hoy no está configurada (es el pendiente que dejó F2). Lo que
-  sí se probó es el otro camino, el de la apertura manual, incluido que sin
-  motivo se rechaza. La rama del QR está escrita y comentada, pero hay que
-  probarla el día que exista una placa.
 - **Que los correos salgan.** `MANTENIMIENTO_ESTADO` emite el evento con las
   variables nuevas, y eso se ve; que llegue un correo depende de la cuenta de
   correo conectada, que no lo está.
@@ -501,3 +494,77 @@ propio y lo que los use como dato en el siguiente (§3).
 crear el contrato, rellenar `grupo_id` en los tickets de maquinaria, y recién
 entonces `SET NOT NULL`. Mientras no exista, la condición doble de la RLS tiene
 que quedarse.
+
+---
+
+## 14. Lo que se arregló después, y lo que enseña
+
+F7 se unió a `master` y se desplegó antes de que volviera la verificación
+visual. La verificación encontró dos errores de fondo, y los dos los había
+dejado yo. El arreglo está en
+[20261028001020_puntos_qr_f7_escaneo_y_backlog.sql](supabase/migrations/20261028001020_puntos_qr_f7_escaneo_y_backlog.sql)
+— archivo nuevo, porque la `001010` ya estaba aplicada y viva.
+
+**1. El escaneo de la placa no funcionaba, y fallaba justo al revés de lo que
+F7 quería.** La pantalla le pasaba a la base la **URL entera** de la placa
+(`https://…/q/<token>`) porque reutilizaba `extraerReferenciaEquipo`, que es el
+extractor de la placa de un **equipo propio** (`/equipo/<ref>`) y no reconoce el
+segmento `/q/`. Y `ronda_qr` se busca por token exacto. El técnico escaneaba una
+placa buena, recibía «esa placa no está registrada» y quedaba empujado a la
+apertura manual — que es exactamente la distinción que el estado `EN_SITIO`
+existe para proteger.
+
+Qué se hizo:
+
+- `clasificarEscaneoOT()` en [lib/mantenimiento.ts](apps/inventario/lib/mantenimiento.ts)
+  decide cuál de las dos clases de placa se escaneó, **reutilizando**
+  `codigoDeEscaneo` y `clasificarEntrada` de `packages/ronda-core` (la pieza que
+  comparten esta app y la móvil). No se escribió un segundo extractor: el que
+  hacía falta ya existía, y el error fue no buscarlo.
+- La **RPC** recibe ahora el código (`p_codigo`) y resuelve ella misma el token
+  de 21 o el código manual de 8 contra `ronda_qr`. Se hace en la base porque los
+  dos códigos están impresos en la misma placa pero viven en columnas distintas,
+  y resolverlo en el navegador serían dos caminos donde equivocarse.
+- Escanear la placa de un equipo propio sobre una orden de cliente ahora dice
+  **cuál** se escaneó, en vez de un «no está registrada» que haría pensar que la
+  placa está mala.
+
+**Y un tercer error que salió al arreglar el segundo:** mi primera versión de la
+RPC marcaba `en_sitio_modo = 'QR'` cuando el código resolvía, **incluido el
+código manual**. Un código manual lo teclea una persona, que puede hacerlo desde
+su casa; solo el token leído por la cámara es prueba de presencia. Eso habría
+vaciado de contenido la garantía entera sin que nadie lo notara. Ahora la RPC
+recuerda por cuál de las dos columnas coincidió y el modo sale de ahí.
+
+**2. El KPI «en curso» podía divergir de su pestaña.**
+`vw_mant_backlog.en_curso` enumeraba los seis estados **en positivo** — el mismo
+modo de falla silencioso que esta misma fase presume de haber cerrado en el
+frontend. Medido en el banco de pruebas: el KPI decía 6 y la pestaña 7. Ahora
+cuenta en negativo, como ya hacían `criticos` y `mios`.
+
+**Tres menores, del mismo informe.** «Todos los extintor» pasa a «Cada
+extintor» (los nombres de `activo_tipos` están en singular y con géneros
+mezclados, así que cualquier artículo fijo se equivoca en la mitad, y «cada»
+además dice lo que un plan por tipo hace); `textoFrecuencia` recibe por fin la
+unidad del medidor, que existía como parámetro y ninguna llamada pasaba, de modo
+que la tabla decía «cada 500 unidades» mientras «Lo que toca» decía «1.200 de
+1.500 horas»; una tarea de plan fijada por `plantilla_codigo` y no por id ya no
+se dibuja como un guion; y se quitó un punto doble.
+
+### Qué enseña esto
+
+Las dos cosas de fondo tienen el mismo origen: **reutilicé una pieza por su
+nombre y no por lo que hace**. `extraerReferenciaEquipo` suena a «saca la
+referencia de lo que escaneaste» y hace algo más estrecho. Y `en_curso` se
+escribió copiando la lista de estados que ya tenía a mano, en el mismo archivo
+donde el comentario de al lado explica por qué eso está mal.
+
+Y las dos **solo se ven ejecutando la pantalla**. Mi script de SQL probaba la
+RPC pasándole un `p_qr` ya resuelto, así que nunca ejercitó el camino que el
+navegador recorre de verdad. Las pruebas que ahora cubren esto son de los dos
+tipos: las cuatro formas del código en
+[tests/inventario/mantenimiento-estados.test.ts](tests/inventario/mantenimiento-estados.test.ts)
+y, en `scripts/probar-puntos-qr-f7.mjs`, una placa emitida de verdad con la que
+se comprueba que el token abre en modo `QR`, que el código manual abre pero
+**no** cuenta como escaneo, que la URL entera se rechaza y que la placa de otro
+punto no sirve.

@@ -25,7 +25,7 @@ export default async function PlanesPage() {
     objeto_activo:activo_id(codigo, nombre),
     objeto_maquinaria:maquinaria_id(codigo, nombre),
     proveedor:proveedor_id(nombre),
-    tareas:mant_plan_tareas(id, orden, plantilla_id, descripcion, plantilla:plantilla_id(codigo, nombre, version)),
+    tareas:mant_plan_tareas(id, orden, plantilla_id, plantilla_codigo, descripcion, plantilla:plantilla_id(codigo, nombre, version)),
     materiales:mant_plan_materiales(id, cantidad, producto_id, producto:producto_id(nombre_estandar, presentacion))`
 
   const [planes, proximos, grupos, tipos, plantillas, tecnicos, proveedores] = await Promise.all([
