@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { faltaPermiso } from '@/lib/permisos-server'
+import { textoDemasiadoLargo } from '@/lib/errores'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -27,6 +28,8 @@ function traducir(msg: string): string {
   }
   if (msg.includes('proveedores_nit_key')) return 'Ya existe un proveedor con ese NIT.'
   if (msg.includes('duplicate')) return 'Ya existe un proveedor con esos datos.'
+  const largo = textoDemasiadoLargo(msg)
+  if (largo) return largo
   return 'Operación fallida: ' + msg
 }
 

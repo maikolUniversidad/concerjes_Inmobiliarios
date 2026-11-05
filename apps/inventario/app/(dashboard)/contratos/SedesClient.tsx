@@ -159,7 +159,7 @@ export function SedesClient({ grupos, sedes, categorias = [], etiquetas = [] }: 
             </div>
             <div>
               <label className="font-body font-semibold text-xs text-gray-600">N° contrato</label>
-              <input name="codigo_interno" defaultValue={editing?.codigo_interno ?? ''} className={inputCls + ' mt-1'} />
+              <input name="codigo_interno" defaultValue={editing?.codigo_interno ?? ''} maxLength={100} className={inputCls + ' mt-1'} />
             </div>
             <div className="sm:col-span-2">
               <label className="font-body font-semibold text-xs text-gray-600">Nombre de la sede *</label>

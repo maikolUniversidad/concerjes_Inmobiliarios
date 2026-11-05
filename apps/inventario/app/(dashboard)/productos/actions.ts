@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { faltaPermiso, SIN_PERMISO } from '@/lib/permisos-server'
 import type { CategoriaRotacion, TipoInsumo } from '@/lib/types/database'
+import { textoDemasiadoLargo } from '@/lib/errores'
 
 export interface ActionResult { error?: string }
 
@@ -39,6 +40,8 @@ function traducirError(msg: string): string {
   if (msg.includes('duplicate key') && msg.includes('ref')) return 'Ya existe un producto con esa REF.'
   if (msg.includes('duplicate key') && msg.includes('codigo')) return 'Ya existe un producto con ese código.'
   if (msg.includes('row-level security')) return SIN_PERMISO
+  const largo = textoDemasiadoLargo(msg)
+  if (largo) return largo
   return 'Operación fallida: ' + msg
 }
 

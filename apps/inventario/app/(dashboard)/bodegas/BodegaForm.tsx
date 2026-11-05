@@ -56,7 +56,7 @@ export function BodegaForm({ usuarios, defaults = {}, modo = 'crear' }: {
         <h2 className="font-heading font-semibold text-lg text-gray-900">Datos de la bodega</h2>
         <div className="grid sm:grid-cols-2 gap-4">
           <div><label className={labelCls}>Nombre *</label><input name="nombre" required defaultValue={defaults.nombre ?? ''} className={inputCls + ' mt-1'} placeholder="Ej: Bodega Central" /></div>
-          <div><label className={labelCls}>Código</label><input name="codigo" defaultValue={defaults.codigo ?? ''} className={inputCls + ' mt-1'} placeholder="Ej: CENTRAL" /></div>
+          <div><label className={labelCls}>Código</label><input name="codigo" defaultValue={defaults.codigo ?? ''} maxLength={30} className={inputCls + ' mt-1'} placeholder="Ej: CENTRAL" /></div>
         </div>
         <div><label className={labelCls}>Dirección</label><input name="direccion" defaultValue={defaults.direccion ?? ''} className={inputCls + ' mt-1'} /></div>
         <div><label className={labelCls}>Descripción</label><textarea name="descripcion" rows={2} defaultValue={defaults.descripcion ?? ''} className={inputCls + ' mt-1 resize-none'} /></div>

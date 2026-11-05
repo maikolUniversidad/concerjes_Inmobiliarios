@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { capturar, desenvolver, conError } from '@/lib/resultado'
-import { mensajeDeError } from '@/lib/errores'
+import { mensajeDeError, textoDemasiadoLargo } from '@/lib/errores'
 
 describe('capturar (servidor)', () => {
   it('devuelve el dato cuando todo sale bien', async () => {
@@ -46,5 +46,16 @@ describe('mensajeDeError', () => {
     const censurado = new Error('An error occurred in the Server Components render. The specific message is omitted in production builds to avoid leaking sensitive details.')
     expect(mensajeDeError(censurado, 'No se pudo guardar.')).toBe('No se pudo guardar.')
     expect(mensajeDeError(new Error('Sin stock'), 'No se pudo guardar.')).toBe('Sin stock')
+  })
+})
+
+describe('textoDemasiadoLargo', () => {
+  it('traduce el error de Postgres por texto largo con su tope', () => {
+    expect(textoDemasiadoLargo('value too long for type character varying(20)'))
+      .toBe('Uno de los campos tiene más de 20 caracteres, que es lo máximo que admite. Acórtalo e intenta de nuevo.')
+  })
+
+  it('no toca otros errores', () => {
+    expect(textoDemasiadoLargo('duplicate key value violates unique constraint')).toBeNull()
   })
 })

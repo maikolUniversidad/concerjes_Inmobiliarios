@@ -694,6 +694,38 @@ export interface DespachoInfo {
   transportadoraGuia?: string | null
 }
 
+/**
+ * Guarda la observación de bodega previa al despacho. Va como evento de la
+ * orden (tipo OBS_DESPACHO): el último es el vigente y los anteriores quedan en
+ * la trazabilidad con quién y cuándo. Sale impresa en la orden y en la remisión.
+ */
+export async function guardarObservacionDespacho(ordenId: string, texto: string): Promise<ActionResult> {
+  const { supabase, user } = await sesion()
+  if (!user) return { error: 'Debes iniciar sesión.' }
+  const perm = await getPermisosUsuario()
+  if (!perm.puede('alistar_ordenes_insumo')) return { error: 'No tienes permiso para escribir observaciones de despacho.' }
+  const sb = supabase as DB
+
+  const limpio = (texto ?? '').trim()
+  if (limpio.length > 500) return { error: 'La observación admite máximo 500 caracteres.' }
+
+  const { data: orden } = await sb.from('ordenes_insumo').select('estado').eq('id', ordenId).single()
+  if (!orden) return { error: 'Orden no encontrada.' }
+  if (!['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO'].includes(orden.estado)) {
+    return { error: 'La observación solo se puede cambiar antes de despachar.' }
+  }
+
+  const { error } = await sb.rpc('oi_evento', {
+    p_orden: ordenId, p_tipo: 'OBS_DESPACHO',
+    p_mensaje: limpio ? `Observación del despacho: ${limpio}` : 'Quitó la observación del despacho.',
+    p_detalle: { texto: limpio },
+  })
+  if (error) return { error: 'No se pudo guardar la observación: ' + error.message }
+
+  revalidatePath(`/ordenes-insumo/${ordenId}`)
+  return { ok: true }
+}
+
 export async function despacharOrden(
   ordenId: string, videoPath: string, videoMime: string | null,
   videoDuracion: number | null, despacho?: DespachoInfo,
@@ -925,7 +957,7 @@ async function crearOrdenPendiente(
  * La versión se calcula contando generaciones previas del mismo tipo.
  */
 export async function registrarGeneracionPDF(
-  ordenId: string, tipo: 'ORDEN' | 'REMISION', storagePath: string,
+  ordenId: string, tipo: 'ORDEN' | 'PENDIENTES' | 'REMISION', storagePath: string,
 ): Promise<ActionResult> {
   const { supabase, user } = await sesion()
   if (!user) return { error: 'Sin sesión.' }
@@ -936,7 +968,7 @@ export async function registrarGeneracionPDF(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const version = ((prev ?? []) as { detalle: any }[]).filter(e => e.detalle?.tipo === tipo).length + 1
 
-  const label = tipo === 'REMISION' ? 'Remisión de despacho' : 'Orden de insumo'
+  const label = tipo === 'REMISION' ? 'Remisión de despacho' : tipo === 'PENDIENTES' ? 'Orden de insumo pendientes' : 'Orden de insumo'
   await sb.rpc('oi_evento', {
     p_orden: ordenId, p_tipo: 'PDF_GENERADO',
     p_mensaje: `Generó la ${label} (PDF)${version > 1 ? ` · versión ${version}` : ''}`,

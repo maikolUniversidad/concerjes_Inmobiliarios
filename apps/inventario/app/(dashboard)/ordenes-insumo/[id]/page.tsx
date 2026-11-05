@@ -103,6 +103,13 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     .select('id, tipo, mensaje, estado_anterior, estado_nuevo, usuario_nombre, created_at')
     .eq('orden_id', id).order('created_at', { ascending: true })
 
+  // Observación de bodega previa al despacho: la vigente es la del último evento.
+  const { data: obsDespachoData } = await supabase.from('orden_insumo_eventos')
+    .select('detalle, usuario_nombre').eq('orden_id', id).eq('tipo', 'OBS_DESPACHO')
+    .order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const obsDespacho = obsDespachoData as unknown as { detalle: { texto?: string } | null; usuario_nombre: string | null } | null
+  const observacionDespacho = obsDespacho?.detalle?.texto?.trim() || null
+
   // El alistamiento SOLO se habilita cuando ya firmaron las dos partes.
   const estado = (orden as unknown as { estado: string }).estado
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO'].includes(estado)
@@ -163,6 +170,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
     numero: o.numero, estado, created_at: o.created_at,
     aprobado_at: o.aprobado_at ?? null, despachado_at: o.despachado_at ?? null,
     observacion: o.observacion ?? null,
+    observacionDespacho,
     sede: o.sede?.nombre ?? 'Sin sede',
     direccion: o.sede?.direccion ?? null,
     grupo: o.sede?.grupo?.nombre ?? null,
@@ -175,6 +183,11 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
       solicitada: Number(i.cantidad_solicitada ?? 0),
       alistada: Number(i.cantidad_alistada ?? 0),
       alistado: !!i.alistado,
+      // Mismo criterio del alistamiento: sin stock real no se puede chulear.
+      sinStock: (() => {
+        const s = Array.isArray(i.producto?.stock) ? i.producto.stock[0] : i.producto?.stock
+        return Number(s?.cantidad_real ?? 0) <= 0
+      })(),
     })),
     origenNumero: o.origen?.numero ?? null,
     pendientesNumeros: hijas.map((h) => h.numero),
@@ -249,6 +262,17 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
           <p className="mt-2 font-body text-sm text-amber-900/90 whitespace-pre-wrap">{o.observacion}</p>
         </div>
       )}
+      {observacionDespacho && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 shadow-sm">
+          <p className="font-heading font-semibold text-sm text-amber-900 flex items-center gap-2">
+            <StickyNote className="w-4 h-4" /> Observaciones del despacho
+          </p>
+          <p className="mt-2 font-body text-sm text-amber-900/90 whitespace-pre-wrap">{observacionDespacho}</p>
+          {obsDespacho?.usuario_nombre && (
+            <p className="mt-1 font-body text-xs text-amber-900/60">Escrita por {obsDespacho.usuario_nombre}</p>
+          )}
+        </div>
+      )}
       <SedeEditor
         ordenId={id}
         sedeId={o.sede_id ?? null}
@@ -284,6 +308,7 @@ export default async function OrdenDetallePage({ params }: { params: Promise<{ i
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           orden={orden as any}
           puedeAlistar={perm.puede('alistar_ordenes_insumo')}
+          observacionDespacho={observacionDespacho}
         />
       )}
       {/* Envío restante: si salió con productos pendientes, despachar lo que falta. */}

@@ -11,7 +11,7 @@ import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import type { EstadoOrdenInsumo } from '@/lib/types/database'
 import { metaEstado } from '../OrdenesInsumoClient'
-import { actualizarItemAlistamiento, despacharOrden, anularOrden } from '../actions'
+import { actualizarItemAlistamiento, despacharOrden, anularOrden, guardarObservacionDespacho } from '../actions'
 import { VideoDespacho } from './VideoDespacho'
 import { VideoGrabado } from '@/components/ui/VideoGrabado'
 import { ProductoThumb } from './ProductoThumb'
@@ -61,9 +61,10 @@ function fmt(iso: string | null) {
   return new Date(iso).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export function OrdenDetalleClient({ orden, puedeAlistar }: {
+export function OrdenDetalleClient({ orden, puedeAlistar, observacionDespacho }: {
   orden: Orden
   puedeAlistar: boolean
+  observacionDespacho: string | null
 }) {
   const router = useRouter()
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -91,6 +92,8 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
   const [showVideo, setShowVideo] = useState(false)
   const [videoUrl, setVideoUrl] = useState<string | null>(null)
   const [despachando, setDespachando] = useState(false)
+  const [obs, setObs] = useState(observacionDespacho ?? '')
+  const [guardandoObs, setGuardandoObs] = useState(false)
 
   // Tipo de despacho: conductor propio (flota) vs transportadora tercera.
   const [tipoDespacho, setTipoDespacho] = useState<TipoDespacho | ''>('')
@@ -181,6 +184,25 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
     tipoDespacho === 'CONDUCTOR_PROPIO' ? Boolean(conductorId)
     : tipoDespacho === 'TRANSPORTADORA' ? Boolean(transpNombre.trim())
     : false
+
+  const obsSinGuardar = obs.trim() !== (observacionDespacho ?? '')
+
+  /** Guarda la observación si cambió. false = falló y no se debe seguir. */
+  async function guardarObs(): Promise<boolean> {
+    if (!obsSinGuardar) return true
+    setGuardandoObs(true)
+    const res = await guardarObservacionDespacho(orden.id, obs)
+    setGuardandoObs(false)
+    if (res.error) { toast.error(res.error); return false }
+    toast.success('Observación guardada. Sale en la orden y en la remisión.')
+    router.refresh()
+    return true
+  }
+
+  /** La observación queda guardada antes de abrir la cámara para no perderla. */
+  async function iniciarDespacho() {
+    if (await guardarObs()) setShowVideo(true)
+  }
 
   async function onVideoListo(path: string, mime: string | null, duracion: number | null) {
     setShowVideo(false)
@@ -471,9 +493,27 @@ export function OrdenDetalleClient({ orden, puedeAlistar }: {
                 </p>
               </div>
             )}
+            <div>
+              <label htmlFor="obs-despacho" className="block font-body text-sm font-semibold text-gray-700 mb-1">Observaciones</label>
+              <textarea
+                id="obs-despacho" value={obs} onChange={(e) => setObs(e.target.value)} disabled={!editable || guardandoObs}
+                rows={3} maxLength={500}
+                placeholder="Novedades del alistamiento o del despacho…"
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 font-body text-sm outline-none focus:border-brand-green disabled:bg-gray-50"
+              />
+              <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+                <p className="font-body text-xs text-gray-400">Sale impresa en la orden y en la remisión. {obs.length}/500</p>
+                {obsSinGuardar && (
+                  <button onClick={guardarObs} disabled={!editable || guardandoObs}
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-brand-green/40 px-3 py-1.5 font-body text-xs font-semibold text-brand-green hover:bg-brand-green/5 disabled:opacity-50">
+                    {guardandoObs && <Loader2 className="w-3.5 h-3.5 animate-spin" />} Guardar observación
+                  </button>
+                )}
+              </div>
+            </div>
             <button
-              onClick={() => setShowVideo(true)}
-              disabled={!puedeAlistar || despachando || !despachoValido || !hayAlistados}
+              onClick={iniciarDespacho}
+              disabled={!puedeAlistar || despachando || guardandoObs || !despachoValido || !hayAlistados}
               className="inline-flex items-center gap-2 bg-brand-green hover:bg-brand-green-dark text-white font-body font-semibold text-sm px-5 py-2.5 rounded-xl transition-colors disabled:opacity-50">
               {despachando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Video className="w-4 h-4" />}
               Grabar video y despachar

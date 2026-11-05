@@ -11,3 +11,15 @@ export function mensajeDeError(e: unknown, respaldo: string): string {
   if (!msg || /Server Components render|omitted in production/i.test(msg)) return respaldo
   return msg
 }
+
+/**
+ * Postgres rechaza un texto más largo que su columna con
+ * "value too long for type character varying(20)", sin decir cuál campo. Esto
+ * lo pasa a español con el tope, para que la persona sepa qué recortar.
+ * Devuelve null si el mensaje no es de ese tipo.
+ */
+export function textoDemasiadoLargo(msg: string): string | null {
+  const m = msg.match(/value too long for type character(?: varying)?\((\d+)\)/i)
+  if (!m) return null
+  return `Uno de los campos tiene más de ${m[1]} caracteres, que es lo máximo que admite. Acórtalo e intenta de nuevo.`
+}

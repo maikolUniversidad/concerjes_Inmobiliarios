@@ -69,9 +69,9 @@ export function ProveedoresClient({ proveedores }: { proveedores: ProveedorRow[]
           <ImagePicker name="logo_url" defaultUrl={editing?.logo_url ?? null} bucket="galeria-fotos" folder="proveedores" label="Logo del proveedor" />
           <div className="grid sm:grid-cols-2 gap-4">
             <div><label className="font-body font-semibold text-sm text-gray-700">Nombre *</label><input name="nombre" required defaultValue={editing?.nombre ?? ''} className={inputCls + ' mt-1'} /></div>
-            <div><label className="font-body font-semibold text-sm text-gray-700">NIT</label><input name="nit" defaultValue={editing?.nit ?? ''} className={inputCls + ' mt-1'} /></div>
+            <div><label className="font-body font-semibold text-sm text-gray-700">NIT</label><input name="nit" defaultValue={editing?.nit ?? ''} maxLength={20} className={inputCls + ' mt-1'} /></div>
             <div><label className="font-body font-semibold text-sm text-gray-700">Contacto</label><input name="contacto" defaultValue={editing?.contacto ?? ''} className={inputCls + ' mt-1'} /></div>
-            <div><label className="font-body font-semibold text-sm text-gray-700">Teléfono</label><input name="telefono" defaultValue={editing?.telefono ?? ''} className={inputCls + ' mt-1'} /></div>
+            <div><label className="font-body font-semibold text-sm text-gray-700">Teléfono</label><input name="telefono" defaultValue={editing?.telefono ?? ''} maxLength={30} className={inputCls + ' mt-1'} /></div>
             <div><label className="font-body font-semibold text-sm text-gray-700">Email</label><input name="email" type="email" defaultValue={editing?.email ?? ''} className={inputCls + ' mt-1'} /></div>
             <label className="flex items-center gap-2 mt-6 font-body text-sm text-gray-700">
               <input name="es_principal" type="checkbox" defaultChecked={editing?.es_principal ?? false} className="w-4 h-4 accent-brand-green" /> Proveedor principal

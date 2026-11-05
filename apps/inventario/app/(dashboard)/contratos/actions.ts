@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { faltaPermiso } from '@/lib/permisos-server'
+import { textoDemasiadoLargo } from '@/lib/errores'
 
 export interface ActionResult { error?: string; ok?: boolean }
 
@@ -65,6 +66,8 @@ export async function geocodificarSede(query: string): Promise<{ lat: number; ln
 
 function traducir(msg: string): string {
   if (msg.includes('row-level security')) return 'No tienes permisos (requiere rol Admin).'
+  const largo = textoDemasiadoLargo(msg)
+  if (largo) return largo
   return 'Operación fallida: ' + msg
 }
 

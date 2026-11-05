@@ -4,12 +4,15 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { traerTodo } from '@/lib/supabase/paginado'
 import { faltaPermiso } from '@/lib/permisos-server'
+import { textoDemasiadoLargo } from '@/lib/errores'
 
 export interface ActionResult { error?: string; ok?: boolean; mensaje?: string }
 
 function traducir(msg: string): string {
   if (msg.includes('row-level security')) return 'No tienes permisos (requiere Admin o Coord. Compras).'
   if (msg.includes('duplicate')) return 'Ese proveedor ya tiene precio para este producto.'
+  const largo = textoDemasiadoLargo(msg)
+  if (largo) return largo
   return 'Operación fallida: ' + msg
 }
 

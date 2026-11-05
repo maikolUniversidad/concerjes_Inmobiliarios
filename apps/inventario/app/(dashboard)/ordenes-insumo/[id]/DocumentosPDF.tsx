@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { FileDown, Loader2, Truck, ClipboardList, Building2, Download, FileText, Eye, MapPin, CalendarDays, Check, X } from 'lucide-react'
+import { FileDown, Loader2, Truck, ClipboardList, Building2, Download, FileText, Eye, MapPin, CalendarDays, Check, X, PackageX } from 'lucide-react'
 import { toast } from 'sonner'
 import { createClient } from '@/lib/supabase/client'
 import { registrarGeneracionPDF, guardarDireccionSede } from '../actions'
@@ -15,6 +15,8 @@ export interface DatosDoc {
   aprobado_at?: string | null
   despachado_at?: string | null
   observacion: string | null
+  /** Lo que escribió bodega antes de despachar: sale en la orden y la remisión. */
+  observacionDespacho?: string | null
   sede: string
   direccion: string | null
   grupo: string | null
@@ -28,6 +30,8 @@ export interface DatosDoc {
     alistada: number
     /** Chuleado en el alistamiento: solo lo chuleado va en la remisión. */
     alistado?: boolean
+    /** Sin stock real en bodega: no se puede alistar, va en "pendientes". */
+    sinStock?: boolean
   }[]
   /** Si es una orden pendiente: número de la orden de la que viene. */
   origenNumero?: string | null
@@ -46,16 +50,36 @@ export interface DatosDoc {
 const ESTADOS_ALISTAMIENTO = ['APROBADA', 'PENDIENTE', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO']
 const esEtapaAlistamiento = (estado: string) => ESTADOS_ALISTAMIENTO.includes(estado)
 
+/** Ya salió de bodega: lo que no tenía stock pasó a la reposición. */
+const ESTADOS_DESPACHADA = ['DESPACHADO', 'EN_RUTA', 'ENTREGADO', 'RECIBIDO']
+
+/**
+ * Producto pendiente: se pidió pero no hay stock real en bodega (no se puede
+ * chulear en el alistamiento). Lo ya chuleado tenía stock y no cuenta. Una vez
+ * despachada, lo que faltó vive en la orden de reposición, no aquí.
+ */
+const esPendiente = (estado: string, i: DatosDoc['items'][number]) =>
+  !ESTADOS_DESPACHADA.includes(estado) && !i.alistado && !!i.sinStock
+
+/** Nombre de cada documento: [para títulos, para archivos]. */
+function nombreDoc(tipo: Tipo, alistamiento: boolean) {
+  if (tipo === 'REMISION') return { titulo: 'Remisión de despacho', corto: 'Remisión', archivo: 'Remision' }
+  if (tipo === 'PENDIENTES') return { titulo: 'Orden de insumo pendientes', corto: 'Pendientes', archivo: 'Orden_insumo_pendientes' }
+  return alistamiento
+    ? { titulo: 'Orden de alistamiento', corto: 'Orden', archivo: 'Orden_alistamiento' }
+    : { titulo: 'Orden de insumo', corto: 'Orden', archivo: 'Orden_insumo' }
+}
+
 interface PdfHistorialItem {
   id: string
-  tipo: 'ORDEN' | 'REMISION'
+  tipo: Tipo
   path: string
   version: number
   usuario_nombre: string | null
   created_at: string
 }
 
-type Tipo = 'ORDEN' | 'REMISION'
+type Tipo = 'ORDEN' | 'PENDIENTES' | 'REMISION'
 
 interface Emisor { nombre: string; nit: string; tel: string; direccion: string | null; logoDataUrl: string | null }
 
@@ -134,7 +158,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       ((data ?? []) as any[]).map(e => ({
         id: e.id,
-        tipo: (e.detalle?.tipo ?? 'ORDEN') as 'ORDEN' | 'REMISION',
+        tipo: (e.detalle?.tipo ?? 'ORDEN') as Tipo,
         path: e.detalle?.path ?? '',
         version: Number(e.detalle?.version ?? 1),
         usuario_nombre: e.usuario_nombre ?? null,
@@ -227,17 +251,37 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     })
 
     const esRemision = tipo === 'REMISION'
+    const esPendientes = tipo === 'PENDIENTES'
     const cantLabel = esRemision ? 'DESPACHADO' : 'SOLICITADO'
     const cantOf = (i: DatosDoc['items'][number]) => (esRemision ? i.alistada : i.solicitada)
-    // La remisión de despacho SOLO lleva lo chuleado con cantidad. Lo demás queda
-    // en la orden pendiente. La orden de insumo lista todos los solicitados.
+    const alistamiento = esEtapaAlistamiento(datos.estado)
+    // - Remisión: SOLO lo chuleado con cantidad (lo demás queda en la reposición).
+    // - Pendientes: lo pedido que no tiene stock en bodega.
+    // - Orden de alistamiento: lo que bodega puede alistar (sin los pendientes).
+    // - Orden de insumo (solicitud): todo lo pedido.
     const itemsDoc = esRemision
       ? datos.items.filter((i) => i.alistado !== false && Number(i.alistada) > 0)
-      : datos.items
+      : esPendientes
+        ? datos.items.filter((i) => esPendiente(datos.estado, i))
+        : alistamiento
+          ? datos.items.filter((i) => !esPendiente(datos.estado, i))
+          : datos.items
     const total = itemsDoc.reduce((a, i) => a + cantOf(i), 0)
     const dir = (direccion || '').trim() || datos.direccion || null
-    const alistamiento = esEtapaAlistamiento(datos.estado)
     const reposicion = datos.reposicion ?? 0
+    // Etiqueta resaltada del encabezado (la remisión lleva su título verde de siempre).
+    const etiqueta = esPendientes
+      ? { texto: 'ORDEN DE INSUMO PENDIENTES', color: '#b45309' }
+      : alistamiento
+        ? { texto: 'ORDEN DE ALISTAMIENTO', color: '#6d28d9' }
+        : { texto: 'ORDEN DE INSUMO', color: '#1d4ed8' }
+    const enPendientes = alistamiento && !esRemision && !esPendientes
+      ? datos.items.filter((i) => esPendiente(datos.estado, i)).length
+      : 0
+
+    if (esPendientes && itemsDoc.length === 0) {
+      throw new Error('esta orden no tiene productos pendientes por falta de stock')
+    }
 
     const doc = h(Document, { title: `${tipo}-${datos.numero}` },
       h(Page, { size: 'LETTER', style: s.page },
@@ -253,8 +297,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
           h(View, { style: { alignItems: 'flex-end' } },
             esRemision
               ? h(Text, { style: s.titulo }, 'REMISIÓN DE DESPACHO')
-              : h(Text, { style: [s.etiqueta, { backgroundColor: alistamiento ? '#6d28d9' : '#1d4ed8' }] },
-                  alistamiento ? 'ORDEN DE ALISTAMIENTO' : 'ORDEN DE INSUMO'),
+              : h(Text, { style: [s.etiqueta, { backgroundColor: etiqueta.color }] }, etiqueta.texto),
             h(Text, { style: s.numero }, datos.numero),
           ),
         ),
@@ -307,10 +350,24 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
           ? h(Text, { style: [s.sub, { marginTop: 6 }] },
               'Si la sede regresa producto, anote las unidades en la columna DEVUELTO y déjelo firmado.')
           : null,
+        esPendientes
+          ? h(Text, { style: [s.sub, { marginTop: 6 }] },
+              'Productos solicitados que no tienen stock en bodega al generar este documento. No van en la orden de alistamiento; se despachan cuando haya existencias.')
+          : null,
+        enPendientes > 0
+          ? h(Text, { style: [s.sub, { marginTop: 6, color: '#b45309' }] },
+              `${enPendientes} producto(s) sin stock no se incluyen aquí: van en la orden de insumo pendientes.`)
+          : null,
         datos.observacion
           ? h(View, { style: [s.box, { marginTop: 10 }] },
               h(Text, { style: s.sub }, 'Observaciones'),
               h(Text, null, datos.observacion),
+            )
+          : null,
+        datos.observacionDespacho && !esPendientes
+          ? h(View, { style: [s.box, { marginTop: datos.observacion ? 0 : 10 }] },
+              h(Text, { style: s.sub }, 'Observaciones del despacho'),
+              h(Text, null, datos.observacionDespacho),
             )
           : null,
         // Espaciador: si la página tiene sitio, las firmas bajan al pie.
@@ -339,7 +396,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     try {
       const blob = await construirBlob(tipo)
       cerrarPreview()
-      setPreview({ url: URL.createObjectURL(blob), titulo: tipo === 'REMISION' ? 'Remisión de despacho' : nombreOrden, blob: true })
+      setPreview({ url: URL.createObjectURL(blob), titulo: nombreDoc(tipo, enAlistamiento).titulo, blob: true })
     } catch (e) {
       toast.error('No se pudo previsualizar: ' + (e instanceof Error ? e.message : 'error'))
     } finally {
@@ -353,12 +410,12 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     setGenerando(tipo)
     try {
       const blob = await construirBlob(tipo)
-      const esRemision = tipo === 'REMISION'
+      const nombre = nombreDoc(tipo, enAlistamiento)
 
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
-      a.download = `${esRemision ? 'Remision' : enAlistamiento ? 'Orden_alistamiento' : 'Orden_insumo'}${reposicion > 0 ? `_Reposicion${reposicion}` : ''}_${datos.numero}.pdf`
+      a.download = `${nombre.archivo}${reposicion > 0 ? `_Reposicion${reposicion}` : ''}_${datos.numero}.pdf`
       a.click()
       URL.revokeObjectURL(url)
 
@@ -377,7 +434,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
         // El almacenamiento falla silenciosamente: el usuario ya tiene el PDF.
       }
 
-      toast.success(`${esRemision ? 'Remisión' : 'Orden'} generada`)
+      toast.success(`${nombre.titulo} generada`)
     } catch (e) {
       toast.error('No se pudo generar el PDF: ' + (e instanceof Error ? e.message : 'error'))
     } finally {
@@ -404,7 +461,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       const { data } = await sb.storage.from('ordenes-insumo').createSignedUrl(item.path, 3600)
       if (!data?.signedUrl) { toast.error('No se pudo abrir el PDF.'); return }
       cerrarPreview()
-      setPreview({ url: data.signedUrl, titulo: `${item.tipo === 'REMISION' ? 'Remisión' : 'Orden'} v${item.version}`, blob: false })
+      setPreview({ url: data.signedUrl, titulo: `${nombreDoc(item.tipo, enAlistamiento).corto} v${item.version}`, blob: false })
     } catch {
       toast.error('Error al abrir el PDF.')
     } finally {
@@ -421,7 +478,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
       if (!data?.signedUrl) { toast.error('No se pudo obtener el enlace de descarga.'); return }
       const a = document.createElement('a')
       a.href = data.signedUrl
-      a.download = `${item.tipo === 'REMISION' ? 'Remision' : 'Orden'}_${datos.numero}_v${item.version}.pdf`
+      a.download = `${nombreDoc(item.tipo, enAlistamiento).archivo}_${datos.numero}_v${item.version}.pdf`
       a.click()
     } catch {
       toast.error('Error al descargar el PDF.')
@@ -432,8 +489,9 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
 
   const aprobada = ['APROBADA', 'EN_ALISTAMIENTO', 'ALISTADO', 'DESPACHADO'].includes(datos.estado)
   const enAlistamiento = esEtapaAlistamiento(datos.estado)
-  const nombreOrden = enAlistamiento ? 'Orden de alistamiento' : 'Orden de insumo'
+  const nombreOrden = nombreDoc('ORDEN', enAlistamiento).titulo
   const reposicion = datos.reposicion ?? 0
+  const numPendientes = datos.items.filter((i) => esPendiente(datos.estado, i)).length
   // Sin fecha de despacho no se emite ningún documento: sale impresa en ambos.
   const ocupado = generando !== null || previsualizando !== null || !fechaDespacho
 
@@ -532,6 +590,30 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
             {generando === 'ORDEN' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />} Descargar
           </button>
+          {enAlistamiento && numPendientes > 0 && (
+            <span className="font-body text-xs text-amber-700">sin los {numPendientes} pendiente(s)</span>
+          )}
+        </div>
+        {/* Orden de insumo pendientes: lo pedido que no tiene stock en bodega */}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="w-28 shrink-0">
+            <span className="inline-block rounded-md bg-amber-600 px-2 py-1 font-body text-[11px] font-bold leading-tight text-white">
+              Orden de insumo pendientes
+            </span>
+          </span>
+          <button onClick={() => previsualizar('PENDIENTES')} disabled={ocupado || numPendientes === 0}
+            title={numPendientes === 0 ? 'No hay productos sin stock en esta orden' : ''}
+            className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {previsualizando === 'PENDIENTES' ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />} Previsualizar
+          </button>
+          <button onClick={() => generar('PENDIENTES')} disabled={ocupado || numPendientes === 0}
+            title={numPendientes === 0 ? 'No hay productos sin stock en esta orden' : ''}
+            className="flex items-center gap-1.5 border border-gray-200 rounded-lg px-3 py-2 font-body text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+            {generando === 'PENDIENTES' ? <Loader2 className="w-4 h-4 animate-spin" /> : <PackageX className="w-4 h-4" />} Descargar
+          </button>
+          <span className={`font-body text-xs ${numPendientes > 0 ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
+            {numPendientes > 0 ? `${numPendientes} producto(s) sin stock` : 'Sin pendientes'}
+          </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-body text-xs font-semibold text-gray-400 w-28 shrink-0">Remisión</span>
@@ -563,9 +645,11 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`font-body text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                      item.tipo === 'REMISION' ? 'bg-emerald-100 text-emerald-700' : 'bg-indigo-100 text-indigo-700'
+                      item.tipo === 'REMISION' ? 'bg-emerald-100 text-emerald-700'
+                        : item.tipo === 'PENDIENTES' ? 'bg-amber-100 text-amber-800'
+                        : 'bg-indigo-100 text-indigo-700'
                     }`}>
-                      {item.tipo === 'REMISION' ? 'Remisión' : 'Orden'} v{item.version}
+                      {nombreDoc(item.tipo, enAlistamiento).corto} v{item.version}
                     </span>
                     <span className="font-body text-xs text-gray-400">
                       {item.usuario_nombre ?? 'Sistema'} · {fecha(item.created_at)}

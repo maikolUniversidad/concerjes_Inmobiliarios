@@ -5,6 +5,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { logActivity } from '@/lib/activity'
 import { faltaPermiso } from '@/lib/permisos-server'
+import { textoDemasiadoLargo } from '@/lib/errores'
 
 export interface ActionResult { error?: string; ok?: boolean; id?: string }
 
@@ -23,6 +24,8 @@ function traducir(msg: string): string {
     return 'Ese origen de entrada ya lo representa otra bodega: cada origen puede tener una sola.'
   }
   if (msg.includes('duplicate')) return 'Código duplicado en esta bodega.'
+  const largo = textoDemasiadoLargo(msg)
+  if (largo) return largo
   return 'Operación fallida: ' + msg
 }
 
