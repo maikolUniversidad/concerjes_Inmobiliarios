@@ -15,7 +15,7 @@ export const metadata: Metadata = { title: 'Movimientos' }
 export const dynamic = 'force-dynamic'
 
 const COLUMNAS_MOV =
-  'id, tipo, cantidad, observacion, created_at, usuario_id, producto:productos ( ref, codigo, nombre_estandar, presentacion ), sede:sedes ( nombre )'
+  'id, numero, tipo, cantidad, observacion, created_at, usuario_id, producto:productos ( ref, codigo, nombre_estandar, presentacion ), sede:sedes ( nombre )'
 
 /**
  * Tope de movimientos que se mandan al navegador.

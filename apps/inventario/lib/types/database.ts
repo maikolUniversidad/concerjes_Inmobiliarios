@@ -177,6 +177,8 @@ export interface OCItem {
 
 export interface Movimiento {
   id: string
+  /** Referencia consecutiva: MOV-AAAAMM-0001. La asigna la base al insertar. */
+  numero: string
   tipo: TipoMovimiento
   producto_id: string
   cantidad: number

@@ -15,6 +15,8 @@ import type { TipoMovimiento } from '@/lib/types/database'
 
 export interface MovRow {
   id: string
+  /** Referencia consecutiva del movimiento: MOV-AAAAMM-0001. */
+  numero: string
   tipo: TipoMovimiento
   cantidad: number
   observacion: string | null
@@ -117,16 +119,13 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
 
   const columnas: ColumnaTabla<MovRow>[] = [
     {
-      id: 'ref',
-      header: 'REF',
-      valor: (m) => refProducto(m) ?? '',
-      ancho: 'w-20',
-      celda: (m) => {
-        const ref = refProducto(m)
-        return ref === null
-          ? <span className="font-body text-xs text-gray-300">—</span>
-          : <span className="rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-500">{ref}</span>
-      },
+      id: 'numero',
+      header: 'Referencia',
+      valor: (m) => m.numero,
+      ancho: 'w-40',
+      celda: (m) => (
+        <span className="whitespace-nowrap rounded bg-gray-100 px-2 py-0.5 font-mono text-xs text-gray-600">{m.numero}</span>
+      ),
       tarjeta: 'meta',
     },
     {
@@ -156,6 +155,15 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
       ),
       ancho: 'min-w-[200px]',
       tarjeta: 'titulo',
+    },
+    {
+      id: 'cod_producto',
+      header: 'Cód. producto',
+      valor: (m) => refProducto(m) ?? '',
+      prioridad: 3,
+      ancho: 'w-24',
+      className: 'font-mono text-xs text-gray-500',
+      tarjeta: 'oculto',
     },
     {
       id: 'presentacion',
@@ -232,7 +240,7 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
         datos={filtrados}
         columnas={columnas}
         filaId={(m) => m.id}
-        busqueda="Buscar por REF, producto, sede, responsable u observación…"
+        busqueda="Buscar por referencia, código, producto, sede, responsable u observación…"
         acciones={puedeEliminar ? (m) => btnBorrar(m) : undefined}
         anchoAcciones="w-12"
         vacio={
@@ -258,7 +266,8 @@ export function MovimientosClient({ movs, puedeEliminar }: { movs: MovRow[]; pue
                   {btnBorrar(m)}
                 </div>
               </div>
-              <p className="mt-2 break-words font-body text-sm font-medium text-gray-900">
+              <p className="mt-2 font-mono text-xs text-gray-500">{m.numero}</p>
+              <p className="mt-1 break-words font-body text-sm font-medium text-gray-900">
                 {m.producto?.nombre_estandar ?? '—'}
               </p>
               {refProducto(m) !== null && (
