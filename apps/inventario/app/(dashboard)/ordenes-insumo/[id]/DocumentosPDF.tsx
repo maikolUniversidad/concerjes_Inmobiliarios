@@ -257,15 +257,13 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
     const alistamiento = esEtapaAlistamiento(datos.estado)
     // - Remisión: SOLO lo chuleado con cantidad (lo demás queda en la reposición).
     // - Pendientes: lo pedido que no tiene stock en bodega.
-    // - Orden de alistamiento: lo que bodega puede alistar (sin los pendientes).
-    // - Orden de insumo (solicitud): todo lo pedido.
+    // - Orden de alistamiento y de insumo: todo lo pedido. En la de alistamiento
+    //   los pendientes salen marcados SIN STOCK (y siguen en su propio documento).
     const itemsDoc = esRemision
       ? datos.items.filter((i) => i.alistado !== false && Number(i.alistada) > 0)
       : esPendientes
         ? datos.items.filter((i) => esPendiente(datos.estado, i))
-        : alistamiento
-          ? datos.items.filter((i) => !esPendiente(datos.estado, i))
-          : datos.items
+        : datos.items
     const total = itemsDoc.reduce((a, i) => a + cantOf(i), 0)
     const dir = (direccion || '').trim() || datos.direccion || null
     const reposicion = datos.reposicion ?? 0
@@ -336,6 +334,10 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             h(View, { style: s.cProd },
               h(Text, null, i.nombre),
               i.presentacion ? h(Text, { style: s.sub }, i.presentacion) : null,
+              enPendientes > 0 && esPendiente(datos.estado, i)
+                ? h(Text, { style: { fontSize: 7, fontFamily: 'Helvetica-Bold', color: '#b45309', marginTop: 1 } },
+                    'SIN STOCK · va también en la orden de insumo pendientes')
+                : null,
             ),
             h(Text, { style: s.cNum }, String(cantOf(i))),
           ),
@@ -352,11 +354,11 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
           : null,
         esPendientes
           ? h(Text, { style: [s.sub, { marginTop: 6 }] },
-              'Productos solicitados que no tienen stock en bodega al generar este documento. No van en la orden de alistamiento; se despachan cuando haya existencias.')
+              'Productos solicitados que no tienen stock en bodega al generar este documento. En la orden de alistamiento salen marcados SIN STOCK; se despachan cuando haya existencias.')
           : null,
         enPendientes > 0
           ? h(Text, { style: [s.sub, { marginTop: 6, color: '#b45309' }] },
-              `${enPendientes} producto(s) sin stock no se incluyen aquí: van en la orden de insumo pendientes.`)
+              `${enPendientes} producto(s) marcados SIN STOCK no tienen existencias en bodega: también salen en la orden de insumo pendientes.`)
           : null,
         datos.observacion
           ? h(View, { style: [s.box, { marginTop: 10 }] },
@@ -591,7 +593,7 @@ export function DocumentosPDF({ datos }: { datos: DatosDoc }) {
             {generando === 'ORDEN' ? <Loader2 className="w-4 h-4 animate-spin" /> : <ClipboardList className="w-4 h-4" />} Descargar
           </button>
           {enAlistamiento && numPendientes > 0 && (
-            <span className="font-body text-xs text-amber-700">sin los {numPendientes} pendiente(s)</span>
+            <span className="font-body text-xs text-amber-700">incluye {numPendientes} sin stock, marcados</span>
           )}
         </div>
         {/* Orden de insumo pendientes: lo pedido que no tiene stock en bodega */}
