@@ -7,7 +7,7 @@
 // físico), para que el Excel se pueda usar sin cruzar información a mano.
 
 import { traerTodo } from '@/lib/supabase/paginado'
-import { ordenarFilasPlanas, ordenarPorItem } from './orden'
+import { ordenarAlfabetico, ordenarFilasPlanas, ordenarPorItem } from './orden'
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DB = any
@@ -47,7 +47,7 @@ export interface HojaInforme {
    * orden alfabético por su nombre principal si no es de productos. 'conservar'
    * respeta el orden en que vienen las filas.
    */
-  orden?: 'item' | 'conservar'
+  orden?: 'item' | 'conservar' | 'alfabetico'
 }
 
 export interface ResultadoInforme {
@@ -1180,6 +1180,53 @@ export const INFORMES: DefinicionInforme[] = [
 
 export const GRUPOS_INFORME = [...new Set(INFORMES.map(i => i.grupo))]
 
+// ─── Informes de inventario: orden alfabético y hojas por tipo ────────────────
+
+/** Tipos de insumo que van en hoja propia en los informes de inventario. */
+const TIPOS_APARTE: { tipo: string; sufijo: string }[] = [
+  { tipo: 'CAFETERIA', sufijo: 'Cafetería' },
+  { tipo: 'MAQUINARIA', sufijo: 'Maquinaria' },
+]
+
+/** Nombre de hoja válido en Excel (máximo 31 caracteres). */
+function nombreHoja(base: string, sufijo: string): string {
+  const fin = ` · ${sufijo}`
+  return base.slice(0, 31 - fin.length).trimEnd() + fin
+}
+
+/**
+ * En los informes de inventario cada hoja de productos se parte en tres: el
+ * resto de productos, Cafetería y Maquinaria, todas en orden alfabético por
+ * nombre del producto. Las hojas de totales (por tipo, rotación, bodega…) no se
+ * tocan. Una hoja es "de productos" si sus filas traen tipo y producto.
+ */
+export function separarHojasInventario(hojas: HojaInforme[]): HojaInforme[] {
+  const salida: HojaInforme[] = []
+  for (const h of hojas) {
+    const esDeProductos = h.columnas.some(c => c.key === 'tipo') && h.columnas.some(c => c.key === 'producto')
+    if (!esDeProductos) { salida.push(h); continue }
+    const nota = h.nota
+      ? h.nota.replace(/Ordenado por ítem y nombre\.?\s*/g, '').replace(/por ítem y nombre/g, 'alfabéticamente por producto').trim()
+      : ''
+    const conNota = (extra: string) => [`Ordenado alfabéticamente por producto. ${extra}`.trim(), nota].filter(Boolean).join(' ')
+    const aparte = new Set(TIPOS_APARTE.map(t => t.tipo))
+    salida.push({
+      ...h, orden: 'alfabetico',
+      filas: h.filas.filter(f => !aparte.has(String(f.tipo ?? ''))),
+      nota: conNota('Cafetería y Maquinaria van en sus propias hojas.'),
+    })
+    for (const t of TIPOS_APARTE) {
+      salida.push({
+        ...h, orden: 'alfabetico',
+        nombre: nombreHoja(h.nombre, t.sufijo),
+        filas: h.filas.filter(f => f.tipo === t.tipo),
+        nota: conNota(`Solo productos de ${t.sufijo.toLowerCase()}.`),
+      })
+    }
+  }
+  return salida
+}
+
 // ─── Generación del archivo .xlsx ─────────────────────────────────────────────
 
 const VERDE = 'FF2E7D32'
@@ -1198,7 +1245,11 @@ export async function descargarInforme(
   supabase: DB,
   progreso: (paso: string) => void,
 ): Promise<number> {
-  const res = await informe.generar(supabase, progreso)
+  const generado = await informe.generar(supabase, progreso)
+  // Los de inventario salen alfabéticos y con Cafetería y Maquinaria aparte.
+  const res: ResultadoInforme = informe.grupo === 'Inventario'
+    ? { ...generado, hojas: separarHojasInventario(generado.hojas) }
+    : generado
   progreso('Generando el archivo…')
 
   const ExcelJS = (await import('exceljs')).default
@@ -1283,7 +1334,9 @@ export async function descargarInforme(
 
     // Regla única de los reportes: por ítem y nombre (o alfabético si la hoja
     // no es de productos). Estable: a igual ítem se conserva el orden previo.
-    const filasHoja = hoja.orden === 'conservar' ? hoja.filas : ordenarFilasPlanas(hoja.filas).filas
+    const filasHoja = hoja.orden === 'conservar' ? hoja.filas
+      : hoja.orden === 'alfabetico' ? ordenarAlfabetico(hoja.filas, f => f.producto, f => f.presentacion)
+      : ordenarFilasPlanas(hoja.filas).filas
 
     if (filasHoja.length === 0) {
       hs.addRow({ [hoja.columnas[0].key]: '(sin registros)' })
